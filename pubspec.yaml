@@ -32,7 +32,18 @@ dev_dependencies:
   flutter_lints: ^4.0.0
   mocktail: ^1.0.4
   golden_toolkit: ^0.15.0
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/app_icon.png"
+  adaptive_icon_background: "#1A237E"
+  adaptive_icon_foreground: "assets/icon/app_icon.png"
 
 flutter:
   uses-material-design: true
   generate: true
+  assets:
+    - assets/icon/
+
