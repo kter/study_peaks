@@ -10,9 +10,9 @@ variable "region" {
 }
 
 variable "api_image" {
-  description = "Docker image for the API service"
+  description = "Docker image for the API service (empty = placeholder)"
   type        = string
-  default     = "gcr.io/cloudrun/hello"
+  default     = ""
 }
 
 variable "google_oauth_client_id" {

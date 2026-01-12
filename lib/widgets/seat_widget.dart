@@ -61,35 +61,31 @@ class SeatWidget extends StatelessWidget {
     
     return Column(
       mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         // Avatar with country flag badge
-        _buildAvatarWithBadge(user),
-        const SizedBox(height: 8),
-        // Username
-        Text(
-          user.displayName,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFF1A237E),
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        Flexible(
+          flex: 3,
+          child: _buildAvatarWithBadge(user),
         ),
-        // Status message
-        if (user.statusMessage.isNotEmpty) ...[
-          const SizedBox(height: 2),
-          Text(
-            user.statusMessage,
+        const SizedBox(height: 4),
+        // Username
+        Flexible(
+          child: Text(
+            user.displayName,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF1A237E),
+              fontSize: 10,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-        ],
-        const SizedBox(height: 4),
+        ),
         // Session duration
-        _buildDurationBadge(),
+        Flexible(
+          child: _buildDurationBadge(),
+        ),
       ],
     );
   }
@@ -97,26 +93,33 @@ class SeatWidget extends StatelessWidget {
   Widget _buildEmptySeat(ThemeData theme) {
     return Column(
       mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         // Empty seat icon
-        Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade200,
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            Icons.event_seat_outlined,
-            size: size * 0.5,
-            color: Colors.grey.shade400,
+        Flexible(
+          flex: 3,
+          child: Container(
+            width: size * 0.7,
+            height: size * 0.7,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.event_seat_outlined,
+              size: size * 0.4,
+              color: Colors.grey.shade400,
+            ),
           ),
         ),
-        const SizedBox(height: 8),
-        Text(
-          'Seat ${seat.seatNumber}',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: Colors.grey.shade500,
+        const SizedBox(height: 4),
+        Flexible(
+          child: Text(
+            '#${seat.seatNumber}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: Colors.grey.shade500,
+              fontSize: 10,
+            ),
           ),
         ),
       ],

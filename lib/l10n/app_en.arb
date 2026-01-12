@@ -1,0 +1,32 @@
+{
+  "@@locale": "en",
+  "appTitle": "Global Study Peaks",
+  "chooseYourPeak": "Choose Your Peak",
+  "joinRoomSubtitle": "Join a virtual study room and start focusing",
+  "profile": "Profile",
+  "signIn": "Sign In",
+  "signOut": "Sign Out",
+  "signInWithGoogle": "Sign in with Google",
+  "signInPrompt": "Sign in to save your study progress and sync across devices.",
+  "signedInSuccess": "Signed in successfully!",
+  "close": "Close",
+  "seat": "Seat",
+  "occupancy": "{current}/{total}",
+  "@occupancy": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "timer": "Timer",
+  "start": "Start",
+  "pause": "Pause",
+  "reset": "Reset",
+  "normalMode": "Normal",
+  "pomodoroMode": "Pomodoro",
+  "focusPhase": "Focus",
+  "breakPhase": "Break",
+  "sitDown": "Sit Down",
+  "leave": "Leave",
+  "anonymous": "Anonymous User"
+}

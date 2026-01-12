@@ -16,11 +16,15 @@ resource "google_cloud_run_v2_service" "api" {
   name     = "study-peaks-api-${local.environment}"
   location = var.region
   
-  depends_on = [google_project_service.run]
+  depends_on = [
+    google_project_service.run,
+    google_artifact_registry_repository.api,
+  ]
 
   template {
     containers {
-      image = var.api_image
+      # Use placeholder image for initial deployment, update after API is built
+      image = local.api_image
 
       env {
         name  = "GCP_PROJECT"

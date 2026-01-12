@@ -1,3 +1,10 @@
+# Enable Firestore API
+resource "google_project_service" "firestore" {
+  project            = var.project_id
+  service            = "firestore.googleapis.com"
+  disable_on_destroy = false
+}
+
 # Firestore Database in Native Mode
 resource "google_firestore_database" "main" {
   provider = google-beta
@@ -11,6 +18,8 @@ resource "google_firestore_database" "main" {
 
   # Use ABANDON in production to prevent accidental data loss
   deletion_policy = local.config.deletion_protection ? "ABANDON" : "DELETE"
+
+  depends_on = [google_project_service.firestore]
 }
 
 # Firestore Security Rules

@@ -54,14 +54,22 @@ locals {
   
   # Get current environment config (default to dev if workspace not found)
   config = lookup(local.env_config, local.environment, local.env_config["dev"])
+
+  # API image URL - uses placeholder for initial deploy, then Artifact Registry
+  # After first deploy, push your image to: ${var.region}-docker.pkg.dev/${var.project_id}/study-peaks/api:latest
+  api_image = var.api_image != "" ? var.api_image : "gcr.io/cloudrun/hello"
 }
 
 provider "google" {
-  project = var.project_id
-  region  = var.region
+  project                     = var.project_id
+  region                      = var.region
+  user_project_override       = true
+  billing_project             = var.project_id
 }
 
 provider "google-beta" {
-  project = var.project_id
-  region  = var.region
+  project                     = var.project_id
+  region                      = var.region
+  user_project_override       = true
+  billing_project             = var.project_id
 }

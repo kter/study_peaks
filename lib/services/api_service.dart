@@ -9,7 +9,7 @@ class ApiService {
   String? _authToken;
 
   ApiService({
-    this.baseUrl = 'https://api.studypeaks.example.com/v1',
+    this.baseUrl = 'https://study-peaks-api-prd-ozokydui6a-an.a.run.app/v1',
     http.Client? client,
   }) : _client = client ?? http.Client();
 

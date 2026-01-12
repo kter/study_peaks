@@ -26,3 +26,8 @@ output "scaling_config" {
     deletion_protection = local.config.deletion_protection
   }
 }
+
+output "artifact_registry_url" {
+  description = "Artifact Registry URL for API images"
+  value       = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.api.repository_id}"
+}

@@ -1,7 +1,9 @@
 # Production environment configuration
-project_id = "your-prd-project-id"
+project_id = "studypeaks-prd"
 region     = "asia-northeast1"
-api_image  = "asia-northeast1-docker.pkg.dev/your-prd-project-id/study-peaks/api:latest"
+
+# API image - set to actual deployed image
+api_image = "asia-northeast1-docker.pkg.dev/studypeaks-prd/study-peaks/api:v3"
 
 # Optional: OAuth settings
 # google_oauth_client_id     = ""

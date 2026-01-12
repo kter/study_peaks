@@ -1,7 +1,9 @@
 # Development environment configuration
-project_id = "your-dev-project-id"
+project_id = "studypeaks-dev"
 region     = "asia-northeast1"
-api_image  = "gcr.io/cloudrun/hello"
+
+# API image - leave empty for placeholder, or set after building
+# api_image = "asia-northeast1-docker.pkg.dev/studypeaks-dev/study-peaks/api:latest"
 
 # Optional: OAuth settings
 # google_oauth_client_id     = ""

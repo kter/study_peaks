@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
 import '../providers/room_provider.dart';
 import '../widgets/room_card.dart';
 import 'room_detail_screen.dart';
@@ -49,11 +50,19 @@ class _RoomListScreenState extends State<RoomListScreen> {
         ),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.person_outline, color: Color(0xFF1A237E)),
-            onPressed: () {
-              // TODO: Navigate to profile
-            },
+          Consumer<AuthProvider>(
+            builder: (context, auth, _) => IconButton(
+              icon: auth.isSignedIn && auth.photoUrl != null
+                  ? CircleAvatar(
+                      radius: 14,
+                      backgroundImage: NetworkImage(auth.photoUrl!),
+                    )
+                  : Icon(
+                      Icons.person_outline,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+              onPressed: () => _showProfileDialog(context, auth),
+            ),
           ),
         ],
       ),
@@ -134,6 +143,88 @@ class _RoomListScreenState extends State<RoomListScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  void _showProfileDialog(BuildContext context, AuthProvider auth) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(auth.isSignedIn ? 'Profile' : 'Sign In'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (auth.isSignedIn) ...[
+              if (auth.photoUrl != null)
+                CircleAvatar(
+                  radius: 40,
+                  backgroundImage: NetworkImage(auth.photoUrl!),
+                ),
+              const SizedBox(height: 16),
+              Text(
+                auth.displayName,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                auth.email,
+                style: TextStyle(color: Colors.grey.shade600),
+              ),
+            ] else ...[
+              Icon(
+                Icons.account_circle,
+                size: 80,
+                color: Colors.grey.shade400,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Sign in to save your study progress and sync across devices.',
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          if (auth.isSignedIn)
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await auth.signOut();
+              },
+              child: const Text('Sign Out'),
+            )
+          else
+            FilledButton.icon(
+              onPressed: auth.isLoading
+                  ? null
+                  : () async {
+                      final success = await auth.signInWithGoogle();
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        if (success) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Signed in successfully!')),
+                          );
+                        }
+                      }
+                    },
+              icon: auth.isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.login),
+              label: Text(auth.isLoading ? 'Signing in...' : 'Sign in with Google'),
+            ),
+        ],
       ),
     );
   }
