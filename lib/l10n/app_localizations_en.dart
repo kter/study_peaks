@@ -1,0 +1,82 @@
+// ignore: unused_import
+import 'package:intl/intl.dart' as intl;
+import 'app_localizations.dart';
+
+// ignore_for_file: type=lint
+
+/// The translations for English (`en`).
+class AppLocalizationsEn extends AppLocalizations {
+  AppLocalizationsEn([String locale = 'en']) : super(locale);
+
+  @override
+  String get appTitle => 'Global Study Peaks';
+
+  @override
+  String get chooseYourPeak => 'Choose Your Peak';
+
+  @override
+  String get joinRoomSubtitle => 'Join a virtual study room and start focusing';
+
+  @override
+  String get profile => 'Profile';
+
+  @override
+  String get signIn => 'Sign In';
+
+  @override
+  String get signOut => 'Sign Out';
+
+  @override
+  String get signInWithGoogle => 'Sign in with Google';
+
+  @override
+  String get signInPrompt =>
+      'Sign in to save your study progress and sync across devices.';
+
+  @override
+  String get signedInSuccess => 'Signed in successfully!';
+
+  @override
+  String get close => 'Close';
+
+  @override
+  String get seat => 'Seat';
+
+  @override
+  String occupancy(int current, int total) {
+    return '$current/$total';
+  }
+
+  @override
+  String get timer => 'Timer';
+
+  @override
+  String get start => 'Start';
+
+  @override
+  String get pause => 'Pause';
+
+  @override
+  String get reset => 'Reset';
+
+  @override
+  String get normalMode => 'Normal';
+
+  @override
+  String get pomodoroMode => 'Pomodoro';
+
+  @override
+  String get focusPhase => 'Focus';
+
+  @override
+  String get breakPhase => 'Break';
+
+  @override
+  String get sitDown => 'Sit Down';
+
+  @override
+  String get leave => 'Leave';
+
+  @override
+  String get anonymous => 'Anonymous User';
+}

@@ -1,0 +1,81 @@
+// ignore: unused_import
+import 'package:intl/intl.dart' as intl;
+import 'app_localizations.dart';
+
+// ignore_for_file: type=lint
+
+/// The translations for Japanese (`ja`).
+class AppLocalizationsJa extends AppLocalizations {
+  AppLocalizationsJa([String locale = 'ja']) : super(locale);
+
+  @override
+  String get appTitle => 'Global Study Peaks';
+
+  @override
+  String get chooseYourPeak => '山を選ぼう';
+
+  @override
+  String get joinRoomSubtitle => 'バーチャル自習室に参加して集中しよう';
+
+  @override
+  String get profile => 'プロフィール';
+
+  @override
+  String get signIn => 'サインイン';
+
+  @override
+  String get signOut => 'サインアウト';
+
+  @override
+  String get signInWithGoogle => 'Googleでサインイン';
+
+  @override
+  String get signInPrompt => 'サインインして学習の進捗を保存し、デバイス間で同期しよう。';
+
+  @override
+  String get signedInSuccess => 'サインインしました！';
+
+  @override
+  String get close => '閉じる';
+
+  @override
+  String get seat => '座席';
+
+  @override
+  String occupancy(int current, int total) {
+    return '$current/$total';
+  }
+
+  @override
+  String get timer => 'タイマー';
+
+  @override
+  String get start => 'スタート';
+
+  @override
+  String get pause => '一時停止';
+
+  @override
+  String get reset => 'リセット';
+
+  @override
+  String get normalMode => '通常';
+
+  @override
+  String get pomodoroMode => 'ポモドーロ';
+
+  @override
+  String get focusPhase => '集中';
+
+  @override
+  String get breakPhase => '休憩';
+
+  @override
+  String get sitDown => '着席';
+
+  @override
+  String get leave => '離席';
+
+  @override
+  String get anonymous => '匿名ユーザー';
+}
