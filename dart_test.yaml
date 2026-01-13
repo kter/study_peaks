@@ -1,0 +1,7 @@
+# Configuration for flutter test
+# See: https://dart.dev/tools/dart_test
+
+# Define custom tags used in tests
+tags:
+  golden:
+    description: "Golden tests that compare against baseline screenshots"

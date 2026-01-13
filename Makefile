@@ -8,10 +8,13 @@ help:
 	@echo "Global Study Peaks - Makefile Commands"
 	@echo ""
 	@echo "Flutter:"
-	@echo "  make flutter-get       - Install dependencies"
-	@echo "  make flutter-analyze   - Run static analysis"
-	@echo "  make flutter-run       - Run on connected device"
-	@echo "  make flutter-build-apk - Build Android APK"
+	@echo "  make flutter-get         - Install dependencies"
+	@echo "  make flutter-analyze     - Run static analysis"
+	@echo "  make flutter-run         - Run on connected device"
+	@echo "  make flutter-test        - Run all tests"
+	@echo "  make flutter-test-fast   - Run tests (excluding golden)"
+	@echo "  make flutter-build-apk   - Build Android APK"
+	@echo "  make setup-hooks         - Install pre-commit hook"
 	@echo ""
 	@echo "Backend API:"
 	@echo "  make api-build         - Build Docker image"
@@ -48,6 +51,18 @@ flutter-build-aab:
 
 flutter-test:
 	flutter test
+
+flutter-test-fast:
+	flutter test --no-pub --exclude-tags golden
+
+flutter-test-golden:
+	flutter test --update-goldens --no-pub
+
+setup-hooks:
+	@echo "Installing pre-commit hook..."
+	@cp scripts/pre-commit .git/hooks/pre-commit
+	@chmod +x .git/hooks/pre-commit
+	@echo "✅ Pre-commit hook installed! Tests will run before each commit."
 
 # ============================================
 # Backend API Commands
