@@ -30,7 +30,7 @@ class TimerWidget extends StatelessWidget {
         timer.pomodoroPhase == PomodoroPhase.shortBreak;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -63,23 +63,9 @@ class TimerWidget extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 12),
-          // Mode indicator
-          Icon(
-            timer.mode == TimerMode.pomodoro ? Icons.hourglass_empty : Icons.timer_outlined,
-            size: 18,
-            color: const Color(0xFF1A237E),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            timer.mode == TimerMode.pomodoro
-                ? (isPomodoroBreak ? 'Break' : 'Focus')
-                : 'Normal',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade600,
-            ),
-          ),
+          const SizedBox(width: 8),
+          // Compact mode toggle
+          _buildCompactModeToggle(timer),
           const Spacer(),
           // Play/Pause button
           Container(
@@ -107,6 +93,86 @@ class TimerWidget extends StatelessWidget {
             constraints: const BoxConstraints(),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Compact mode toggle for collapsed view
+  Widget _buildCompactModeToggle(TimerProvider timer) {
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildCompactModeButton(
+            timer,
+            TimerMode.normal,
+            Icons.timer_outlined,
+            'Normal',
+          ),
+          _buildCompactModeButton(
+            timer,
+            TimerMode.pomodoro,
+            Icons.hourglass_empty,
+            'Pomodoro',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactModeButton(
+    TimerProvider timer,
+    TimerMode mode,
+    IconData icon,
+    String tooltip,
+  ) {
+    final isSelected = timer.mode == mode;
+    final isPomodoroBreak = mode == TimerMode.pomodoro &&
+        timer.mode == TimerMode.pomodoro &&
+        timer.pomodoroPhase == PomodoroPhase.shortBreak;
+    
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: timer.isRunning ? null : () => timer.setMode(mode),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? (isPomodoroBreak ? Colors.green : const Color(0xFF1A237E))
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 14,
+                color: isSelected ? Colors.white : Colors.grey.shade500,
+              ),
+              if (isSelected) ...[
+                const SizedBox(width: 4),
+                Text(
+                  mode == TimerMode.pomodoro
+                      ? (isPomodoroBreak ? 'Break' : 'Focus')
+                      : 'Normal',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
