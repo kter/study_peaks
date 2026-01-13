@@ -7,6 +7,7 @@ require (
 	firebase.google.com/go/v4 v4.13.0
 	github.com/go-chi/chi/v5 v5.0.11
 	github.com/google/uuid v1.5.0
+	google.golang.org/api v0.128.0
 )
 
 require (
@@ -33,7 +34,6 @@ require (
 	golang.org/x/text v0.13.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
-	google.golang.org/api v0.128.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/appengine/v2 v2.0.2 // indirect
 	google.golang.org/genproto v0.0.0-20230530153820-e85fd2cbaebc // indirect

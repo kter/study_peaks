@@ -40,8 +40,9 @@ func main() {
 		r.Get("/rooms", getRoomsHandler)
 		r.Get("/rooms/{roomId}/seats", getSeatsHandler)
 
+		// Seat operations with optional auth (support anonymous users)
 		r.Group(func(r chi.Router) {
-			r.Use(authMiddleware)
+			r.Use(optionalAuthMiddleware)
 			r.Post("/rooms/{roomId}/sit", sitHandler)
 			r.Post("/rooms/{roomId}/sync", syncHandler)
 			r.Post("/rooms/{roomId}/leave", leaveHandler)
@@ -137,6 +138,26 @@ func corsMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		next.ServeHTTP(w, r)
+	})
+}
+
+// optionalAuthMiddleware attempts to verify Firebase token if present,
+// but allows the request to proceed without authentication for anonymous users
+func optionalAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		authHeader := r.Header.Get("Authorization")
+
+		if len(authHeader) >= 7 && authHeader[:7] == "Bearer " {
+			token := authHeader[7:]
+			decoded, err := authClient.VerifyIDToken(ctx, token)
+			if err == nil {
+				ctx = context.WithValue(ctx, "userId", decoded.UID)
+				ctx = context.WithValue(ctx, "isAuthenticated", true)
+			}
+		}
+
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
@@ -249,14 +270,36 @@ func getSeatsHandler(w http.ResponseWriter, r *http.Request) {
 func sitHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	roomId := chi.URLParam(r, "roomId")
-	userId := ctx.Value("userId").(string)
 
 	var req struct {
-		SeatNumber int `json:"seatNumber"`
+		SeatNumber  int    `json:"seatNumber"`
+		DisplayName string `json:"displayName"`
+		CountryCode string `json:"countryCode"`
+		UserId      string `json:"userId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
 		return
+	}
+
+	// Validate displayName is required for anonymous users
+	if req.DisplayName == "" {
+		req.DisplayName = "User"
+	}
+
+	// Set default country code
+	if req.CountryCode == "" {
+		req.CountryCode = "JP"
+	}
+
+	// Get userId from auth context or request, generate if not present
+	userId := ""
+	if ctxUserId := ctx.Value("userId"); ctxUserId != nil {
+		userId = ctxUserId.(string)
+	} else if req.UserId != "" {
+		userId = req.UserId
+	} else {
+		userId = "anon_" + uuid.New().String()[:8]
 	}
 
 	seatRef := firestoreClient.Collection("rooms").Doc(roomId).Collection("seats").Doc(seatId(req.SeatNumber))
@@ -281,8 +324,8 @@ func sitHandler(w http.ResponseWriter, r *http.Request) {
 			"sessionStartedAt":       now,
 			"lastSyncAt":             now,
 			"currentSessionDuration": 0,
-			"displayName":            "User",
-			"countryCode":            "UN",
+			"displayName":            req.DisplayName,
+			"countryCode":            req.CountryCode,
 			"statusMessage":          "",
 		})
 	})
@@ -304,6 +347,7 @@ func sitHandler(w http.ResponseWriter, r *http.Request) {
 		"sessionId":        data["sessionId"],
 		"seatNumber":       req.SeatNumber,
 		"sessionStartedAt": data["sessionStartedAt"],
+		"userId":           userId,
 	})
 }
 
