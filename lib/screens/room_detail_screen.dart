@@ -28,9 +28,30 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<RoomProvider>().fetchSeats(widget.room.roomId);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await context.read<RoomProvider>().fetchSeats(widget.room.roomId);
+      // Restore current user's seat if they are seated in this room
+      _restoreUserSeat();
     });
+  }
+
+  /// Restore the current user's seat if they are seated in this room
+  void _restoreUserSeat() {
+    final session = context.read<SessionProvider>();
+    if (session.isSeated && session.currentRoomId == widget.room.roomId && session.seatNumber != null) {
+      final userSettings = context.read<UserSettingsProvider>();
+      context.read<RoomProvider>().updateSeatOccupancy(
+        roomId: widget.room.roomId,
+        seatNumber: session.seatNumber!,
+        isOccupied: true,
+        user: SeatUser(
+          userId: userSettings.iconSeed,
+          displayName: userSettings.displayName,
+          countryCode: userSettings.countryCode,
+          statusMessage: '',
+        ),
+      );
+    }
   }
 
   void _toggleTimerCollapsed() {
@@ -188,11 +209,17 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                         ),
                         itemCount: seats.length,
                         itemBuilder: (context, index) {
+                          final seat = seats[index];
+                          // Check if this seat belongs to the current user
+                          final isCurrentUserSeat = session.isSeated &&
+                              session.currentRoomId == widget.room.roomId &&
+                              session.seatNumber == seat.seatNumber;
+                          
                           return SeatWidget(
-                            seat: seats[index],
+                            seat: seat,
                             size: 60,
+                            isCurrentUser: isCurrentUserSeat,
                             onTap: () {
-                              final seat = seats[index];
                               if (!seat.isOccupied) {
                                 if (session.isSeated) {
                                   ScaffoldMessenger.of(context).showSnackBar(
@@ -229,47 +256,50 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
   }
 
   void _confirmSit(BuildContext context, Seat seat) {
+    // Store reference to parent context before showing dialog
+    final parentContext = context;
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text('Seat ${seat.seatNumber}'),
         content: const Text('Do you want to take this seat and start studying?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.of(context).pop();
-              final success = await context
+              Navigator.of(dialogContext).pop();
+              final success = await parentContext
                   .read<SessionProvider>()
                   .sit(widget.room.roomId, seat.seatNumber);
               
-              if (context.mounted) {
+              if (parentContext.mounted) {
                 if (success) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(parentContext).showSnackBar(
                     SnackBar(
                       content: Text('You are now seated at seat ${seat.seatNumber}!'),
                       backgroundColor: Colors.green,
                     ),
                   );
                   // Update seat locally to show current user
-                  final userSettings = context.read<UserSettingsProvider>();
-                  context.read<RoomProvider>().updateSeatOccupancy(
+                  final userSettings = parentContext.read<UserSettingsProvider>();
+                  parentContext.read<RoomProvider>().updateSeatOccupancy(
                     roomId: widget.room.roomId,
                     seatNumber: seat.seatNumber,
                     isOccupied: true,
                     user: SeatUser(
-                      userId: 'current-user',
+                      userId: userSettings.iconSeed,
                       displayName: userSettings.displayName,
                       countryCode: userSettings.countryCode,
                       statusMessage: '',
                     ),
                   );
                 } else {
-                   final error = context.read<SessionProvider>().error;
-                   ScaffoldMessenger.of(context).showSnackBar(
+                   final error = parentContext.read<SessionProvider>().error;
+                   ScaffoldMessenger.of(parentContext).showSnackBar(
                     SnackBar(
                       content: Text('Failed to sit: $error'),
                       backgroundColor: Colors.red,

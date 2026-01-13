@@ -12,17 +12,30 @@ class SeatWidget extends StatelessWidget {
   final Seat seat;
   final VoidCallback? onTap;
   final double size;
+  final bool isCurrentUser;
 
   const SeatWidget({
     super.key,
     required this.seat,
     this.onTap,
     this.size = 80,
+    this.isCurrentUser = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    
+    // Define colors based on whether this is the current user
+    final borderColor = isCurrentUser
+        ? const Color(0xFFFFB300) // Gold/Amber for current user
+        : seat.isOccupied 
+            ? const Color(0xFF1A237E) // Navy accent for other users
+            : Colors.grey.shade300;
+    
+    final shadowColor = isCurrentUser
+        ? const Color(0xFFFFB300).withValues(alpha: 0.3)
+        : const Color(0xFF1A237E).withValues(alpha: 0.1);
     
     return GestureDetector(
       onTap: onTap,
@@ -34,16 +47,14 @@ class SeatWidget extends StatelessWidget {
               : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: seat.isOccupied 
-                ? const Color(0xFF1A237E) // Navy accent
-                : Colors.grey.shade300,
-            width: seat.isOccupied ? 2 : 1,
+            color: borderColor,
+            width: (seat.isOccupied || isCurrentUser) ? 2 : 1,
           ),
           boxShadow: seat.isOccupied
               ? [
                   BoxShadow(
-                    color: const Color(0xFF1A237E).withValues(alpha: 0.1),
-                    blurRadius: 8,
+                    color: shadowColor,
+                    blurRadius: isCurrentUser ? 12 : 8,
                     offset: const Offset(0, 2),
                   ),
                 ]
