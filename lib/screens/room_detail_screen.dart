@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/seat.dart';
+import '../providers/room_provider.dart';
+import '../providers/session_provider.dart';
 import '../providers/timer_provider.dart';
+import '../providers/user_settings_provider.dart';
 import '../widgets/seat_widget.dart';
 import '../widgets/timer_widget.dart';
 
 /// Screen displaying theater-style seat grid for a room.
-class RoomDetailScreen extends StatelessWidget {
+
+class RoomDetailScreen extends StatefulWidget {
   final Room room;
 
   const RoomDetailScreen({
@@ -15,12 +19,32 @@ class RoomDetailScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    // Generate mock seats for demo
-    final seats = _generateMockSeats();
+  State<RoomDetailScreen> createState() => _RoomDetailScreenState();
+}
 
-    return ChangeNotifierProvider(
-      create: (_) => TimerProvider(),
+class _RoomDetailScreenState extends State<RoomDetailScreen> {
+  bool _isTimerCollapsed = true; // Start collapsed to show more seats
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<RoomProvider>().fetchSeats(widget.room.roomId);
+    });
+  }
+
+  void _toggleTimerCollapsed() {
+    setState(() {
+      _isTimerCollapsed = !_isTimerCollapsed;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => TimerProvider()),
+      ],
       child: Scaffold(
         backgroundColor: const Color(0xFFF5F5F5),
         appBar: AppBar(
@@ -36,7 +60,7 @@ class RoomDetailScreen extends StatelessWidget {
               const Icon(Icons.terrain, color: Color(0xFF1A237E), size: 24),
               const SizedBox(width: 8),
               Text(
-                room.name,
+                widget.room.name,
                 style: const TextStyle(
                   color: Color(0xFF1A237E),
                   fontWeight: FontWeight.bold,
@@ -55,87 +79,138 @@ class RoomDetailScreen extends StatelessWidget {
         body: Column(
           children: [
             // Timer section (collapsible)
-            Container(
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
               margin: const EdgeInsets.all(16),
-              child: const TimerWidget(),
+              child: TimerWidget(
+                isCollapsed: _isTimerCollapsed,
+                onToggleCollapsed: _toggleTimerCollapsed,
+              ),
             ),
             // Room info bar
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.people_outline,
-                    color: Color(0xFF1A237E),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${seats.where((s) => s.isOccupied).length} studying',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1A237E),
-                    ),
-                  ),
-                  const Spacer(),
-                  ElevatedButton(
-                    onPressed: () => _takeSeat(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1A237E),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
+            Consumer<RoomProvider>(
+              builder: (context, roomProvider, _) {
+                final seats = roomProvider.getSeats(widget.room.roomId);
+                final occupiedCount = seats.where((s) => s.isOccupied).length;
+                
+                return Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
                       ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 10,
-                      ),
-                    ),
-                    child: const Text('Take a Seat'),
+                    ],
                   ),
-                ],
-              ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.people_outline,
+                        color: Color(0xFF1A237E),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$occupiedCount studying',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1A237E),
+                        ),
+                      ),
+                      const Spacer(),
+                      Consumer<SessionProvider>(
+                        builder: (context, session, _) {
+                          if (session.isSeated) {
+                            return OutlinedButton.icon(
+                              onPressed: () => _confirmLeave(context, session),
+                              icon: const Icon(Icons.exit_to_app),
+                              label: const Text('Leave Seat'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.red,
+                                side: const BorderSide(color: Colors.red),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                              ),
+                            );
+                          }
+                          return ElevatedButton(
+                            onPressed: () => _takeSeat(context),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF1A237E),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 10,
+                              ),
+                            ),
+                            child: const Text('Take a Seat'),
+                          );
+                        }
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 16),
             // Seat grid
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: GridView.builder(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    childAspectRatio: 0.7,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                  ),
-                  itemCount: seats.length,
-                  itemBuilder: (context, index) {
-                    return SeatWidget(
-                      seat: seats[index],
-                      size: 60,
-                      onTap: () {
-                        final seat = seats[index];
-                        if (!seat.isOccupied) {
-                          _confirmSit(context, seat);
-                        } else {
-                          _showUserInfo(context, seat);
-                        }
-                      },
-                    );
-                  },
-                ),
+              child: Consumer2<RoomProvider, SessionProvider>(
+                builder: (context, roomProvider, session, child) {
+                  if (roomProvider.isLoading && roomProvider.getSeats(widget.room.roomId).isEmpty) {
+                     return const Center(child: CircularProgressIndicator());
+                  }
+
+                  final seats = roomProvider.getSeats(widget.room.roomId);
+                  if (seats.isEmpty) {
+                    return const Center(child: Text('No seats available'));
+                  }
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: RefreshIndicator(
+                      onRefresh: () => roomProvider.fetchSeats(widget.room.roomId),
+                      child: GridView.builder(
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 4,
+                          childAspectRatio: 0.7,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                        ),
+                        itemCount: seats.length,
+                        itemBuilder: (context, index) {
+                          return SeatWidget(
+                            seat: seats[index],
+                            size: 60,
+                            onTap: () {
+                              final seat = seats[index];
+                              if (!seat.isOccupied) {
+                                if (session.isSeated) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('You are already seated!')),
+                                  );
+                                } else {
+                                  _confirmSit(context, seat);
+                                }
+                              } else {
+                                _showUserInfo(context, seat);
+                              }
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ],
@@ -165,19 +240,85 @@ class RoomDetailScreen extends StatelessWidget {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(context).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('You are now seated at seat ${seat.seatNumber}!'),
-                  backgroundColor: Colors.green,
-                ),
-              );
+              final success = await context
+                  .read<SessionProvider>()
+                  .sit(widget.room.roomId, seat.seatNumber);
+              
+              if (context.mounted) {
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('You are now seated at seat ${seat.seatNumber}!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                  // Update seat locally to show current user
+                  final userSettings = context.read<UserSettingsProvider>();
+                  context.read<RoomProvider>().updateSeatOccupancy(
+                    roomId: widget.room.roomId,
+                    seatNumber: seat.seatNumber,
+                    isOccupied: true,
+                    user: SeatUser(
+                      userId: 'current-user',
+                      displayName: userSettings.displayName,
+                      countryCode: userSettings.countryCode,
+                      statusMessage: '',
+                    ),
+                  );
+                } else {
+                   final error = context.read<SessionProvider>().error;
+                   ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to sit: $error'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF1A237E),
             ),
             child: const Text('Sit Down', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmLeave(BuildContext context, SessionProvider session) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Leave Seat'),
+        content: const Text('Are you sure you want to leave your seat?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              final seatNumber = session.seatNumber;
+              final success = await session.leave();
+              if (context.mounted && success) {
+                 ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('You have left your seat.')),
+                  );
+                 // Clear seat locally
+                 if (seatNumber != null) {
+                   context.read<RoomProvider>().clearSeatOccupancy(
+                     widget.room.roomId,
+                     seatNumber,
+                   );
+                 }
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Leave'),
           ),
         ],
       ),
@@ -256,7 +397,7 @@ class RoomDetailScreen extends StatelessWidget {
                 const Icon(Icons.terrain, color: Color(0xFF1A237E), size: 32),
                 const SizedBox(width: 12),
                 Text(
-                  room.name,
+                  widget.room.name,
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -266,9 +407,9 @@ class RoomDetailScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            _infoRow(Icons.event_seat, 'Capacity: ${room.capacity} seats'),
+            _infoRow(Icons.event_seat, 'Capacity: ${widget.room.capacity} seats'),
             const SizedBox(height: 8),
-            _infoRow(Icons.people, 'Currently: ${room.currentOccupancy} studying'),
+            _infoRow(Icons.people, 'Currently: ${widget.room.currentOccupancy} studying'),
             const SizedBox(height: 24),
           ],
         ),
@@ -287,35 +428,5 @@ class RoomDetailScreen extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  List<Seat> _generateMockSeats() {
-    final mockUsers = [
-      const SeatUser(userId: 'u1', displayName: 'Taro', countryCode: 'JP', statusMessage: '頑張る！'),
-      const SeatUser(userId: 'u2', displayName: 'Emma', countryCode: 'US', statusMessage: 'Studying for finals'),
-      const SeatUser(userId: 'u3', displayName: 'Liu Wei', countryCode: 'CN', statusMessage: '专注学习'),
-      const SeatUser(userId: 'u4', displayName: 'Hans', countryCode: 'DE', statusMessage: 'Prüfungsvorbereitung'),
-      const SeatUser(userId: 'u5', displayName: 'Maria', countryCode: 'BR', statusMessage: 'Estudando!'),
-    ];
-
-    final List<Seat> seats = [];
-    int userIdx = 0;
-    final occupiedSeats = [1, 3, 7, 8, 12, 15, 20];
-
-    for (int i = 1; i <= 24; i++) {
-      if (occupiedSeats.contains(i) && userIdx < mockUsers.length) {
-        seats.add(Seat(
-          seatId: 'seat-$i',
-          seatNumber: i,
-          isOccupied: true,
-          user: mockUsers[userIdx],
-          currentSessionDuration: (userIdx + 1) * 900,
-        ));
-        userIdx++;
-      } else {
-        seats.add(Seat.empty(i));
-      }
-    }
-    return seats;
   }
 }

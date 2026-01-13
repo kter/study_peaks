@@ -81,6 +81,26 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Update user display name
+  Future<void> updateUserName(String name) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      await _user?.updateDisplayName(name);
+      await _user?.reload();
+      _user = _auth.currentUser;
+
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
   /// Get ID token for API calls
   Future<String?> getIdToken() async {
     return await _user?.getIdToken();

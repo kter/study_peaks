@@ -191,35 +191,27 @@ class SeatWidget extends StatelessWidget {
     
     String durationText;
     if (hours > 0) {
-      durationText = '${hours}h ${minutes}m';
+      durationText = '${hours}h${minutes}m';
     } else {
       durationText = '${minutes}m';
     }
     
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A237E).withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.timer_outlined,
-            size: 14,
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A237E).withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          durationText,
+          style: const TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w500,
             color: Color(0xFF1A237E),
           ),
-          const SizedBox(width: 4),
-          Text(
-            durationText,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF1A237E),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

@@ -75,7 +75,7 @@ void main() {
       expect(find.text('Test User'), findsOneWidget);
     });
 
-    testWidgets('displays duration badge with timer icon', (tester) async {
+    testWidgets('displays duration badge', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -87,9 +87,8 @@ void main() {
         ),
       );
 
-      // Core behavior: Shows duration with timer icon
-      expect(find.byIcon(Icons.timer_outlined), findsOneWidget);
-      expect(find.text('1h 0m'), findsOneWidget);
+      // Core behavior: Shows duration text
+      expect(find.text('1h0m'), findsOneWidget);
     });
 
     testWidgets('duration displays minutes only when under an hour', (tester) async {

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:jdenticon_dart/jdenticon_dart.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../providers/auth_provider.dart';
 import '../providers/room_provider.dart';
+import '../providers/user_settings_provider.dart';
 import '../widgets/room_card.dart';
 import 'room_detail_screen.dart';
+import 'user_settings_screen.dart';
 
 /// Main screen displaying list of available study rooms.
 class RoomListScreen extends StatefulWidget {
@@ -50,18 +54,27 @@ class _RoomListScreenState extends State<RoomListScreen> {
         ),
         centerTitle: true,
         actions: [
-          Consumer<AuthProvider>(
-            builder: (context, auth, _) => IconButton(
+          Consumer2<AuthProvider, UserSettingsProvider>(
+            builder: (context, auth, userSettings, _) => IconButton(
               icon: auth.isSignedIn && auth.photoUrl != null
                   ? CircleAvatar(
                       radius: 14,
                       backgroundImage: NetworkImage(auth.photoUrl!),
                     )
-                  : Icon(
-                      Icons.person_outline,
-                      color: Theme.of(context).colorScheme.primary,
+                  : ClipOval(
+                      child: SvgPicture.string(
+                        Jdenticon.toSvg(userSettings.iconSeed, size: 28),
+                        width: 28,
+                        height: 28,
+                      ),
                     ),
-              onPressed: () => _showProfileDialog(context, auth),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const UserSettingsScreen(),
+                  ),
+                );
+              },
             ),
           ),
         ],
@@ -162,12 +175,25 @@ class _RoomListScreenState extends State<RoomListScreen> {
                   backgroundImage: NetworkImage(auth.photoUrl!),
                 ),
               const SizedBox(height: 16),
-              Text(
-                auth.displayName,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    auth.displayName,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.edit, size: 20),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _showEditNameDialog(context, auth);
+                    },
+                    tooltip: 'Edit Name',
+                  ),
+                ],
               ),
               Text(
                 auth.email,
@@ -182,6 +208,14 @@ class _RoomListScreenState extends State<RoomListScreen> {
               const SizedBox(height: 16),
               const Text(
                 'Sign in to save your study progress and sync across devices.',
+                textAlign: TextAlign.center,
+              ),
+            ],
+            if (auth.error != null) ...[
+              const SizedBox(height: 16),
+              Text(
+                auth.error!,
+                style: const TextStyle(color: Colors.red, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -212,6 +246,13 @@ class _RoomListScreenState extends State<RoomListScreen> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Signed in successfully!')),
                           );
+                        } else if (auth.error != null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Sign in failed: ${auth.error}'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
                         }
                       }
                     },
@@ -224,6 +265,56 @@ class _RoomListScreenState extends State<RoomListScreen> {
                   : const Icon(Icons.login),
               label: Text(auth.isLoading ? 'Signing in...' : 'Sign in with Google'),
             ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditNameDialog(BuildContext context, AuthProvider auth) {
+    final controller = TextEditingController(text: auth.displayName);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Name'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Display Name',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newName = controller.text.trim();
+              if (newName.isNotEmpty) {
+                try {
+                  await auth.updateUserName(newName);
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Name updated successfully')),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to update name: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              }
+            },
+            child: const Text('Save'),
+          ),
         ],
       ),
     );

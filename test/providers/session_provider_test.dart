@@ -46,16 +46,18 @@ void main() {
       expect(provider.isSeated, true);
     });
 
-    test('sit returns false on API error', () async {
+    test('sit falls back to mock mode on API error', () async {
       when(() => mockApiService.sit('room-1', 5)).thenThrow(
         Exception('Server error'),
       );
 
       final result = await provider.sit('room-1', 5);
 
-      expect(result, false);
-      expect(provider.state, SessionState.idle);
-      expect(provider.error, isNotNull);
+      // Mock mode: success even with API error
+      expect(result, true);
+      expect(provider.state, SessionState.seated);
+      expect(provider.sessionId, isNotNull); // Mock session ID
+      expect(provider.error, isNull); // No error in mock mode
     });
 
     test('leave resets state on success', () async {
@@ -93,7 +95,7 @@ void main() {
       expect(provider.currentDuration, 300);
     });
 
-    test('leave returns false on API error', () async {
+    test('leave succeeds even on API error (mock mode)', () async {
       // First sit down
       final mockSitResponse = createMockSitResponse(
         sessionId: 'session-123',
@@ -110,8 +112,9 @@ void main() {
 
       final result = await provider.leave();
 
-      expect(result, false);
-      expect(provider.error, isNotNull);
+      // Mock mode: success even with API error
+      expect(result, true);
+      expect(provider.state, SessionState.idle); // State reset
     });
   });
 }

@@ -5,24 +5,39 @@ import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/room_provider.dart';
 import 'providers/session_provider.dart';
+import 'providers/user_settings_provider.dart';
 import 'screens/room_list_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-  runApp(const StudyPeaksApp());
+  
+  // Initialize user settings
+  final userSettingsProvider = UserSettingsProvider();
+  await userSettingsProvider.init();
+  
+  runApp(StudyPeaksApp(userSettingsProvider: userSettingsProvider));
 }
 
 class StudyPeaksApp extends StatelessWidget {
-  const StudyPeaksApp({super.key});
+  final UserSettingsProvider userSettingsProvider;
+  
+  const StudyPeaksApp({super.key, required this.userSettingsProvider});
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider.value(value: userSettingsProvider),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => RoomProvider()),
-        ChangeNotifierProvider(create: (_) => SessionProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, SessionProvider>(
+          create: (_) => SessionProvider(),
+          update: (_, auth, session) {
+            session?.setAuthProvider(auth);
+            return session ?? SessionProvider()..setAuthProvider(auth);
+          },
+        ),
       ],
       child: MaterialApp(
         title: 'Global Study Peaks',
