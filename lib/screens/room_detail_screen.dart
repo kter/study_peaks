@@ -94,6 +94,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
         body: Column(
           children: [
             _buildTimerSection(),
+            _buildErrorBanner(),
             _buildRoomInfoBar(),
             const SizedBox(height: 16),
             Expanded(
@@ -153,6 +154,42 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
         isCollapsed: _isTimerCollapsed,
         onToggleCollapsed: _toggleTimerCollapsed,
       ),
+    );
+  }
+
+  Widget _buildErrorBanner() {
+    return Consumer<SessionProvider>(
+      builder: (context, session, _) {
+        if (session.error == null) return const SizedBox.shrink();
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.red.shade50,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.red.shade200),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  session.error!,
+                  style: TextStyle(color: Colors.red.shade700, fontSize: 14),
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.close, color: Colors.red.shade700, size: 18),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () => session.clearError(),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

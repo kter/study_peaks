@@ -13,6 +13,7 @@ enum SessionState {
 /// Provider for managing study session state.
 class SessionProvider extends ChangeNotifier {
   final ApiService _apiService;
+  final bool useMockFallback;
   AuthProvider? _authProvider;
 
   SessionState _state = SessionState.idle;
@@ -26,8 +27,15 @@ class SessionProvider extends ChangeNotifier {
 
   static const syncIntervalMinutes = 5;
 
-  SessionProvider({ApiService? apiService})
-      : _apiService = apiService ?? ApiService();
+  /// Creates a SessionProvider.
+  /// 
+  /// [useMockFallback] controls whether API errors fall back to mock mode.
+  /// Defaults to [kDebugMode], so production builds will show errors to users.
+  SessionProvider({
+    ApiService? apiService,
+    bool? useMockFallback,
+  })  : _apiService = apiService ?? ApiService(),
+        useMockFallback = useMockFallback ?? kDebugMode;
 
   /// Set the auth provider for getting tokens
   void setAuthProvider(AuthProvider authProvider) {
@@ -53,6 +61,12 @@ class SessionProvider extends ChangeNotifier {
   String? get error => _error;
   bool get isSeated => _state == SessionState.seated;
 
+  /// Clear the current error state.
+  void clearError() {
+    _error = null;
+    notifyListeners();
+  }
+
   /// Sit down on a seat.
   Future<bool> sit(String roomId, int seatNumber) async {
     try {
@@ -73,17 +87,24 @@ class SessionProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      // If API fails (e.g., no auth), use local mock mode for development
-      _error = null; // Clear error for mock mode
-      _currentRoomId = roomId;
-      _sessionId = 'mock-session-${DateTime.now().millisecondsSinceEpoch}';
-      _seatNumber = seatNumber;
-      _sessionStartedAt = DateTime.now();
-      _currentDuration = 0;
-      _state = SessionState.seated;
-      
-      notifyListeners();
-      return true;
+      if (useMockFallback) {
+        // Development mode: log and fall back to mock mode
+        debugPrint('API error (mock fallback): $e');
+        _error = null;
+        _currentRoomId = roomId;
+        _sessionId = 'mock-session-${DateTime.now().millisecondsSinceEpoch}';
+        _seatNumber = seatNumber;
+        _sessionStartedAt = DateTime.now();
+        _currentDuration = 0;
+        _state = SessionState.seated;
+        notifyListeners();
+        return true;
+      } else {
+        // Production mode: surface error to UI
+        _error = 'Failed to sit: ${e.toString()}';
+        notifyListeners();
+        return false;
+      }
     }
   }
 
@@ -102,7 +123,13 @@ class SessionProvider extends ChangeNotifier {
       await _ensureAuthToken();
       await _apiService.leave(_currentRoomId!, _sessionId!, _currentDuration);
     } catch (e) {
-      // Ignore API errors - allow local state reset for mock mode
+      if (useMockFallback) {
+        // Development mode: log but allow state reset
+        debugPrint('API error (mock fallback): $e');
+      } else {
+        // Production mode: set error but still reset local state
+        _error = 'Failed to leave: ${e.toString()}';
+      }
     }
 
     _cancelSyncTimer();
