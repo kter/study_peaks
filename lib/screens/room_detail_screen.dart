@@ -346,28 +346,31 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
   }
 
   void _confirmLeave(BuildContext context, SessionProvider session) {
+    // Store reference to parent context before showing dialog
+    final parentContext = context;
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Leave Seat'),
         content: const Text('Are you sure you want to leave your seat?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () async {
-              Navigator.of(context).pop();
+              Navigator.of(dialogContext).pop();
               final seatNumber = session.seatNumber;
               final success = await session.leave();
-              if (context.mounted && success) {
-                 ScaffoldMessenger.of(context).showSnackBar(
+              if (parentContext.mounted && success) {
+                 ScaffoldMessenger.of(parentContext).showSnackBar(
                     const SnackBar(content: Text('You have left your seat.')),
                   );
                  // Clear seat locally
                  if (seatNumber != null) {
-                   context.read<RoomProvider>().clearSeatOccupancy(
+                   parentContext.read<RoomProvider>().clearSeatOccupancy(
                      widget.room.roomId,
                      seatNumber,
                    );
