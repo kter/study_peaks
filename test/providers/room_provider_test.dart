@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:study_peaks/providers/room_provider.dart';
 import 'package:study_peaks/models/seat.dart';
+import 'package:study_peaks/repositories/mock_data_repository.dart';
 
 import '../helpers/test_helpers.dart';
 import '../helpers/mock_data.dart';
@@ -58,15 +59,21 @@ void main() {
     });
 
     test('fetchRooms falls back to mock data on API error', () async {
+      // Create provider with mock data repository for this test
+      final providerWithMock = RoomProvider(
+        apiService: mockApiService,
+        mockDataRepository: DevMockDataRepository(),
+      );
+      
       when(() => mockApiService.getRooms()).thenThrow(
         Exception('Network error'),
       );
 
-      await provider.fetchRooms();
+      await providerWithMock.fetchRooms();
 
       // Should have mock rooms (fallback)
-      expect(provider.rooms.isNotEmpty, true);
-      expect(provider.error, isNotNull);
+      expect(providerWithMock.rooms.isNotEmpty, true);
+      expect(providerWithMock.error, isNotNull);
     });
 
     test('rooms list contains Room objects with expected properties', () async {

@@ -6,7 +6,12 @@ import 'providers/auth_provider.dart';
 import 'providers/room_provider.dart';
 import 'providers/session_provider.dart';
 import 'providers/user_settings_provider.dart';
+import 'repositories/mock_data_repository.dart';
 import 'screens/room_list_screen.dart';
+
+/// Build-time constant for mock data usage.
+/// Set to false in production builds using: --dart-define=USE_MOCK_DATA=false
+const bool kUseMockData = bool.fromEnvironment('USE_MOCK_DATA', defaultValue: true);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,7 +35,11 @@ class StudyPeaksApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider.value(value: userSettingsProvider),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => RoomProvider()),
+        ChangeNotifierProvider(
+          create: (_) => RoomProvider(
+            mockDataRepository: kUseMockData ? DevMockDataRepository() : null,
+          ),
+        ),
         ChangeNotifierProxyProvider<AuthProvider, SessionProvider>(
           create: (_) => SessionProvider(),
           update: (_, auth, session) {

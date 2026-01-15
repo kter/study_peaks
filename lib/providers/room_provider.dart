@@ -1,18 +1,22 @@
 import 'package:flutter/foundation.dart';
 import '../models/seat.dart';
+import '../repositories/mock_data_repository.dart';
 import '../services/api_service.dart';
 
 /// Provider for managing room list state.
 class RoomProvider extends ChangeNotifier {
   final ApiService _apiService;
+  final MockDataRepository? _mockDataRepository;
 
   List<Room> _rooms = [];
   bool _isLoading = false;
   String? _error;
 
-  RoomProvider({ApiService? apiService})
-      : _apiService = apiService ?? ApiService();
-
+  RoomProvider({
+    ApiService? apiService,
+    MockDataRepository? mockDataRepository,
+  })  : _apiService = apiService ?? ApiService(),
+        _mockDataRepository = mockDataRepository;
 
   final Map<String, List<Seat>> _roomSeats = {};
 
@@ -67,8 +71,8 @@ class RoomProvider extends ChangeNotifier {
       _rooms = await _apiService.getRooms();
     } catch (e) {
       _error = e.toString();
-      // Use mock data for development
-      _rooms = _getMockRooms();
+      // Use mock data for development (if repository provided)
+      _rooms = _mockDataRepository?.getMockRooms() ?? [];
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -85,134 +89,17 @@ class RoomProvider extends ChangeNotifier {
       final seats = await _apiService.getRoomSeats(roomId);
       // Use mock data if API returns empty seats (backend not configured yet)
       if (seats.isEmpty) {
-        _roomSeats[roomId] = _getMockSeats(roomId);
+        _roomSeats[roomId] = _mockDataRepository?.getMockSeats(roomId) ?? [];
       } else {
         _roomSeats[roomId] = seats;
       }
     } catch (e) {
       _error = e.toString();
-      // Use mock data for development (fallback)
-      _roomSeats[roomId] = _getMockSeats(roomId);
+      // Use mock data for development (fallback, if repository provided)
+      _roomSeats[roomId] = _mockDataRepository?.getMockSeats(roomId) ?? [];
     } finally {
       _isLoading = false;
       notifyListeners();
     }
-  }
-
-  /// Get mock seats for development.
-  List<Seat> _getMockSeats(String roomId) {
-    // Determine capacity based on room
-    final roomCapacity = _getRoomCapacity(roomId);
-    final seats = <Seat>[];
-    
-    // Generate seats with some randomly occupied
-    for (int i = 1; i <= roomCapacity; i++) {
-      // Randomly occupy ~30% of seats
-      final isOccupied = i % 3 == 0;
-      
-      if (isOccupied) {
-        seats.add(Seat(
-          seatId: '$roomId-seat-$i',
-          seatNumber: i,
-          isOccupied: true,
-          user: SeatUser(
-            userId: 'mock-user-$i',
-            displayName: _getMockUserName(i),
-            countryCode: _getMockCountryCode(i),
-            statusMessage: _getMockStatus(i),
-          ),
-          sessionStartedAt: DateTime.now().subtract(Duration(minutes: i * 5)),
-          currentSessionDuration: i * 300, // 5 min increments
-        ));
-      } else {
-        seats.add(Seat.empty(i));
-      }
-    }
-    
-    return seats;
-  }
-
-  int _getRoomCapacity(String roomId) {
-    switch (roomId) {
-      case 'everest':
-        return 24;
-      case 'fuji':
-        return 20;
-      case 'matterhorn':
-        return 16;
-      case 'kilimanjaro':
-        return 20;
-      case 'denali':
-        return 16;
-      case 'aconcagua':
-        return 20;
-      default:
-        return 16;
-    }
-  }
-
-  String _getMockUserName(int index) {
-    const names = [
-      'Alex', 'Jordan', 'Taylor', 'Morgan', 'Casey',
-      'Riley', 'Quinn', 'Avery', 'Charlie', 'Dakota',
-      'Skyler', 'Jamie', 'Reese', 'Finley', 'Harper',
-    ];
-    return names[index % names.length];
-  }
-
-  String _getMockCountryCode(int index) {
-    const countries = ['JP', 'US', 'GB', 'KR', 'DE', 'FR', 'CN', 'BR', 'IN', 'AU'];
-    return countries[index % countries.length];
-  }
-
-  String _getMockStatus(int index) {
-    const statuses = [
-      'Studying hard!', 'Deep focus', 'Math exam prep',
-      'Coding time', 'Reading', 'Essay writing',
-      '', '', '', // Some empty statuses
-    ];
-    return statuses[index % statuses.length];
-  }
-
-  /// Get mock rooms for development.
-  List<Room> _getMockRooms() {
-    return const [
-      Room(
-        roomId: 'everest',
-        name: 'Mt. Everest',
-        capacity: 100,
-        currentOccupancy: 42,
-      ),
-      Room(
-        roomId: 'fuji',
-        name: 'Mt. Fuji',
-        capacity: 50,
-        currentOccupancy: 23,
-      ),
-      Room(
-        roomId: 'matterhorn',
-        name: 'Matterhorn',
-        capacity: 75,
-        currentOccupancy: 31,
-      ),
-      Room(
-        roomId: 'kilimanjaro',
-        name: 'Mt. Kilimanjaro',
-        capacity: 80,
-        currentOccupancy: 15,
-      ),
-      Room(
-        roomId: 'denali',
-        name: 'Denali',
-        capacity: 60,
-        currentOccupancy: 8,
-      ),
-      Room(
-        roomId: 'aconcagua',
-        name: 'Aconcagua',
-        capacity: 70,
-        currentOccupancy: 19,
-      ),
-    ];
   }
 }
