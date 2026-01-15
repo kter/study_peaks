@@ -84,32 +84,27 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => TimerProvider()),
-      ],
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF5F5F5),
-        appBar: _buildAppBar(),
-        body: Column(
-          children: [
-            _buildTimerSection(),
-            _buildErrorBanner(),
-            _buildRoomInfoBar(),
-            const SizedBox(height: 16),
-            Expanded(
-              child: SeatGrid(
-                roomId: widget.room.roomId,
-                onAlreadySeated: () => _showAlreadySeatedMessage(context),
-                onEmptySeatTap: (seat) => _handleSitRequest(context, seat),
-                onOccupiedSeatTap: (seat) => showUserInfoDialog(
-                  context: context,
-                  seat: seat,
-                ),
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5),
+      appBar: _buildAppBar(),
+      body: Column(
+        children: [
+          _buildTimerSection(),
+          _buildErrorBanner(),
+          _buildRoomInfoBar(),
+          const SizedBox(height: 16),
+          Expanded(
+            child: SeatGrid(
+              roomId: widget.room.roomId,
+              onAlreadySeated: () => _showAlreadySeatedMessage(context),
+              onEmptySeatTap: (seat) => _handleSitRequest(context, seat),
+              onOccupiedSeatTap: (seat) => showUserInfoDialog(
+                context: context,
+                seat: seat,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -300,6 +295,8 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
           backgroundColor: Colors.green,
         ),
       );
+      // Start timer when sitting down
+      context.read<TimerProvider>().start();
       final userSettings = context.read<UserSettingsProvider>();
       context.read<RoomProvider>().updateSeatOccupancy(
             roomId: widget.room.roomId,
@@ -331,6 +328,8 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('You have left your seat.')),
       );
+      // Reset timer when leaving
+      context.read<TimerProvider>().reset();
       if (seatNumber != null) {
         context.read<RoomProvider>().clearSeatOccupancy(
               widget.room.roomId,

@@ -273,5 +273,71 @@ void main() {
         expect(provider2.countryCode, 'UK');
       });
     });
+
+    group('useGoogleAvatar', () {
+      test('has default value of true', () async {
+        await setupMockSharedPreferences();
+        final provider = UserSettingsProvider();
+        await provider.init();
+
+        expect(provider.useGoogleAvatar, true);
+      });
+
+      test('loads saved value from preferences', () async {
+        await setupMockSharedPreferences({
+          'user_use_google_avatar': false,
+        });
+        final provider = UserSettingsProvider();
+        await provider.init();
+
+        expect(provider.useGoogleAvatar, false);
+      });
+
+      test('setUseGoogleAvatar updates value', () async {
+        await setupMockSharedPreferences();
+        final provider = UserSettingsProvider();
+        await provider.init();
+
+        expect(provider.useGoogleAvatar, true);
+        await provider.setUseGoogleAvatar(false);
+        expect(provider.useGoogleAvatar, false);
+      });
+
+      test('setUseGoogleAvatar throws StateError before init', () async {
+        await setupMockSharedPreferences();
+        final provider = UserSettingsProvider();
+
+        expect(
+          () => provider.setUseGoogleAvatar(false),
+          throwsA(isA<StateError>()),
+        );
+      });
+
+      test('notifies listeners on change', () async {
+        await setupMockSharedPreferences();
+        final provider = UserSettingsProvider();
+        await provider.init();
+
+        bool notified = false;
+        provider.addListener(() => notified = true);
+
+        await provider.setUseGoogleAvatar(false);
+
+        expect(notified, true);
+      });
+
+      test('persists across provider instances', () async {
+        await setupMockSharedPreferences();
+
+        final provider1 = UserSettingsProvider();
+        await provider1.init();
+        await provider1.setUseGoogleAvatar(false);
+        expect(provider1.useGoogleAvatar, false);
+
+        final provider2 = UserSettingsProvider();
+        await provider2.init();
+        expect(provider2.useGoogleAvatar, false);
+      });
+    });
   });
 }

@@ -55,27 +55,33 @@ class _RoomListScreenState extends State<RoomListScreen> {
         centerTitle: true,
         actions: [
           Consumer2<AuthProvider, UserSettingsProvider>(
-            builder: (context, auth, userSettings, _) => IconButton(
-              icon: auth.isSignedIn && auth.photoUrl != null
-                  ? CircleAvatar(
-                      radius: 14,
-                      backgroundImage: NetworkImage(auth.photoUrl!),
-                    )
-                  : ClipOval(
-                      child: SvgPicture.string(
-                        Jdenticon.toSvg(userSettings.iconSeed, size: 28),
-                        width: 28,
-                        height: 28,
+            builder: (context, auth, userSettings, _) {
+              final showGoogleAvatar = auth.isSignedIn && 
+                  auth.photoUrl != null && 
+                  userSettings.useGoogleAvatar;
+              
+              return IconButton(
+                icon: showGoogleAvatar
+                    ? CircleAvatar(
+                        radius: 14,
+                        backgroundImage: NetworkImage(auth.photoUrl!),
+                      )
+                    : ClipOval(
+                        child: SvgPicture.string(
+                          Jdenticon.toSvg(userSettings.iconSeed, size: 28),
+                          width: 28,
+                          height: 28,
+                        ),
                       ),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const UserSettingsScreen(),
                     ),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const UserSettingsScreen(),
-                  ),
-                );
-              },
-            ),
+                  );
+                },
+              );
+            },
           ),
         ],
       ),

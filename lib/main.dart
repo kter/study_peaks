@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'l10n/app_localizations.dart';
 import 'providers/auth_provider.dart';
 import 'providers/room_provider.dart';
 import 'providers/session_provider.dart';
+import 'providers/timer_provider.dart';
 import 'providers/user_settings_provider.dart';
 import 'repositories/mock_data_repository.dart';
 import 'screens/room_list_screen.dart';
@@ -35,6 +37,7 @@ class StudyPeaksApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider.value(value: userSettingsProvider),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => TimerProvider()),
         ChangeNotifierProvider(
           create: (_) => RoomProvider(
             mockDataRepository: kUseMockData ? DevMockDataRepository() : null,
@@ -51,6 +54,8 @@ class StudyPeaksApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Global Study Peaks',
         debugShowCheckedModeBanner: false,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         theme: _buildLightTheme(),
         darkTheme: _buildDarkTheme(),
         themeMode: ThemeMode.system,

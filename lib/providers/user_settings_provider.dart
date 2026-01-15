@@ -11,17 +11,20 @@ class UserSettingsProvider extends ChangeNotifier {
   static const _keyDisplayName = 'user_display_name';
   static const _keyIconSeed = 'user_icon_seed';
   static const _keyCountryCode = 'user_country_code';
+  static const _keyUseGoogleAvatar = 'user_use_google_avatar';
 
   SharedPreferences? _prefs;
   bool _isInitialized = false;
   String _displayName = 'Anonymous';
   String _iconSeed = '';
   String _countryCode = 'JP';
+  bool _useGoogleAvatar = true;
   bool _isLoading = true;
 
   String get displayName => _displayName;
   String get iconSeed => _iconSeed;
   String get countryCode => _countryCode;
+  bool get useGoogleAvatar => _useGoogleAvatar;
   bool get isLoading => _isLoading;
   bool get isInitialized => _isInitialized;
 
@@ -45,6 +48,7 @@ class UserSettingsProvider extends ChangeNotifier {
     _displayName = _prefs!.getString(_keyDisplayName) ?? 'Anonymous';
     _iconSeed = _prefs!.getString(_keyIconSeed) ?? const Uuid().v4();
     _countryCode = _prefs!.getString(_keyCountryCode) ?? 'JP';
+    _useGoogleAvatar = _prefs!.getBool(_keyUseGoogleAvatar) ?? true;
 
     // Save default icon seed if not set
     if (_prefs!.getString(_keyIconSeed) == null) {
@@ -91,4 +95,14 @@ class UserSettingsProvider extends ChangeNotifier {
     await _prefs!.setString(_keyCountryCode, _countryCode);
     notifyListeners();
   }
+
+  /// Update whether to use Google avatar when signed in.
+  /// Throws [StateError] if [init] has not been called.
+  Future<void> setUseGoogleAvatar(bool value) async {
+    _ensureInitialized();
+    _useGoogleAvatar = value;
+    await _prefs!.setBool(_keyUseGoogleAvatar, _useGoogleAvatar);
+    notifyListeners();
+  }
 }
+
