@@ -29,6 +29,55 @@ void main() {
         
         expect(provider.isLoading, true);
       });
+
+      test('isInitialized is false before init', () async {
+        await setupMockSharedPreferences();
+        final provider = UserSettingsProvider();
+        
+        expect(provider.isInitialized, false);
+      });
+    });
+
+    group('Uninitialized Access', () {
+      test('setDisplayName throws StateError before init', () async {
+        await setupMockSharedPreferences();
+        final provider = UserSettingsProvider();
+
+        expect(
+          () => provider.setDisplayName('Test'),
+          throwsA(isA<StateError>()),
+        );
+      });
+
+      test('setCountryCode throws StateError before init', () async {
+        await setupMockSharedPreferences();
+        final provider = UserSettingsProvider();
+
+        expect(
+          () => provider.setCountryCode('US'),
+          throwsA(isA<StateError>()),
+        );
+      });
+
+      test('setIconSeed throws StateError before init', () async {
+        await setupMockSharedPreferences();
+        final provider = UserSettingsProvider();
+
+        expect(
+          () => provider.setIconSeed('seed'),
+          throwsA(isA<StateError>()),
+        );
+      });
+
+      test('regenerateIcon throws StateError before init', () async {
+        await setupMockSharedPreferences();
+        final provider = UserSettingsProvider();
+
+        expect(
+          () => provider.regenerateIcon(),
+          throwsA(isA<StateError>()),
+        );
+      });
     });
 
     group('init', () {
