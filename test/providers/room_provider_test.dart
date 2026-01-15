@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:study_peaks/providers/room_provider.dart';
-import 'package:study_peaks/models/seat.dart';
+import 'package:study_peaks/models/models.dart';
 import 'package:study_peaks/repositories/mock_data_repository.dart';
 
 import '../helpers/test_helpers.dart';

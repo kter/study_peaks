@@ -1,4 +1,4 @@
-import '../models/seat.dart';
+import '../models/models.dart';
 
 /// Abstract interface for mock data generation.
 /// 

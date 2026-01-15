@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import '../config/app_config.dart';
 import '../services/api_service.dart';
 import 'auth_provider.dart';
 
@@ -25,7 +26,7 @@ class SessionProvider extends ChangeNotifier {
   Timer? _syncTimer;
   String? _error;
 
-  static const syncIntervalMinutes = 5;
+  static const syncIntervalMinutes = AppConfig.sessionSyncIntervalMinutes;
 
   /// Creates a SessionProvider.
   /// 

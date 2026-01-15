@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:study_peaks/models/seat.dart';
+import 'package:study_peaks/models/models.dart';
 import 'package:study_peaks/widgets/seat_widget.dart';
 
 import '../helpers/mock_data.dart';

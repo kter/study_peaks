@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/seat.dart';
+import '../models/models.dart';
 
 /// A card widget displaying room information.
 class RoomCard extends StatelessWidget {

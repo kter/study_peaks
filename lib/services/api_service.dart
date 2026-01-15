@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../models/seat.dart';
+import '../config/app_config.dart';
+import '../models/models.dart';
 
 /// API service for communicating with the Study Peaks backend.
 class ApiService {
@@ -9,7 +10,7 @@ class ApiService {
   String? _authToken;
 
   ApiService({
-    this.baseUrl = 'https://study-peaks-api-prd-ozokydui6a-an.a.run.app/v1',
+    this.baseUrl = AppConfig.apiBaseUrl,
     http.Client? client,
   }) : _client = client ?? http.Client();
 

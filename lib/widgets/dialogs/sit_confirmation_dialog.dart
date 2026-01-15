@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../models/seat.dart';
+import '../../models/models.dart';
 
 /// Dialog to confirm sitting in a seat.
 /// 

@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import '../models/seat.dart';
+import '../models/models.dart';
 import '../repositories/mock_data_repository.dart';
 import '../services/api_service.dart';
 

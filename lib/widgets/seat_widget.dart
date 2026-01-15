@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:jdenticon_dart/jdenticon_dart.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:country_flags/country_flags.dart';
-import '../models/seat.dart';
+import '../models/models.dart';
 
 /// A widget that displays a single seat in the virtual study room.
 /// 

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/seat.dart';
+import '../models/models.dart';
 import '../providers/room_provider.dart';
 import '../providers/session_provider.dart';
 import 'seat_widget.dart';

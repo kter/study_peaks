@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import '../config/app_config.dart';
 
 /// Timer mode for study sessions.
 enum TimerMode {
@@ -28,8 +29,10 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Duration _pausedDuration = Duration.zero;
 
   // Pomodoro settings
-  static const int pomodoroFocusDuration = 25 * 60; // 25 minutes
-  static const int pomodoroBreakDuration = 5 * 60; // 5 minutes
+  static final int pomodoroFocusDuration =
+      AppConfig.pomodoroFocusDurationMinutes * 60;
+  static final int pomodoroBreakDuration =
+      AppConfig.pomodoroBreakDurationMinutes * 60;
   PomodoroPhase _pomodoroPhase = PomodoroPhase.focus;
   int _pomodoroCompletedCycles = 0;
 

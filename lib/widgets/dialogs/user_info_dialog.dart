@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../models/seat.dart';
+import '../../models/models.dart';
 
 /// Modal bottom sheet displaying user information.
 /// 

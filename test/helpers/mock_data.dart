@@ -1,4 +1,4 @@
-import 'package:study_peaks/models/seat.dart';
+import 'package:study_peaks/models/models.dart';
 
 /// Mock room data for testing
 const mockRooms = [
