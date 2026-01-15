@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/seat.dart';
@@ -22,17 +23,43 @@ class RoomDetailScreen extends StatefulWidget {
   State<RoomDetailScreen> createState() => _RoomDetailScreenState();
 }
 
-class _RoomDetailScreenState extends State<RoomDetailScreen> {
+class _RoomDetailScreenState extends State<RoomDetailScreen>
+    with WidgetsBindingObserver {
   bool _isTimerCollapsed = true; // Start collapsed to show more seats
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await context.read<RoomProvider>().fetchSeats(widget.room.roomId);
       // Restore current user's seat if they are seated in this room
       _restoreUserSeat();
     });
+    // Start periodic refresh for seat duration updates (every minute)
+    _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Refresh UI when app resumes to show correct durations
+      if (mounted) {
+        setState(() {});
+      }
+    }
   }
 
   /// Restore the current user's seat if they are seated in this room
@@ -358,7 +385,10 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
   void _showUserInfo(BuildContext context, Seat seat) {
     if (seat.user == null) return;
     final user = seat.user!;
-    final duration = Duration(seconds: seat.currentSessionDuration);
+    // Calculate duration from sessionStartedAt for accurate time tracking
+    final duration = seat.sessionStartedAt != null
+        ? DateTime.now().difference(seat.sessionStartedAt!)
+        : Duration.zero;
 
     showModalBottomSheet(
       context: context,

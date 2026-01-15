@@ -196,7 +196,10 @@ class SeatWidget extends StatelessWidget {
   }
 
   Widget _buildDurationBadge() {
-    final duration = Duration(seconds: seat.currentSessionDuration);
+    // Calculate duration from sessionStartedAt for accurate time tracking
+    final duration = seat.sessionStartedAt != null
+        ? DateTime.now().difference(seat.sessionStartedAt!)
+        : Duration.zero;
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
     

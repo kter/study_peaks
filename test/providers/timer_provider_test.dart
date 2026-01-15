@@ -6,6 +6,7 @@ void main() {
     late TimerProvider provider;
 
     setUp(() {
+      TestWidgetsFlutterBinding.ensureInitialized();
       provider = TimerProvider();
     });
 

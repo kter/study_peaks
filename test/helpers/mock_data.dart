@@ -25,13 +25,14 @@ const mockUser = SeatUser(
 );
 
 /// Mock occupied seat for testing
-final mockOccupiedSeat = Seat(
+/// sessionStartedAt is set to 1 hour ago for duration testing
+Seat get mockOccupiedSeat => Seat(
   seatId: 'seat-001',
   seatNumber: 1,
   isOccupied: true,
   user: mockUser,
-  sessionStartedAt: DateTime(2026, 1, 12, 10, 0, 0),
-  currentSessionDuration: 3600, // 1 hour
+  sessionStartedAt: DateTime.now().subtract(const Duration(hours: 1)),
+  currentSessionDuration: 3600, // 1 hour (legacy field)
 );
 
 /// Mock empty seat for testing

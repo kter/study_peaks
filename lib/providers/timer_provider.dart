@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 /// Timer mode for study sessions.
 enum TimerMode {
@@ -14,32 +15,71 @@ enum PomodoroPhase {
 }
 
 /// Provider for managing timer state.
-class TimerProvider extends ChangeNotifier {
+/// 
+/// Uses timestamp-based calculation to ensure accurate time tracking
+/// even when the app is in background or the screen is off.
+class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   TimerMode _mode = TimerMode.normal;
   bool _isRunning = false;
-  int _elapsedSeconds = 0;
   Timer? _timer;
+
+  // Timestamp-based tracking for accurate elapsed time
+  DateTime? _startedAt;
+  Duration _pausedDuration = Duration.zero;
 
   // Pomodoro settings
   static const int pomodoroFocusDuration = 25 * 60; // 25 minutes
   static const int pomodoroBreakDuration = 5 * 60; // 5 minutes
   PomodoroPhase _pomodoroPhase = PomodoroPhase.focus;
-  int _pomodoroRemainingSeconds = pomodoroFocusDuration;
   int _pomodoroCompletedCycles = 0;
+
+  // Pomodoro timestamp tracking
+  DateTime? _pomodoroPhaseStartedAt;
+  int _pomodoroElapsedBeforePause = 0;
+
+  TimerProvider() {
+    WidgetsBinding.instance.addObserver(this);
+  }
 
   TimerMode get mode => _mode;
   bool get isRunning => _isRunning;
-  int get elapsedSeconds => _elapsedSeconds;
   PomodoroPhase get pomodoroPhase => _pomodoroPhase;
-  int get pomodoroRemainingSeconds => _pomodoroRemainingSeconds;
   int get pomodoroCompletedCycles => _pomodoroCompletedCycles;
+
+  /// Get elapsed seconds using timestamp-based calculation.
+  /// This ensures accurate time even when the app is in background.
+  int get elapsedSeconds {
+    if (_startedAt == null) {
+      return _pausedDuration.inSeconds;
+    }
+    return _pausedDuration.inSeconds + 
+        DateTime.now().difference(_startedAt!).inSeconds;
+  }
+
+  /// Get remaining seconds for pomodoro mode.
+  int get pomodoroRemainingSeconds {
+    final phaseDuration = _pomodoroPhase == PomodoroPhase.focus
+        ? pomodoroFocusDuration
+        : pomodoroBreakDuration;
+    
+    int elapsed;
+    if (_pomodoroPhaseStartedAt == null) {
+      elapsed = _pomodoroElapsedBeforePause;
+    } else {
+      elapsed = _pomodoroElapsedBeforePause +
+          DateTime.now().difference(_pomodoroPhaseStartedAt!).inSeconds;
+    }
+    
+    final remaining = phaseDuration - elapsed;
+    return remaining > 0 ? remaining : 0;
+  }
 
   /// Format duration as "HH:MM:SS" or "MM:SS".
   String get formattedTime {
     if (_mode == TimerMode.normal) {
-      return _formatDuration(_elapsedSeconds);
+      return _formatDuration(elapsedSeconds);
     } else {
-      return _formatDuration(_pomodoroRemainingSeconds);
+      return _formatDuration(pomodoroRemainingSeconds);
     }
   }
 
@@ -52,6 +92,21 @@ class TimerProvider extends ChangeNotifier {
       return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
     }
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  /// Handle app lifecycle changes to recalculate time when resuming.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _isRunning) {
+      // Force UI update when app resumes - the getters will calculate
+      // the correct time based on timestamps
+      notifyListeners();
+      
+      // Check if pomodoro phase should switch
+      if (_mode == TimerMode.pomodoro && pomodoroRemainingSeconds <= 0) {
+        _switchPomodoroPhase();
+      }
+    }
   }
 
   /// Toggle timer mode.
@@ -67,14 +122,17 @@ class TimerProvider extends ChangeNotifier {
     if (_isRunning) return;
 
     _isRunning = true;
+    
+    if (_mode == TimerMode.normal) {
+      _startedAt = DateTime.now();
+    } else {
+      _pomodoroPhaseStartedAt = DateTime.now();
+    }
+
+    // Timer for UI updates only (the actual time is calculated from timestamps)
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_mode == TimerMode.normal) {
-        _elapsedSeconds++;
-      } else {
-        _pomodoroRemainingSeconds--;
-        if (_pomodoroRemainingSeconds <= 0) {
-          _switchPomodoroPhase();
-        }
+      if (_mode == TimerMode.pomodoro && pomodoroRemainingSeconds <= 0) {
+        _switchPomodoroPhase();
       }
       notifyListeners();
     });
@@ -83,8 +141,26 @@ class TimerProvider extends ChangeNotifier {
 
   /// Pause the timer.
   void pause() {
+    if (!_isRunning) return;
+    
     _timer?.cancel();
     _isRunning = false;
+    
+    if (_mode == TimerMode.normal) {
+      // Save elapsed time when pausing
+      if (_startedAt != null) {
+        _pausedDuration += DateTime.now().difference(_startedAt!);
+        _startedAt = null;
+      }
+    } else {
+      // Save pomodoro elapsed time when pausing
+      if (_pomodoroPhaseStartedAt != null) {
+        _pomodoroElapsedBeforePause += 
+            DateTime.now().difference(_pomodoroPhaseStartedAt!).inSeconds;
+        _pomodoroPhaseStartedAt = null;
+      }
+    }
+    
     notifyListeners();
   }
 
@@ -92,9 +168,16 @@ class TimerProvider extends ChangeNotifier {
   void reset() {
     _timer?.cancel();
     _isRunning = false;
-    _elapsedSeconds = 0;
+    
+    // Reset normal mode
+    _startedAt = null;
+    _pausedDuration = Duration.zero;
+    
+    // Reset pomodoro mode
     _pomodoroPhase = PomodoroPhase.focus;
-    _pomodoroRemainingSeconds = pomodoroFocusDuration;
+    _pomodoroPhaseStartedAt = null;
+    _pomodoroElapsedBeforePause = 0;
+    
     notifyListeners();
   }
 
@@ -102,23 +185,27 @@ class TimerProvider extends ChangeNotifier {
   void _switchPomodoroPhase() {
     if (_pomodoroPhase == PomodoroPhase.focus) {
       _pomodoroPhase = PomodoroPhase.shortBreak;
-      _pomodoroRemainingSeconds = pomodoroBreakDuration;
       _pomodoroCompletedCycles++;
     } else {
       _pomodoroPhase = PomodoroPhase.focus;
-      _pomodoroRemainingSeconds = pomodoroFocusDuration;
+    }
+    
+    // Reset phase timer
+    _pomodoroElapsedBeforePause = 0;
+    if (_isRunning) {
+      _pomodoroPhaseStartedAt = DateTime.now();
     }
   }
 
   /// Get total study time (for both modes).
   int get totalStudySeconds {
     if (_mode == TimerMode.normal) {
-      return _elapsedSeconds;
+      return elapsedSeconds;
     } else {
       // Calculate total focus time in Pomodoro mode
       final completedFocusTime = _pomodoroCompletedCycles * pomodoroFocusDuration;
       final currentFocusTime = _pomodoroPhase == PomodoroPhase.focus
-          ? pomodoroFocusDuration - _pomodoroRemainingSeconds
+          ? pomodoroFocusDuration - pomodoroRemainingSeconds
           : 0;
       return completedFocusTime + currentFocusTime;
     }
@@ -127,6 +214,7 @@ class TimerProvider extends ChangeNotifier {
   @override
   void dispose() {
     _timer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 }

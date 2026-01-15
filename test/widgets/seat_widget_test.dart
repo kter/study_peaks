@@ -97,7 +97,8 @@ void main() {
         seatNumber: 2,
         isOccupied: true,
         user: mockUser,
-        currentSessionDuration: 1800, // 30 minutes
+        sessionStartedAt: DateTime.now().subtract(const Duration(minutes: 30)),
+        currentSessionDuration: 1800, // legacy field
       );
 
       await tester.pumpWidget(
