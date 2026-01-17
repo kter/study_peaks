@@ -118,7 +118,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   /// Get ID token for API calls
-  Future<String?> getIdToken() async {
-    return await _user?.getIdToken();
+  Future<String?> getIdToken({bool forceRefresh = false}) async {
+    return await _user?.getIdToken(forceRefresh);
   }
 }

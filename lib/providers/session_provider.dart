@@ -88,7 +88,37 @@ class SessionProvider extends ChangeNotifier {
 
       notifyListeners();
       return true;
+
     } catch (e) {
+      // 401 Retry Logic
+      if (e is ApiException && e.statusCode == 401) {
+        try {
+          // Force token refresh
+          if (_authProvider != null) {
+            final newToken =
+                await _authProvider!.getIdToken(forceRefresh: true);
+            if (newToken != null) {
+              _apiService.setAuthToken(newToken);
+              // Retry the request once
+              final response = await _apiService.sit(roomId, seatNumber);
+
+              _currentRoomId = roomId;
+              _sessionId = response.sessionId;
+              _seatNumber = response.seatNumber;
+              _sessionStartedAt = response.sessionStartedAt;
+              _currentDuration = 0;
+              _state = SessionState.seated;
+              _startSyncTimer();
+              notifyListeners();
+              return true;
+            }
+          }
+        } catch (retryError) {
+          // If retry fails, fall through to normal error handling
+          debugPrint('Retry failed: $retryError');
+        }
+      }
+
       if (useMockFallback) {
         // Development mode: log and fall back to mock mode
         debugPrint('API error (mock fallback): $e');
@@ -130,16 +160,37 @@ class SessionProvider extends ChangeNotifier {
       await _ensureAuthToken();
       await _apiService.leave(_currentRoomId!, _sessionId!, _currentDuration);
     } catch (e) {
-      if (useMockFallback) {
-        // Development mode: log but allow state reset
-        debugPrint('API error (mock fallback): $e');
-      } else {
-        // Production mode: set error but still reset local state
-        // Use localization key for network errors
-        if (isNetworkError(e)) {
-          _error = NetworkErrorKey.networkError;
+      bool retrySuccess = false;
+      // 401 Retry Logic
+      if (e is ApiException && e.statusCode == 401) {
+        try {
+          if (_authProvider != null) {
+            final newToken =
+                await _authProvider!.getIdToken(forceRefresh: true);
+            if (newToken != null) {
+              _apiService.setAuthToken(newToken);
+              await _apiService.leave(
+                  _currentRoomId!, _sessionId!, _currentDuration);
+              retrySuccess = true;
+            }
+          }
+        } catch (retryError) {
+           debugPrint('Retry failed: $retryError');
+        }
+      }
+
+      if (!retrySuccess) {
+        if (useMockFallback) {
+          // Development mode: log but allow state reset
+          debugPrint('API error (mock fallback): $e');
         } else {
-          _error = 'Failed to leave: ${e.toString()}';
+          // Production mode: set error but still reset local state
+          // Use localization key for network errors
+          if (isNetworkError(e)) {
+            _error = NetworkErrorKey.networkError;
+          } else {
+            _error = 'Failed to leave: ${e.toString()}';
+          }
         }
       }
     }
@@ -176,11 +227,32 @@ class SessionProvider extends ChangeNotifier {
       await _ensureAuthToken();
       await _apiService.sync(_currentRoomId!, _sessionId!, _currentDuration);
     } catch (e) {
-      // Use localization key for network errors
-      if (isNetworkError(e)) {
-        _error = NetworkErrorKey.networkError;
-      } else {
-        _error = e.toString();
+      bool retrySuccess = false;
+         // 401 Retry Logic
+      if (e is ApiException && e.statusCode == 401) {
+        try {
+          if (_authProvider != null) {
+            final newToken =
+                await _authProvider!.getIdToken(forceRefresh: true);
+            if (newToken != null) {
+              _apiService.setAuthToken(newToken);
+              await _apiService.sync(
+                  _currentRoomId!, _sessionId!, _currentDuration);
+              retrySuccess = true;
+            }
+          }
+        } catch (retryError) {
+           debugPrint('Retry failed: $retryError');
+        }
+      }
+
+      if (!retrySuccess) {
+         // Use localization key for network errors
+        if (isNetworkError(e)) {
+          _error = NetworkErrorKey.networkError;
+        } else {
+          _error = e.toString();
+        }
       }
     }
 
