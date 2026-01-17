@@ -3,7 +3,7 @@ project_id = "studypeaks-prd"
 region     = "asia-northeast1"
 
 # API image - set to actual deployed image
-api_image = "asia-northeast1-docker.pkg.dev/studypeaks-prd/study-peaks/api:v3"
+api_image = "asia-northeast1-docker.pkg.dev/studypeaks-prd/study-peaks/api:v4"
 
 # Optional: OAuth settings
 # google_oauth_client_id     = ""
