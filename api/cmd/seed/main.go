@@ -80,7 +80,8 @@ func seedRoom(ctx context.Context, client *firestore.Client, roomId string, capa
 	batchCount := 0
 
 	for i := 1; i <= capacity; i++ {
-		seatId := fmt.Sprintf("%s-seat-%03d", roomId, i)
+		// Use same format as API: "seat-01", "seat-02", etc.
+		seatId := fmt.Sprintf("seat-%02d", i)
 		seatRef := roomRef.Collection("seats").Doc(seatId)
 
 		seat := map[string]interface{}{

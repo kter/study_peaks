@@ -50,6 +50,7 @@ func main() {
 	})
 
 	r.Post("/internal/cleanup-sessions", cleanupHandler)
+	r.Post("/internal/cleanup-old-seeds", cleanupOldSeedsHandler)
 
 	// Initialize Firebase in background
 	go initFirebase()
@@ -448,6 +449,49 @@ func cleanupHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"cleanedSessions": cleaned,
 		"processedAt":     time.Now().UTC(),
+	})
+}
+
+// cleanupOldSeedsHandler removes old seed documents that use the wrong ID format
+func cleanupOldSeedsHandler(w http.ResponseWriter, r *http.Request) {
+	initMu.RLock()
+	ready := isInitialized
+	initMu.RUnlock()
+
+	if !ready {
+		writeError(w, http.StatusServiceUnavailable, "INITIALIZING", "Service is starting up")
+		return
+	}
+
+	ctx := r.Context()
+	cleaned := 0
+
+	// List of room IDs
+	roomIds := []string{"everest", "fuji", "kilimanjaro", "denali"}
+
+	for _, roomId := range roomIds {
+		docs, err := firestoreClient.Collection("rooms").Doc(roomId).Collection("seats").Documents(ctx).GetAll()
+		if err != nil {
+			log.Printf("Error listing seats for room %s: %v", roomId, err)
+			continue
+		}
+
+		for _, doc := range docs {
+			// Old format: "denali-seat-001", new format: "seat-01"
+			// Delete documents that contain roomId in their ID
+			if len(doc.Ref.ID) > 10 && doc.Ref.ID[:len(roomId)] == roomId {
+				if _, err := doc.Ref.Delete(ctx); err == nil {
+					cleaned++
+					log.Printf("Deleted old seed document: %s/%s", roomId, doc.Ref.ID)
+				}
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"cleanedDocuments": cleaned,
+		"processedAt":      time.Now().UTC(),
 	})
 }
 
