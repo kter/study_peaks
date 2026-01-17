@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:jdenticon_dart/jdenticon_dart.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../providers/room_provider.dart';
 import '../providers/user_settings_provider.dart';
+import '../services/network_exception.dart';
 import '../widgets/room_card.dart';
 import 'room_detail_screen.dart';
 import 'user_settings_screen.dart';
@@ -219,10 +221,18 @@ class _RoomListScreenState extends State<RoomListScreen> {
             ],
             if (auth.error != null) ...[
               const SizedBox(height: 16),
-              Text(
-                auth.error!,
-                style: const TextStyle(color: Colors.red, fontSize: 13),
-                textAlign: TextAlign.center,
+              Builder(
+                builder: (context) {
+                  final l10n = AppLocalizations.of(context)!;
+                  final errorMessage = auth.error == NetworkErrorKey.networkError
+                      ? l10n.networkError
+                      : auth.error!;
+                  return Text(
+                    errorMessage,
+                    style: const TextStyle(color: Colors.red, fontSize: 13),
+                    textAlign: TextAlign.center,
+                  );
+                },
               ),
             ],
           ],
@@ -253,9 +263,13 @@ class _RoomListScreenState extends State<RoomListScreen> {
                             const SnackBar(content: Text('Signed in successfully!')),
                           );
                         } else if (auth.error != null) {
+                          final l10n = AppLocalizations.of(context)!;
+                          final errorMessage = auth.error == NetworkErrorKey.networkError
+                              ? l10n.networkError
+                              : auth.error!;
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Sign in failed: ${auth.error}'),
+                              content: Text(errorMessage),
                               backgroundColor: Colors.red,
                             ),
                           );
@@ -309,9 +323,14 @@ class _RoomListScreenState extends State<RoomListScreen> {
                   }
                 } catch (e) {
                   if (context.mounted) {
+                    // Localize network error messages
+                    final l10n = AppLocalizations.of(context)!;
+                    final errorMessage = isNetworkError(e)
+                        ? l10n.networkError
+                        : e.toString();
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Failed to update name: $e'),
+                        content: Text(errorMessage),
                         backgroundColor: Colors.red,
                       ),
                     );

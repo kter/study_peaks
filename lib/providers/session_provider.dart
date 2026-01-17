@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../config/app_config.dart';
 import '../services/api_service.dart';
+import '../services/network_exception.dart';
 import 'auth_provider.dart';
 
 /// Session state.
@@ -102,7 +103,12 @@ class SessionProvider extends ChangeNotifier {
         return true;
       } else {
         // Production mode: surface error to UI
-        _error = 'Failed to sit: ${e.toString()}';
+        // Use localization key for network errors
+        if (isNetworkError(e)) {
+          _error = NetworkErrorKey.networkError;
+        } else {
+          _error = 'Failed to sit: ${e.toString()}';
+        }
         notifyListeners();
         return false;
       }
@@ -129,7 +135,12 @@ class SessionProvider extends ChangeNotifier {
         debugPrint('API error (mock fallback): $e');
       } else {
         // Production mode: set error but still reset local state
-        _error = 'Failed to leave: ${e.toString()}';
+        // Use localization key for network errors
+        if (isNetworkError(e)) {
+          _error = NetworkErrorKey.networkError;
+        } else {
+          _error = 'Failed to leave: ${e.toString()}';
+        }
       }
     }
 
@@ -165,7 +176,12 @@ class SessionProvider extends ChangeNotifier {
       await _ensureAuthToken();
       await _apiService.sync(_currentRoomId!, _sessionId!, _currentDuration);
     } catch (e) {
-      _error = e.toString();
+      // Use localization key for network errors
+      if (isNetworkError(e)) {
+        _error = NetworkErrorKey.networkError;
+      } else {
+        _error = e.toString();
+      }
     }
 
     _state = SessionState.seated;

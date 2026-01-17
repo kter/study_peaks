@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../l10n/app_localizations.dart';
 import '../models/models.dart';
 import '../providers/room_provider.dart';
 import '../providers/session_provider.dart';
 import '../providers/timer_provider.dart';
 import '../providers/user_settings_provider.dart';
+import '../services/network_exception.dart';
 import '../widgets/dialogs/leave_confirmation_dialog.dart';
 import '../widgets/dialogs/room_info_dialog.dart';
 import '../widgets/dialogs/sit_confirmation_dialog.dart';
@@ -157,6 +159,12 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       builder: (context, session, _) {
         if (session.error == null) return const SizedBox.shrink();
 
+        // Localize error message if it's a known key
+        final l10n = AppLocalizations.of(context)!;
+        final errorMessage = session.error == NetworkErrorKey.networkError
+            ? l10n.networkError
+            : session.error!;
+
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 16),
           padding: const EdgeInsets.all(12),
@@ -171,7 +179,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  session.error!,
+                  errorMessage,
                   style: TextStyle(color: Colors.red.shade700, fontSize: 14),
                 ),
               ),

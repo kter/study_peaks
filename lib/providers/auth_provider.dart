@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../services/network_exception.dart';
 
 /// Provider for Firebase Authentication state management.
 class AuthProvider extends ChangeNotifier {
@@ -56,7 +57,12 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      _error = e.toString();
+      // Use localization key for network errors
+      if (isNetworkError(e)) {
+        _error = NetworkErrorKey.networkError;
+      } else {
+        _error = e.toString();
+      }
       _isLoading = false;
       notifyListeners();
       return false;
@@ -75,7 +81,12 @@ class AuthProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     } catch (e) {
-      _error = e.toString();
+      // Use localization key for network errors
+      if (isNetworkError(e)) {
+        _error = NetworkErrorKey.networkError;
+      } else {
+        _error = e.toString();
+      }
       _isLoading = false;
       notifyListeners();
     }
@@ -94,7 +105,12 @@ class AuthProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     } catch (e) {
-      _error = e.toString();
+      // Use localization key for network errors
+      if (isNetworkError(e)) {
+        _error = NetworkErrorKey.networkError;
+      } else {
+        _error = e.toString();
+      }
       _isLoading = false;
       notifyListeners();
       rethrow;

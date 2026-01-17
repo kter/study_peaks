@@ -6,6 +6,7 @@ import 'package:country_flags/country_flags.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_settings_provider.dart';
+import '../services/network_exception.dart';
 
 /// Screen for configuring user profile settings.
 /// Works whether user is signed in or not.
@@ -484,9 +485,14 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                               ),
                             );
                           } else if (auth.error != null) {
+                            // Localize error message if it's a network error key
+                            final l10n = AppLocalizations.of(context)!;
+                            final errorMessage = auth.error == NetworkErrorKey.networkError
+                                ? l10n.networkError
+                                : auth.error!;
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Sign in failed: ${auth.error}'),
+                                content: Text(errorMessage),
                                 backgroundColor: Colors.red,
                               ),
                             );

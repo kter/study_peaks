@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../models/models.dart';
 import '../repositories/mock_data_repository.dart';
 import '../services/api_service.dart';
+import '../services/network_exception.dart';
 
 /// Provider for managing room list state.
 class RoomProvider extends ChangeNotifier {
@@ -70,7 +71,12 @@ class RoomProvider extends ChangeNotifier {
     try {
       _rooms = await _apiService.getRooms();
     } catch (e) {
-      _error = e.toString();
+      // Use localization key for network errors
+      if (isNetworkError(e)) {
+        _error = NetworkErrorKey.networkError;
+      } else {
+        _error = e.toString();
+      }
       // Use mock data for development (if repository provided)
       _rooms = _mockDataRepository?.getMockRooms() ?? [];
     } finally {
@@ -94,9 +100,16 @@ class RoomProvider extends ChangeNotifier {
         _roomSeats[roomId] = seats;
       }
     } catch (e) {
-      _error = e.toString();
-      // Use mock data for development (fallback, if repository provided)
-      _roomSeats[roomId] = _mockDataRepository?.getMockSeats(roomId) ?? [];
+      // Use localization key for network errors
+      if (isNetworkError(e)) {
+        _error = NetworkErrorKey.networkError;
+      } else {
+        _error = e.toString();
+      }
+      // Preserve existing seat data on network error; fall back to mock only if no existing data
+      if (!_roomSeats.containsKey(roomId) || _roomSeats[roomId]!.isEmpty) {
+        _roomSeats[roomId] = _mockDataRepository?.getMockSeats(roomId) ?? [];
+      }
     } finally {
       _isLoading = false;
       notifyListeners();
