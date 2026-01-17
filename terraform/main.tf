@@ -46,7 +46,7 @@ locals {
       deletion_protection = false
     }
     prd = {
-      min_instances = 1
+      min_instances = 0
       max_instances = 20
       deletion_protection = true
     }

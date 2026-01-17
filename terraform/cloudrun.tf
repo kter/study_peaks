@@ -38,10 +38,10 @@ resource "google_cloud_run_v2_service" "api" {
 
       resources {
         limits = {
-          cpu    = local.environment == "prd" ? "2" : "1"
-          memory = local.environment == "prd" ? "1Gi" : "512Mi"
+          cpu    = "1"
+          memory = "512Mi"
         }
-        cpu_idle = local.environment != "prd"
+        cpu_idle = true
       }
 
       startup_probe {
