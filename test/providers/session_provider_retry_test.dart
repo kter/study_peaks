@@ -25,6 +25,8 @@ void main() {
     // Default stubs to prevent null pointer exceptions on Futures
     when(() => mockAuthProvider.getIdToken(forceRefresh: any(named: 'forceRefresh')))
         .thenAnswer((_) async => 'token');
+    when(() => mockAuthProvider.displayName).thenReturn('Test User');
+    when(() => mockAuthProvider.userId).thenReturn('test-uid');
   });
 
   tearDown(() {
@@ -49,7 +51,13 @@ void main() {
           });
 
       var callCount = 0;
-      when(() => mockApiService.sit('room-1', 10)).thenAnswer((_) async {
+      when(() => mockApiService.sit(
+        'room-1',
+        10,
+        displayName: any(named: 'displayName'),
+        userId: any(named: 'userId'),
+        countryCode: any(named: 'countryCode'),
+      )).thenAnswer((_) async {
         callCount++;
         if (callCount == 1) {
           throw ApiException('Unauthorized', 401);
@@ -70,12 +78,24 @@ void main() {
       // Verify setAuthToken was called with new token (we can't easily verify exact sequence without more complex mocks, but this is good enough)
       verify(() => mockApiService.setAuthToken('new-token')).called(1);
       // Verify sit was called twice
-      verify(() => mockApiService.sit('room-1', 10)).called(2);
+      verify(() => mockApiService.sit(
+        'room-1',
+        10,
+        displayName: any(named: 'displayName'),
+        userId: any(named: 'userId'),
+        countryCode: any(named: 'countryCode'),
+      )).called(2);
     });
 
     test('sit fails if retry also fails', () async {
       // Both calls throw 401 (or retry throws something else)
-      when(() => mockApiService.sit('room-1', 10)).thenThrow(
+      when(() => mockApiService.sit(
+        'room-1',
+        10,
+        displayName: any(named: 'displayName'),
+        userId: any(named: 'userId'),
+        countryCode: any(named: 'countryCode'),
+      )).thenThrow(
         ApiException('Unauthorized', 401),
       );
 
@@ -91,7 +111,13 @@ void main() {
       expect(provider.error, isNotNull);
       
       verify(() => mockAuthProvider.getIdToken(forceRefresh: true)).called(1);
-      verify(() => mockApiService.sit('room-1', 10)).called(2); // Initial + Retry
+      verify(() => mockApiService.sit(
+        'room-1',
+        10,
+        displayName: any(named: 'displayName'),
+        userId: any(named: 'userId'),
+        countryCode: any(named: 'countryCode'),
+      )).called(2); // Initial + Retry
     });
 
     test('leave retries on 401 error and succeeds', () async {
@@ -99,7 +125,13 @@ void main() {
       when(() => mockAuthProvider.getIdToken(forceRefresh: any(named: 'forceRefresh')))
           .thenAnswer((_) async => 'token');
           
-      when(() => mockApiService.sit('room-1', 10)).thenAnswer(
+      when(() => mockApiService.sit(
+        'room-1',
+        10,
+        displayName: any(named: 'displayName'),
+        userId: any(named: 'userId'),
+        countryCode: any(named: 'countryCode'),
+      )).thenAnswer(
         (_) async => createMockSitResponse(sessionId: 'session-123'),
       );
       final sitResult = await provider.sit('room-1', 10);

@@ -74,7 +74,12 @@ class SessionProvider extends ChangeNotifier {
     try {
       _error = null;
       await _ensureAuthToken();
-      final response = await _apiService.sit(roomId, seatNumber);
+      final response = await _apiService.sit(
+        roomId,
+        seatNumber,
+        displayName: _authProvider?.displayName,
+        userId: _authProvider?.userId,
+      );
 
       _currentRoomId = roomId;
       _sessionId = response.sessionId;
@@ -100,7 +105,12 @@ class SessionProvider extends ChangeNotifier {
             if (newToken != null) {
               _apiService.setAuthToken(newToken);
               // Retry the request once
-              final response = await _apiService.sit(roomId, seatNumber);
+              final response = await _apiService.sit(
+                roomId,
+                seatNumber,
+                displayName: _authProvider?.displayName,
+                userId: _authProvider?.userId,
+              );
 
               _currentRoomId = roomId;
               _sessionId = response.sessionId;

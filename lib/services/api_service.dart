@@ -105,12 +105,23 @@ class ApiService {
   }
 
   /// Sit down on a seat.
-  Future<SitResponse> sit(String roomId, int seatNumber) async {
+  Future<SitResponse> sit(
+    String roomId,
+    int seatNumber, {
+    String? displayName,
+    String? countryCode,
+    String? userId,
+  }) async {
     return _withRetry(() async {
       final response = await _client.post(
         Uri.parse('$baseUrl/rooms/$roomId/sit'),
         headers: _headers,
-        body: jsonEncode({'seatNumber': seatNumber}),
+        body: jsonEncode({
+          'seatNumber': seatNumber,
+          if (displayName != null) 'displayName': displayName,
+          if (countryCode != null) 'countryCode': countryCode,
+          if (userId != null) 'userId': userId,
+        }),
       );
 
       if (response.statusCode == 200) {

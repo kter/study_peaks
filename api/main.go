@@ -249,10 +249,11 @@ func getSeatsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type SeatResponse struct {
-		SeatId     string    `json:"seatId"`
-		SeatNumber int       `json:"seatNumber"`
-		IsOccupied bool      `json:"isOccupied"`
-		User       *UserInfo `json:"user"`
+		SeatId           string    `json:"seatId"`
+		SeatNumber       int       `json:"seatNumber"`
+		IsOccupied       bool      `json:"isOccupied"`
+		User             *UserInfo `json:"user"`
+		SessionStartedAt time.Time `json:"sessionStartedAt"`
 	}
 
 	// Build map of occupied seats
@@ -264,6 +265,10 @@ func getSeatsHandler(w http.ResponseWriter, r *http.Request) {
 			SeatId:     doc.Ref.ID,
 			SeatNumber: seatNum,
 			IsOccupied: data["isOccupied"].(bool),
+		}
+
+		if val, ok := data["sessionStartedAt"]; ok {
+			seat.SessionStartedAt = val.(time.Time)
 		}
 
 		if seat.IsOccupied {
