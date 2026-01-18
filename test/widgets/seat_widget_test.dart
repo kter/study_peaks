@@ -116,6 +116,31 @@ void main() {
       expect(find.text('30m'), findsOneWidget);
     });
 
+    testWidgets('displays 0m for new session', (tester) async {
+      final newSessionSeat = Seat(
+        seatId: 'seat-new',
+        seatNumber: 3,
+        isOccupied: true,
+        user: mockUser,
+        sessionStartedAt: DateTime.now(), // Duration ~0
+        currentSessionDuration: 0,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SeatWidget(
+              seat: newSessionSeat,
+              onTap: () {},
+            ),
+          ),
+        ),
+      );
+
+      // Core behavior: New session shows 0m
+      expect(find.text('0m'), findsOneWidget);
+    });
+
     testWidgets('calls onTap when tapped', (tester) async {
       bool tapped = false;
 

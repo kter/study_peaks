@@ -88,6 +88,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
               countryCode: userSettings.countryCode,
               statusMessage: '',
             ),
+            sessionStartedAt: session.sessionStartedAt,
           );
     }
   }
@@ -348,6 +349,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
               countryCode: userSettings.countryCode,
               statusMessage: '',
             ),
+            sessionStartedAt: context.read<SessionProvider>().sessionStartedAt,
           );
     } else {
       final error = context.read<SessionProvider>().error;

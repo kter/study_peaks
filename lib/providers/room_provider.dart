@@ -34,6 +34,7 @@ class RoomProvider extends ChangeNotifier {
     required int seatNumber,
     required bool isOccupied,
     SeatUser? user,
+    DateTime? sessionStartedAt,
   }) {
     final seats = _roomSeats[roomId];
     if (seats == null) return;
@@ -47,7 +48,7 @@ class RoomProvider extends ChangeNotifier {
         seatNumber: seatNumber,
         isOccupied: isOccupied,
         user: user,
-        sessionStartedAt: isOccupied ? DateTime.now() : null,
+        sessionStartedAt: sessionStartedAt ?? (isOccupied ? DateTime.now() : null),
         currentSessionDuration: 0,
       );
     notifyListeners();
