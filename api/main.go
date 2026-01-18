@@ -238,6 +238,7 @@ func getSeatsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type SeatResponse struct {
+		SeatId     string    `json:"seatId"`
 		SeatNumber int       `json:"seatNumber"`
 		IsOccupied bool      `json:"isOccupied"`
 		User       *UserInfo `json:"user"`
@@ -247,6 +248,7 @@ func getSeatsHandler(w http.ResponseWriter, r *http.Request) {
 	for _, doc := range docs {
 		data := doc.Data()
 		seat := SeatResponse{
+			SeatId:     doc.Ref.ID,
 			SeatNumber: int(data["seatNumber"].(int64)),
 			IsOccupied: data["isOccupied"].(bool),
 		}
