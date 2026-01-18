@@ -90,4 +90,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get connectionRestored => '接続が復元されました';
+
+  @override
+  String get seatTaken => 'この席は他の人に取られました。別の席を選んでください。';
 }

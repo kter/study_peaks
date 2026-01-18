@@ -92,4 +92,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get connectionRestored => 'Connection restored';
+
+  @override
+  String get seatTaken => 'This seat was just taken. Please select another.';
 }

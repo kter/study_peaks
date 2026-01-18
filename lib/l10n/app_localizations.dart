@@ -259,6 +259,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Connection restored'**
   String get connectionRestored;
+
+  /// No description provided for @seatTaken.
+  ///
+  /// In en, this message translates to:
+  /// **'This seat was just taken. Please select another.'**
+  String get seatTaken;
 }
 
 class _AppLocalizationsDelegate

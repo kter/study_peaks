@@ -14,6 +14,9 @@ class AppConfig {
   // セッション同期
   static const int sessionSyncIntervalMinutes = 5;
 
+  // 席データ更新間隔（他ユーザーの変更を反映するため）
+  static const int seatRefreshIntervalSeconds = 60;
+
   // Private constructor to prevent instantiation
   const AppConfig._();
 

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/app_config.dart';
 import '../l10n/app_localizations.dart';
 import '../models/models.dart';
 import '../providers/room_provider.dart';
@@ -31,7 +32,7 @@ class RoomDetailScreen extends StatefulWidget {
 class _RoomDetailScreenState extends State<RoomDetailScreen>
     with WidgetsBindingObserver {
   bool _isTimerCollapsed = true;
-  Timer? _refreshTimer;
+  Timer? _seatRefreshTimer;
 
   @override
   void initState() {
@@ -41,14 +42,24 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       await context.read<RoomProvider>().fetchSeats(widget.room.roomId);
       _restoreUserSeat();
     });
-    _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted) setState(() {});
-    });
+    // 定期的に席データを更新して他ユーザーの変更を反映
+    _seatRefreshTimer = Timer.periodic(
+      const Duration(seconds: AppConfig.seatRefreshIntervalSeconds),
+      (_) => _refreshSeats(),
+    );
+  }
+
+  /// 席データをサーバーから再取得
+  Future<void> _refreshSeats() async {
+    if (!mounted) return;
+    await context.read<RoomProvider>().fetchSeats(widget.room.roomId);
+    // 自分のセッションを再適用（サーバーのデータで上書きされないように）
+    _restoreUserSeat();
   }
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
+    _seatRefreshTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -56,7 +67,8 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && mounted) {
-      setState(() {});
+      // アプリ復帰時に席データを再取得
+      _refreshSeats();
     }
   }
 
@@ -286,6 +298,26 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
   }
 
   Future<void> _handleSitRequest(BuildContext context, Seat seat) async {
+    // 着席前に最新の席データを取得（競合防止）
+    await context.read<RoomProvider>().fetchSeats(widget.room.roomId);
+    if (!context.mounted) return;
+
+    // 席が既に埋まっていないか再確認
+    final seats = context.read<RoomProvider>().getSeats(widget.room.roomId);
+    final currentSeat = seats.firstWhere(
+      (s) => s.seatNumber == seat.seatNumber,
+      orElse: () => seat,
+    );
+    if (currentSeat.isOccupied) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.seatTaken),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     final confirmed = await showSitConfirmationDialog(context: context, seat: seat);
     if (confirmed != true || !context.mounted) return;
 
