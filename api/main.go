@@ -224,6 +224,16 @@ func getSeatsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	roomId := chi.URLParam(r, "roomId")
 
+	// Get room capacity
+	roomDoc, err := firestoreClient.Collection("rooms").Doc(roomId).Get(ctx)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "ROOM_NOT_FOUND", "Room not found")
+		return
+	}
+	roomData := roomDoc.Data()
+	capacity := int(roomData["capacity"].(int64))
+
+	// Get occupied seats from Firestore
 	docs, err := firestoreClient.Collection("rooms").Doc(roomId).Collection("seats").Documents(ctx).GetAll()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "FIRESTORE_ERROR", err.Error())
@@ -231,6 +241,7 @@ func getSeatsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type UserInfo struct {
+		UserId                 string `json:"userId"`
 		DisplayName            string `json:"displayName"`
 		CountryCode            string `json:"countryCode"`
 		StatusMessage          string `json:"statusMessage"`
@@ -244,17 +255,20 @@ func getSeatsHandler(w http.ResponseWriter, r *http.Request) {
 		User       *UserInfo `json:"user"`
 	}
 
-	seats := []SeatResponse{}
+	// Build map of occupied seats
+	occupiedSeats := make(map[int]SeatResponse)
 	for _, doc := range docs {
 		data := doc.Data()
+		seatNum := int(data["seatNumber"].(int64))
 		seat := SeatResponse{
 			SeatId:     doc.Ref.ID,
-			SeatNumber: int(data["seatNumber"].(int64)),
+			SeatNumber: seatNum,
 			IsOccupied: data["isOccupied"].(bool),
 		}
 
 		if seat.IsOccupied {
 			seat.User = &UserInfo{
+				UserId:                 getString(data, "userId"),
 				DisplayName:            getString(data, "displayName"),
 				CountryCode:            getString(data, "countryCode"),
 				StatusMessage:          getString(data, "statusMessage"),
@@ -262,7 +276,23 @@ func getSeatsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		seats = append(seats, seat)
+		occupiedSeats[seatNum] = seat
+	}
+
+	// Generate all seats (1 to capacity)
+	seats := make([]SeatResponse, 0, capacity)
+	for i := 1; i <= capacity; i++ {
+		if occupied, exists := occupiedSeats[i]; exists {
+			seats = append(seats, occupied)
+		} else {
+			// Empty seat
+			seats = append(seats, SeatResponse{
+				SeatId:     seatId(i),
+				SeatNumber: i,
+				IsOccupied: false,
+				User:       nil,
+			})
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
