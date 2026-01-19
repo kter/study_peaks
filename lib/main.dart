@@ -43,11 +43,14 @@ class StudyPeaksApp extends StatelessWidget {
             mockDataRepository: kUseMockData ? DevMockDataRepository() : null,
           ),
         ),
-        ChangeNotifierProxyProvider<AuthProvider, SessionProvider>(
+        ChangeNotifierProxyProvider2<AuthProvider, UserSettingsProvider, SessionProvider>(
           create: (_) => SessionProvider(),
-          update: (_, auth, session) {
+          update: (_, auth, userSettings, session) {
             session?.setAuthProvider(auth);
-            return session ?? SessionProvider()..setAuthProvider(auth);
+            session?.setUserSettingsProvider(userSettings);
+            return session ?? SessionProvider()
+              ..setAuthProvider(auth)
+              ..setUserSettingsProvider(userSettings);
           },
         ),
       ],

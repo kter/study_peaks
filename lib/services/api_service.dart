@@ -111,6 +111,8 @@ class ApiService {
     String? displayName,
     String? countryCode,
     String? userId,
+    String? iconSeed,
+    String? photoUrl,
   }) async {
     return _withRetry(() async {
       final response = await _client.post(
@@ -121,6 +123,8 @@ class ApiService {
           if (displayName != null) 'displayName': displayName,
           if (countryCode != null) 'countryCode': countryCode,
           if (userId != null) 'userId': userId,
+          if (iconSeed != null) 'iconSeed': iconSeed,
+          if (photoUrl != null) 'photoUrl': photoUrl,
         }),
       );
 
@@ -133,7 +137,15 @@ class ApiService {
   }
 
   /// Sync session (called every 5 minutes).
-  Future<void> sync(String roomId, String sessionId, int currentDuration) async {
+  Future<void> sync(
+    String roomId,
+    String sessionId,
+    int currentDuration, {
+    String? displayName,
+    String? countryCode,
+    String? iconSeed,
+    String? photoUrl,
+  }) async {
     return _withRetry(() async {
       final response = await _client.post(
         Uri.parse('$baseUrl/rooms/$roomId/sync'),
@@ -141,6 +153,11 @@ class ApiService {
         body: jsonEncode({
           'sessionId': sessionId,
           'currentDuration': currentDuration,
+          if (displayName != null) 'displayName': displayName,
+          if (countryCode != null) 'countryCode': countryCode,
+          if (iconSeed != null) 'iconSeed': iconSeed,
+          // Always include photoUrl (can be empty string to clear it)
+          'photoUrl': photoUrl ?? '',
         }),
       );
 

@@ -245,6 +245,8 @@ func getSeatsHandler(w http.ResponseWriter, r *http.Request) {
 		DisplayName            string `json:"displayName"`
 		CountryCode            string `json:"countryCode"`
 		StatusMessage          string `json:"statusMessage"`
+		IconSeed               string `json:"iconSeed,omitempty"`
+		PhotoUrl               string `json:"photoUrl,omitempty"`
 		CurrentSessionDuration int    `json:"currentSessionDuration"`
 	}
 
@@ -277,6 +279,8 @@ func getSeatsHandler(w http.ResponseWriter, r *http.Request) {
 				DisplayName:            getString(data, "displayName"),
 				CountryCode:            getString(data, "countryCode"),
 				StatusMessage:          getString(data, "statusMessage"),
+				IconSeed:               getString(data, "iconSeed"),
+				PhotoUrl:               getString(data, "photoUrl"),
 				CurrentSessionDuration: getInt(data, "currentSessionDuration"),
 			}
 		}
@@ -313,6 +317,8 @@ func sitHandler(w http.ResponseWriter, r *http.Request) {
 		DisplayName string `json:"displayName"`
 		CountryCode string `json:"countryCode"`
 		UserId      string `json:"userId"`
+		IconSeed    string `json:"iconSeed"`
+		PhotoUrl    string `json:"photoUrl"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
@@ -353,7 +359,7 @@ func sitHandler(w http.ResponseWriter, r *http.Request) {
 		sessionId := "sess_" + uuid.New().String()[:8]
 		now := time.Now().UTC()
 
-		return tx.Set(seatRef, map[string]interface{}{
+		updateMap := map[string]interface{}{
 			"seatNumber":             req.SeatNumber,
 			"isOccupied":             true,
 			"userId":                 userId,
@@ -364,7 +370,17 @@ func sitHandler(w http.ResponseWriter, r *http.Request) {
 			"displayName":            req.DisplayName,
 			"countryCode":            req.CountryCode,
 			"statusMessage":          "",
-		})
+		}
+
+		// Only save if provided
+		if req.IconSeed != "" {
+			updateMap["iconSeed"] = req.IconSeed
+		}
+		if req.PhotoUrl != "" {
+			updateMap["photoUrl"] = req.PhotoUrl
+		}
+
+		return tx.Set(seatRef, updateMap)
 	})
 
 	if err != nil {
@@ -395,6 +411,10 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		SessionId       string `json:"sessionId"`
 		CurrentDuration int    `json:"currentDuration"`
+		DisplayName     string `json:"displayName"`
+		CountryCode     string `json:"countryCode"`
+		IconSeed        string `json:"iconSeed"`
+		PhotoUrl        string `json:"photoUrl"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
@@ -409,10 +429,26 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC()
-	_, err = docs[0].Ref.Update(ctx, []firestore.Update{
+	updates := []firestore.Update{
 		{Path: "lastSyncAt", Value: now},
 		{Path: "currentSessionDuration", Value: req.CurrentDuration},
-	})
+	}
+
+	// Update profile fields if provided
+	if req.DisplayName != "" {
+		updates = append(updates, firestore.Update{Path: "displayName", Value: req.DisplayName})
+	}
+	if req.CountryCode != "" {
+		updates = append(updates, firestore.Update{Path: "countryCode", Value: req.CountryCode})
+	}
+	if req.IconSeed != "" {
+		updates = append(updates, firestore.Update{Path: "iconSeed", Value: req.IconSeed})
+	}
+	// PhotoUrl can be empty string (user switched from Google to Jdenticon)
+	// So we always update it if it's present in the request
+	updates = append(updates, firestore.Update{Path: "photoUrl", Value: req.PhotoUrl})
+
+	_, err = docs[0].Ref.Update(ctx, updates)
 
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "UPDATE_ERROR", err.Error())

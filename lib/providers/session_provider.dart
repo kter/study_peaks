@@ -4,6 +4,7 @@ import '../config/app_config.dart';
 import '../services/api_service.dart';
 import '../services/network_exception.dart';
 import 'auth_provider.dart';
+import 'user_settings_provider.dart';
 
 /// Session state.
 enum SessionState {
@@ -17,6 +18,7 @@ class SessionProvider extends ChangeNotifier {
   final ApiService _apiService;
   final bool useMockFallback;
   AuthProvider? _authProvider;
+  UserSettingsProvider? _userSettingsProvider;
 
   SessionState _state = SessionState.idle;
   String? _currentRoomId;
@@ -42,6 +44,11 @@ class SessionProvider extends ChangeNotifier {
   /// Set the auth provider for getting tokens
   void setAuthProvider(AuthProvider authProvider) {
     _authProvider = authProvider;
+  }
+
+  /// Set the user settings provider for syncing profile data
+  void setUserSettingsProvider(UserSettingsProvider userSettingsProvider) {
+    _userSettingsProvider = userSettingsProvider;
   }
 
   /// Ensure API has valid auth token
@@ -70,15 +77,25 @@ class SessionProvider extends ChangeNotifier {
   }
 
   /// Sit down on a seat.
-  Future<bool> sit(String roomId, int seatNumber) async {
+  Future<bool> sit(
+    String roomId,
+    int seatNumber, {
+    String? displayName,
+    String? countryCode,
+    String? iconSeed,
+    String? photoUrl,
+  }) async {
     try {
       _error = null;
       await _ensureAuthToken();
       final response = await _apiService.sit(
         roomId,
         seatNumber,
-        displayName: _authProvider?.displayName,
+        displayName: displayName ?? _authProvider?.displayName,
+        countryCode: countryCode,
         userId: _authProvider?.userId,
+        iconSeed: iconSeed,
+        photoUrl: photoUrl,
       );
 
       _currentRoomId = roomId;
@@ -108,8 +125,11 @@ class SessionProvider extends ChangeNotifier {
               final response = await _apiService.sit(
                 roomId,
                 seatNumber,
-                displayName: _authProvider?.displayName,
+                displayName: displayName ?? _authProvider?.displayName,
+                countryCode: countryCode,
                 userId: _authProvider?.userId,
+                iconSeed: iconSeed,
+                photoUrl: photoUrl,
               );
 
               _currentRoomId = roomId;
@@ -235,7 +255,36 @@ class SessionProvider extends ChangeNotifier {
 
     try {
       await _ensureAuthToken();
-      await _apiService.sync(_currentRoomId!, _sessionId!, _currentDuration);
+      
+      // Get current user settings for sync
+      String? displayName;
+      String? countryCode;
+      String? iconSeed;
+      String? photoUrl;
+      
+      if (_userSettingsProvider != null) {
+        displayName = _userSettingsProvider!.displayName;
+        countryCode = _userSettingsProvider!.countryCode;
+        iconSeed = _userSettingsProvider!.iconSeed;
+        
+        // Determine photoUrl based on settings and auth state
+        if (_authProvider != null &&
+            _authProvider!.isSignedIn &&
+            _authProvider!.photoUrl != null &&
+            _userSettingsProvider!.useGoogleAvatar) {
+          photoUrl = _authProvider!.photoUrl;
+        }
+      }
+      
+      await _apiService.sync(
+        _currentRoomId!,
+        _sessionId!,
+        _currentDuration,
+        displayName: displayName,
+        countryCode: countryCode,
+        iconSeed: iconSeed,
+        photoUrl: photoUrl,
+      );
     } catch (e) {
       bool retrySuccess = false;
          // 401 Retry Logic

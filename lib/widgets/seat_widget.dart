@@ -143,7 +143,7 @@ class SeatWidget extends StatelessWidget {
       height: size + 8,
       child: Stack(
         children: [
-          // Identicon avatar
+          // Identicon avatar or Google Photo
           Container(
             width: size,
             height: size,
@@ -155,12 +155,25 @@ class SeatWidget extends StatelessWidget {
               ),
             ),
             child: ClipOval(
-              child: SvgPicture.string(
-                Jdenticon.toSvg(user.userId, size: size.toInt()),
-                width: size,
-                height: size,
-              ),
-            ),
+                child: user.photoUrl != null
+                    ? Image.network(
+                        user.photoUrl!,
+                        width: size,
+                        height: size,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => SvgPicture.string(
+                          Jdenticon.toSvg(user.iconSeed ?? user.userId,
+                              size: size.toInt()),
+                          width: size,
+                          height: size,
+                        ),
+                      )
+                    : SvgPicture.string(
+                        Jdenticon.toSvg(user.iconSeed ?? user.userId,
+                            size: size.toInt()),
+                        width: size,
+                        height: size,
+                      )),
           ),
           // Country flag badge (bottom-right)
           Positioned(

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../config/app_config.dart';
 import '../l10n/app_localizations.dart';
 import '../models/models.dart';
+import '../providers/auth_provider.dart';
 import '../providers/room_provider.dart';
 import '../providers/session_provider.dart';
 import '../providers/timer_provider.dart';
@@ -78,14 +79,25 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
         session.currentRoomId == widget.room.roomId &&
         session.seatNumber != null) {
       final userSettings = context.read<UserSettingsProvider>();
+      final authProvider = context.read<AuthProvider>();
+      
+      // Determine photoUrl for restore
+      final String? photoUrl = (authProvider.isSignedIn &&
+              authProvider.photoUrl != null &&
+              userSettings.useGoogleAvatar)
+          ? authProvider.photoUrl
+          : null;
+
       context.read<RoomProvider>().updateSeatOccupancy(
             roomId: widget.room.roomId,
             seatNumber: session.seatNumber!,
             isOccupied: true,
             user: SeatUser(
-              userId: userSettings.iconSeed,
+              userId: session.sessionId ?? userSettings.iconSeed,
               displayName: userSettings.displayName,
               countryCode: userSettings.countryCode,
+              iconSeed: userSettings.iconSeed,
+              photoUrl: photoUrl,
               statusMessage: '',
             ),
             sessionStartedAt: session.sessionStartedAt,
@@ -322,9 +334,23 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     final confirmed = await showSitConfirmationDialog(context: context, seat: seat);
     if (confirmed != true || !context.mounted) return;
 
+    final userSettings = context.read<UserSettingsProvider>();
+    final authProvider = context.read<AuthProvider>();
+
+    // Determine photoUrl: only send if signed in and 'useGoogleAvatar' is true
+    final String? photoUrl = (authProvider.isSignedIn &&
+            authProvider.photoUrl != null &&
+            userSettings.useGoogleAvatar)
+        ? authProvider.photoUrl
+        : null;
+
     final success = await context.read<SessionProvider>().sit(
           widget.room.roomId,
           seat.seatNumber,
+          displayName: userSettings.displayName,
+          countryCode: userSettings.countryCode,
+          iconSeed: userSettings.iconSeed,
+          photoUrl: photoUrl,
         );
 
     if (!context.mounted) return;
@@ -347,6 +373,8 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
               userId: userSettings.iconSeed,
               displayName: userSettings.displayName,
               countryCode: userSettings.countryCode,
+              iconSeed: userSettings.iconSeed,
+              photoUrl: photoUrl,
               statusMessage: '',
             ),
             sessionStartedAt: context.read<SessionProvider>().sessionStartedAt,
