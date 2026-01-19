@@ -246,6 +246,13 @@ class SessionProvider extends ChangeNotifier {
     _syncTimer = null;
   }
 
+  /// Force an immediate sync (e.g., when user changes their icon).
+  /// This allows icon changes to be reflected immediately for other users.
+  Future<void> forceSync() async {
+    if (!isSeated) return;
+    await _syncSession();
+  }
+
   /// Sync session with server.
   Future<void> _syncSession() async {
     if (_sessionId == null || _currentRoomId == null) return;
@@ -275,6 +282,8 @@ class SessionProvider extends ChangeNotifier {
           photoUrl = _authProvider!.photoUrl;
         }
       }
+      
+      debugPrint('🔄 Sync: iconSeed=$iconSeed, photoUrl=$photoUrl, displayName=$displayName');
       
       await _apiService.sync(
         _currentRoomId!,

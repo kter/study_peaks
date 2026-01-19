@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:country_flags/country_flags.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
+import '../providers/session_provider.dart';
 import '../providers/user_settings_provider.dart';
 import '../services/network_exception.dart';
 
@@ -258,6 +259,10 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                     value: userSettings.useGoogleAvatar,
                     onChanged: (value) async {
                       await userSettings.setUseGoogleAvatar(value);
+                      // Sync immediately so other users see the change
+                      if (mounted) {
+                        await context.read<SessionProvider>().forceSync();
+                      }
                     },
                     activeColor: const Color(0xFF1A237E),
                   ),
@@ -271,7 +276,9 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
             OutlinedButton.icon(
               onPressed: () async {
                 await userSettings.regenerateIcon();
+                // Sync immediately so other users see the new icon
                 if (mounted) {
+                  await context.read<SessionProvider>().forceSync();
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Icon regenerated!'),
