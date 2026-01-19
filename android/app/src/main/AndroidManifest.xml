@@ -37,6 +37,14 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- Notification Icon -->
+        <meta-data
+            android:name="com.pravera.flutter_foreground_task.notification.common.icon"
+            android:resource="@drawable/ic_notification_silhouette" />
+        <meta-data
+            android:name="com.pravera.flutter_foreground_task.notification.icon"
+            android:resource="@drawable/ic_notification_silhouette" />
         
         <!-- Foreground service for study session notification -->
         <service

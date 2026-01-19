@@ -18,7 +18,7 @@ class NotificationService {
     if (_isInitialized) return;
 
     // Initialize local notifications
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings('@drawable/ic_notification_silhouette');
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -98,6 +98,9 @@ class NotificationService {
       final result = await FlutterForegroundTask.startService(
         notificationTitle: notificationTitle,
         notificationText: notificationText,
+        notificationIcon: const NotificationIcon(
+          metaDataName: 'com.pravera.flutter_foreground_task.notification.common.icon',
+        ),
         callback: _startCallback,
       );
       debugPrint('📢 Foreground service start result: $result');
