@@ -10,6 +10,7 @@ import 'providers/timer_provider.dart';
 import 'providers/user_settings_provider.dart';
 import 'repositories/mock_data_repository.dart';
 import 'screens/room_list_screen.dart';
+import 'services/notification_service.dart';
 
 /// Build-time constant for mock data usage.
 /// Set to false in production builds using: --dart-define=USE_MOCK_DATA=false
@@ -18,6 +19,9 @@ const bool kUseMockData = bool.fromEnvironment('USE_MOCK_DATA', defaultValue: tr
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  
+  // Initialize notification service for foreground notifications
+  await NotificationService().initialize();
   
   // Initialize user settings
   final userSettingsProvider = UserSettingsProvider();

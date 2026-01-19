@@ -95,4 +95,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get seatTaken => 'This seat was just taken. Please select another.';
+
+  @override
+  String notificationStudyingAt(String roomName) {
+    return 'Studying at $roomName';
+  }
+
+  @override
+  String get notificationSessionStarted => 'Session started - 0m';
+
+  @override
+  String notificationStudying(String duration) {
+    return 'Studying - $duration';
+  }
 }

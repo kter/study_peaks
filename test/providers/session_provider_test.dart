@@ -7,6 +7,10 @@ import '../helpers/test_helpers.dart';
 void main() {
   late MockApiService mockApiService;
 
+  setUpAll(() {
+    TestWidgetsFlutterBinding.ensureInitialized();
+  });
+
   setUp(() {
     mockApiService = MockApiService();
   });
@@ -23,7 +27,10 @@ void main() {
     });
 
     test('sit updates state on success', () async {
-      final provider = SessionProvider(apiService: mockApiService);
+      final provider = SessionProvider(
+        apiService: mockApiService,
+        useMockFallback: false, // Disable fallback to test real mock API
+      );
       final mockResponse = createMockSitResponse(
         sessionId: 'session-123',
         seatNumber: 5,

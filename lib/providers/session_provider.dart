@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../config/app_config.dart';
 import '../services/api_service.dart';
 import '../services/network_exception.dart';
+import '../services/notification_service.dart';
 import 'auth_provider.dart';
 import 'user_settings_provider.dart';
 
@@ -22,12 +23,18 @@ class SessionProvider extends ChangeNotifier {
 
   SessionState _state = SessionState.idle;
   String? _currentRoomId;
+  String? _currentRoomName;
   String? _sessionId;
   int? _seatNumber;
   DateTime? _sessionStartedAt;
   int _currentDuration = 0;
   Timer? _syncTimer;
   String? _error;
+  final NotificationService _notificationService = NotificationService();
+  
+  // Stored localized notification strings
+  String? _notificationTitle;
+  String _studyingFormat = 'Studying - {duration}'; // Default fallback
 
   static const syncIntervalMinutes = AppConfig.sessionSyncIntervalMinutes;
 
@@ -80,10 +87,14 @@ class SessionProvider extends ChangeNotifier {
   Future<bool> sit(
     String roomId,
     int seatNumber, {
+    String? roomName,
     String? displayName,
     String? countryCode,
     String? iconSeed,
     String? photoUrl,
+    String? notificationTitle,
+    String? notificationSessionStarted,
+    String? notificationStudyingFormat,
   }) async {
     try {
       _error = null;
@@ -99,14 +110,25 @@ class SessionProvider extends ChangeNotifier {
       );
 
       _currentRoomId = roomId;
+      _currentRoomName = roomName;
       _sessionId = response.sessionId;
       _seatNumber = response.seatNumber;
       _sessionStartedAt = response.sessionStartedAt;
       _currentDuration = 0;
       _state = SessionState.seated;
+      
+      // Store notification strings for later updates
+      _notificationTitle = notificationTitle ?? 'Studying at ${roomName ?? roomId}';
+      _studyingFormat = notificationStudyingFormat ?? 'Studying - {duration}';
 
       // Start sync timer (every 5 minutes)
       _startSyncTimer();
+      
+      // Start foreground notification
+      await _notificationService.startStudySession(
+        notificationTitle: _notificationTitle!,
+        notificationText: notificationSessionStarted ?? 'Session started - 0m',
+      );
 
       notifyListeners();
       return true;
@@ -133,12 +155,25 @@ class SessionProvider extends ChangeNotifier {
               );
 
               _currentRoomId = roomId;
+              _currentRoomName = roomName;
               _sessionId = response.sessionId;
               _seatNumber = response.seatNumber;
               _sessionStartedAt = response.sessionStartedAt;
               _currentDuration = 0;
               _state = SessionState.seated;
+              
+              // Store notification strings for later updates
+              _notificationTitle = notificationTitle ?? 'Studying at ${roomName ?? roomId}';
+              _studyingFormat = notificationStudyingFormat ?? 'Studying - {duration}';
+              
               _startSyncTimer();
+              
+              // Start foreground notification
+              await _notificationService.startStudySession(
+                notificationTitle: _notificationTitle!,
+                notificationText: notificationSessionStarted ?? 'Session started - 0m',
+              );
+              
               notifyListeners();
               return true;
             }
@@ -178,6 +213,23 @@ class SessionProvider extends ChangeNotifier {
   /// Update session duration (called from timer provider).
   void updateDuration(int durationSeconds) {
     _currentDuration = durationSeconds;
+    
+    // Update foreground notification with current duration
+    if (isSeated) {
+      final hours = durationSeconds ~/ 3600;
+      final minutes = (durationSeconds % 3600) ~/ 60;
+      
+      String durationText;
+      if (hours > 0) {
+        durationText = '${hours}h ${minutes}m';
+      } else {
+        durationText = '${minutes}m';
+      }
+      
+      final notificationText = _studyingFormat.replaceAll('{duration}', durationText);
+      _notificationService.updateSessionDuration(notificationText);
+    }
+    
     notifyListeners();
   }
 
@@ -226,6 +278,10 @@ class SessionProvider extends ChangeNotifier {
     }
 
     _cancelSyncTimer();
+    
+    // Stop foreground notification
+    await _notificationService.stopStudySession();
+    
     _reset();
 
     notifyListeners();
@@ -332,6 +388,7 @@ class SessionProvider extends ChangeNotifier {
   void _reset() {
     _state = SessionState.idle;
     _currentRoomId = null;
+    _currentRoomName = null;
     _sessionId = null;
     _seatNumber = null;
     _sessionStartedAt = null;

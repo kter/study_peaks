@@ -93,4 +93,17 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get seatTaken => 'この席は他の人に取られました。別の席を選んでください。';
+
+  @override
+  String notificationStudyingAt(String roomName) {
+    return '$roomNameで勉強中';
+  }
+
+  @override
+  String get notificationSessionStarted => 'セッション開始 - 0分';
+
+  @override
+  String notificationStudying(String duration) {
+    return '勉強中 - $duration';
+  }
 }

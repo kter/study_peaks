@@ -336,6 +336,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
 
     final userSettings = context.read<UserSettingsProvider>();
     final authProvider = context.read<AuthProvider>();
+    final l10n = AppLocalizations.of(context)!;
 
     // Determine photoUrl: only send if signed in and 'useGoogleAvatar' is true
     final String? photoUrl = (authProvider.isSignedIn &&
@@ -347,10 +348,14 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     final success = await context.read<SessionProvider>().sit(
           widget.room.roomId,
           seat.seatNumber,
+          roomName: widget.room.name,
           displayName: userSettings.displayName,
           countryCode: userSettings.countryCode,
           iconSeed: userSettings.iconSeed,
           photoUrl: photoUrl,
+          notificationTitle: l10n.notificationStudyingAt(widget.room.name),
+          notificationSessionStarted: l10n.notificationSessionStarted,
+          notificationStudyingFormat: l10n.notificationStudying('{duration}'),
         );
 
     if (!context.mounted) return;

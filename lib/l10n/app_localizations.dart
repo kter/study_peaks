@@ -265,6 +265,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This seat was just taken. Please select another.'**
   String get seatTaken;
+
+  /// No description provided for @notificationStudyingAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Studying at {roomName}'**
+  String notificationStudyingAt(String roomName);
+
+  /// No description provided for @notificationSessionStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'Session started - 0m'**
+  String get notificationSessionStarted;
+
+  /// No description provided for @notificationStudying.
+  ///
+  /// In en, this message translates to:
+  /// **'Studying - {duration}'**
+  String notificationStudying(String duration);
 }
 
 class _AppLocalizationsDelegate
