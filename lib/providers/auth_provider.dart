@@ -117,8 +117,42 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Get ID token for API calls
+  /// Retry configuration for network operations
+  static const int _maxRetries = 3;
+  static const List<Duration> _retryDelays = [
+    Duration(seconds: 1),
+    Duration(seconds: 2),
+    Duration(seconds: 4),
+  ];
+
+  /// Get ID token for API calls with automatic retry on network errors.
+  /// 
+  /// Will retry up to [_maxRetries] times with exponential backoff.
+  /// This helps handle transient network issues after device sleep recovery.
   Future<String?> getIdToken({bool forceRefresh = false}) async {
-    return await _user?.getIdToken(forceRefresh);
+    if (_user == null) return null;
+
+    Object? lastError;
+    
+    for (var attempt = 0; attempt < _maxRetries; attempt++) {
+      try {
+        return await _user!.getIdToken(forceRefresh);
+      } catch (e) {
+        lastError = e;
+        
+        // Only retry on network errors
+        if (!isNetworkError(e)) {
+          rethrow;
+        }
+        
+        // Don't delay after the last attempt
+        if (attempt < _maxRetries - 1) {
+          await Future.delayed(_retryDelays[attempt]);
+        }
+      }
+    }
+    
+    // All retries exhausted, throw the last error
+    throw lastError!;
   }
 }
