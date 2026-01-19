@@ -118,11 +118,14 @@ class AuthProvider extends ChangeNotifier {
   }
 
   /// Retry configuration for network operations
-  static const int _maxRetries = 3;
+  /// Extended delays to handle network recovery after device sleep
+  static const int _maxRetries = 5;
   static const List<Duration> _retryDelays = [
     Duration(seconds: 1),
     Duration(seconds: 2),
     Duration(seconds: 4),
+    Duration(seconds: 8),
+    Duration(seconds: 16),
   ];
 
   /// Get ID token for API calls with automatic retry on network errors.
