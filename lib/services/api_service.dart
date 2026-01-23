@@ -190,6 +190,27 @@ class ApiService {
     });
   }
 
+  /// Get session info to validate if a session is still active.
+  /// Returns null if the session is not found or expired.
+  Future<SessionInfo?> getSession(String roomId, String sessionId) async {
+    try {
+      final response = await _client.get(
+        Uri.parse('$baseUrl/rooms/$roomId/sessions/$sessionId'),
+        headers: _headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return SessionInfo.fromJson(data);
+      }
+      // Session not found or expired
+      return null;
+    } catch (e) {
+      // Network error or other issues - treat as session not found
+      return null;
+    }
+  }
+
   void dispose() {
     _client.close();
   }
@@ -238,6 +259,39 @@ class LeaveResponse {
     return LeaveResponse(
       totalSessionDuration: json['totalSessionDuration'] as int,
       endedAt: DateTime.parse(json['endedAt'] as String),
+    );
+  }
+}
+
+/// Session information returned from the session validation API.
+class SessionInfo {
+  final String sessionId;
+  final String roomId;
+  final String roomName;
+  final int seatNumber;
+  final DateTime sessionStartedAt;
+  final DateTime lastSyncAt;
+  final int currentDuration;
+
+  SessionInfo({
+    required this.sessionId,
+    required this.roomId,
+    required this.roomName,
+    required this.seatNumber,
+    required this.sessionStartedAt,
+    required this.lastSyncAt,
+    required this.currentDuration,
+  });
+
+  factory SessionInfo.fromJson(Map<String, dynamic> json) {
+    return SessionInfo(
+      sessionId: json['sessionId'] as String,
+      roomId: json['roomId'] as String,
+      roomName: json['roomName'] as String,
+      seatNumber: json['seatNumber'] as int,
+      sessionStartedAt: DateTime.parse(json['sessionStartedAt'] as String),
+      lastSyncAt: DateTime.parse(json['lastSyncAt'] as String),
+      currentDuration: json['currentDuration'] as int,
     );
   }
 }

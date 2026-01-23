@@ -155,6 +155,35 @@ Ends the current study session and frees the seat.
 
 ---
 
+### Get Session (Validate Session)
+
+**`GET /rooms/{roomId}/sessions/{sessionId}`**
+
+Validates if a session is still active. Used to restore session state after app restart.
+
+**Response (200)**
+```json
+{
+  "sessionId": "sess_abc123",
+  "roomId": "denali",
+  "roomName": "Denali",
+  "seatNumber": 42,
+  "sessionStartedAt": "2026-01-12T02:00:00Z",
+  "lastSyncAt": "2026-01-12T02:30:00Z",
+  "currentDuration": 1800
+}
+```
+
+**Errors**
+| Code | Description |
+|------|-------------|
+| 404  | Session not found or expired |
+
+> [!NOTE]
+> Sessions without sync for 3 hours are considered expired.
+
+---
+
 ### Internal: Cleanup Sessions
 
 **`POST /internal/cleanup-sessions`**

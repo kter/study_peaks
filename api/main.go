@@ -46,6 +46,7 @@ func main() {
 			r.Post("/rooms/{roomId}/sit", sitHandler)
 			r.Post("/rooms/{roomId}/sync", syncHandler)
 			r.Post("/rooms/{roomId}/leave", leaveHandler)
+			r.Get("/rooms/{roomId}/sessions/{sessionId}", getSessionHandler)
 		})
 	})
 
@@ -457,6 +458,60 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"syncedAt": now})
+}
+
+func getSessionHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	roomId := chi.URLParam(r, "roomId")
+	sessionId := chi.URLParam(r, "sessionId")
+
+	// Get room info for room name
+	roomDoc, err := firestoreClient.Collection("rooms").Doc(roomId).Get(ctx)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "ROOM_NOT_FOUND", "Room not found")
+		return
+	}
+	roomData := roomDoc.Data()
+	roomName := getString(roomData, "name")
+
+	// Find the session by sessionId
+	query := firestoreClient.Collection("rooms").Doc(roomId).Collection("seats").Where("sessionId", "==", sessionId).Limit(1)
+	docs, err := query.Documents(ctx).GetAll()
+	if err != nil || len(docs) == 0 {
+		writeError(w, http.StatusNotFound, "SESSION_NOT_FOUND", "Session not found or expired")
+		return
+	}
+
+	data := docs[0].Data()
+
+	// Check if the session is still valid (not stale)
+	// Sessions without sync for 3 hours are considered expired
+	if lastSyncAt, ok := data["lastSyncAt"].(time.Time); ok {
+		if time.Since(lastSyncAt) > 3*time.Hour {
+			writeError(w, http.StatusNotFound, "SESSION_EXPIRED", "Session has expired due to inactivity")
+			return
+		}
+	}
+
+	var sessionStartedAt time.Time
+	if val, ok := data["sessionStartedAt"]; ok {
+		sessionStartedAt = val.(time.Time)
+	}
+	var lastSyncAt time.Time
+	if val, ok := data["lastSyncAt"]; ok {
+		lastSyncAt = val.(time.Time)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"sessionId":        sessionId,
+		"roomId":           roomId,
+		"roomName":         roomName,
+		"seatNumber":       getInt(data, "seatNumber"),
+		"sessionStartedAt": sessionStartedAt,
+		"lastSyncAt":       lastSyncAt,
+		"currentDuration":  getInt(data, "currentSessionDuration"),
+	})
 }
 
 func leaveHandler(w http.ResponseWriter, r *http.Request) {

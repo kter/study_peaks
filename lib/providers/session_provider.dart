@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
 import '../services/api_service.dart';
 import '../services/network_exception.dart';
@@ -37,6 +38,13 @@ class SessionProvider extends ChangeNotifier {
   String _studyingFormat = 'Studying - {duration}'; // Default fallback
 
   static const syncIntervalMinutes = AppConfig.sessionSyncIntervalMinutes;
+
+  // SharedPreferences keys for session persistence
+  static const _keySessionId = 'persisted_session_id';
+  static const _keyRoomId = 'persisted_room_id';
+  static const _keyRoomName = 'persisted_room_name';
+  static const _keySeatNumber = 'persisted_seat_number';
+  static const _keySessionStartedAt = 'persisted_session_started_at';
 
   /// Creates a SessionProvider.
   /// 
@@ -129,6 +137,9 @@ class SessionProvider extends ChangeNotifier {
         notificationTitle: _notificationTitle!,
         notificationText: notificationSessionStarted ?? 'Session started - 0m',
       );
+      
+      // Persist session for recovery after app restart
+      await _persistSession();
 
       notifyListeners();
       return true;
@@ -173,6 +184,9 @@ class SessionProvider extends ChangeNotifier {
                 notificationTitle: _notificationTitle!,
                 notificationText: notificationSessionStarted ?? 'Session started - 0m',
               );
+              
+              // Persist session for recovery after app restart
+              await _persistSession();
               
               notifyListeners();
               return true;
@@ -281,6 +295,9 @@ class SessionProvider extends ChangeNotifier {
     
     // Stop foreground notification
     await _notificationService.stopStudySession();
+    
+    // Clear persisted session
+    await _clearPersistedSession();
     
     _reset();
 
@@ -393,6 +410,101 @@ class SessionProvider extends ChangeNotifier {
     _seatNumber = null;
     _sessionStartedAt = null;
     _currentDuration = 0;
+  }
+
+  /// Persist session information to local storage.
+  /// Called when a session is started to enable recovery after app restart.
+  Future<void> _persistSession() async {
+    if (_sessionId == null || _currentRoomId == null) return;
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keySessionId, _sessionId!);
+      await prefs.setString(_keyRoomId, _currentRoomId!);
+      await prefs.setString(_keyRoomName, _currentRoomName ?? '');
+      await prefs.setInt(_keySeatNumber, _seatNumber ?? 0);
+      await prefs.setString(_keySessionStartedAt, _sessionStartedAt?.toIso8601String() ?? '');
+      debugPrint('📦 Session persisted: $_sessionId');
+    } catch (e) {
+      debugPrint('📦 Failed to persist session: $e');
+    }
+  }
+
+  /// Clear persisted session from local storage.
+  Future<void> _clearPersistedSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_keySessionId);
+      await prefs.remove(_keyRoomId);
+      await prefs.remove(_keyRoomName);
+      await prefs.remove(_keySeatNumber);
+      await prefs.remove(_keySessionStartedAt);
+      debugPrint('📦 Persisted session cleared');
+    } catch (e) {
+      debugPrint('📦 Failed to clear persisted session: $e');
+    }
+  }
+
+  /// Restore session if there's an active foreground service and valid session.
+  /// Returns true if session was restored, false otherwise.
+  /// 
+  /// This should be called when the app starts to handle the case where
+  /// the app was killed but the foreground service continued running.
+  Future<bool> restoreSessionIfNeeded() async {
+    try {
+      // Check if foreground service is running
+      final isRunning = await _notificationService.isRunning();
+      if (!isRunning) {
+        debugPrint('🔄 No foreground service running, no restore needed');
+        return false;
+      }
+
+      debugPrint('🔄 Foreground service running, attempting session restore...');
+
+      // Load persisted session data
+      final prefs = await SharedPreferences.getInstance();
+      final sessionId = prefs.getString(_keySessionId);
+      final roomId = prefs.getString(_keyRoomId);
+
+      if (sessionId == null || roomId == null) {
+        debugPrint('🔄 No persisted session data, stopping foreground service');
+        await _notificationService.stopStudySession();
+        return false;
+      }
+
+      // Validate session with server
+      await _ensureAuthToken();
+      final sessionInfo = await _apiService.getSession(roomId, sessionId);
+
+      if (sessionInfo == null) {
+        debugPrint('🔄 Session no longer valid on server, stopping foreground service');
+        await _notificationService.stopStudySession();
+        await _clearPersistedSession();
+        return false;
+      }
+
+      // Restore session state
+      _sessionId = sessionInfo.sessionId;
+      _currentRoomId = sessionInfo.roomId;
+      _currentRoomName = sessionInfo.roomName;
+      _seatNumber = sessionInfo.seatNumber;
+      _sessionStartedAt = sessionInfo.sessionStartedAt;
+      _currentDuration = sessionInfo.currentDuration;
+      _state = SessionState.seated;
+
+      // Restart sync timer
+      _startSyncTimer();
+
+      debugPrint('🔄 Session restored: $_sessionId in room $_currentRoomName');
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('🔄 Error during session restore: $e');
+      // On error, stop the foreground service to avoid inconsistent state
+      await _notificationService.stopStudySession();
+      await _clearPersistedSession();
+      return false;
+    }
   }
 
   @override

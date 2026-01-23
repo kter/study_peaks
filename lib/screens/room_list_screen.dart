@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../providers/room_provider.dart';
+import '../providers/session_provider.dart';
 import '../providers/user_settings_provider.dart';
 import '../services/network_exception.dart';
 import '../widgets/room_card.dart';
@@ -23,9 +24,30 @@ class _RoomListScreenState extends State<RoomListScreen> {
   @override
   void initState() {
     super.initState();
-    // Fetch rooms on init
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<RoomProvider>().fetchRooms();
+    // Fetch rooms and restore session on init
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final roomProvider = context.read<RoomProvider>();
+      final sessionProvider = context.read<SessionProvider>();
+      
+      // Fetch rooms first
+      await roomProvider.fetchRooms();
+      
+      // Try to restore session if foreground service is running
+      final restored = await sessionProvider.restoreSessionIfNeeded();
+      if (restored && mounted) {
+        // Find the room the user was in and navigate to it
+        final roomId = sessionProvider.currentRoomId;
+        if (roomId != null) {
+          final room = roomProvider.rooms.where((r) => r.roomId == roomId).firstOrNull;
+          if (room != null) {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => RoomDetailScreen(room: room),
+              ),
+            );
+          }
+        }
+      }
     });
   }
 
