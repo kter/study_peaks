@@ -265,44 +265,25 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
   Widget _buildSeatActionButton() {
     return Consumer<SessionProvider>(
       builder: (context, session, _) {
-        if (session.isSeated) {
-          return OutlinedButton.icon(
-            onPressed: () => _handleLeaveRequest(context, session),
-            icon: const Icon(Icons.exit_to_app),
-            label: const Text('Leave Seat'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.red,
-              side: const BorderSide(color: Colors.red),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-          );
-        }
-        return ElevatedButton(
-          onPressed: () => _showTakeSeatHint(context),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF1A237E),
-            foregroundColor: Colors.white,
+        final isSeated = session.isSeated;
+        return OutlinedButton.icon(
+          onPressed: isSeated ? () => _handleLeaveRequest(context, session) : null,
+          icon: const Icon(Icons.exit_to_app),
+          label: const Text('Leave Seat'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.red,
+            disabledForegroundColor: Colors.grey,
+            side: BorderSide(color: isSeated ? Colors.red : Colors.grey),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           ),
-          child: const Text('Take a Seat'),
         );
       },
     );
   }
 
-  void _showTakeSeatHint(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Select an empty seat to sit down'),
-        duration: Duration(seconds: 2),
-      ),
-    );
-  }
+
 
   void _showAlreadySeatedMessage(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
