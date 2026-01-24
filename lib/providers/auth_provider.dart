@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../services/network_exception.dart';
+import '../utils/retry_helper.dart';
+import '../config/app_config.dart';
 
 /// Provider for Firebase Authentication state management.
 class AuthProvider extends ChangeNotifier {
@@ -32,14 +34,11 @@ class AuthProvider extends ChangeNotifier {
   /// Sign in with Google
   Future<bool> signInWithGoogle() async {
     try {
-      _isLoading = true;
-      _error = null;
-      notifyListeners();
+      _setLoading(true);
 
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
-        _isLoading = false;
-        notifyListeners();
+        _setLoading(false);
         return false; // User cancelled
       }
 
@@ -53,18 +52,10 @@ class AuthProvider extends ChangeNotifier {
 
       await _auth.signInWithCredential(credential);
       
-      _isLoading = false;
-      notifyListeners();
+      _setLoading(false);
       return true;
     } catch (e) {
-      // Use localization key for network errors
-      if (isNetworkError(e)) {
-        _error = NetworkErrorKey.networkError;
-      } else {
-        _error = e.toString();
-      }
-      _isLoading = false;
-      notifyListeners();
+      _handleError(e);
       return false;
     }
   }
@@ -72,90 +63,61 @@ class AuthProvider extends ChangeNotifier {
   /// Sign out
   Future<void> signOut() async {
     try {
-      _isLoading = true;
-      notifyListeners();
+      _setLoading(true);
 
       await _googleSignIn.signOut();
       await _auth.signOut();
 
-      _isLoading = false;
-      notifyListeners();
+      _setLoading(false);
     } catch (e) {
-      // Use localization key for network errors
-      if (isNetworkError(e)) {
-        _error = NetworkErrorKey.networkError;
-      } else {
-        _error = e.toString();
-      }
-      _isLoading = false;
-      notifyListeners();
+      _handleError(e);
     }
   }
 
   /// Update user display name
   Future<void> updateUserName(String name) async {
     try {
-      _isLoading = true;
-      notifyListeners();
+      _setLoading(true);
 
       await _user?.updateDisplayName(name);
       await _user?.reload();
       _user = _auth.currentUser;
 
-      _isLoading = false;
-      notifyListeners();
+      _setLoading(false);
     } catch (e) {
-      // Use localization key for network errors
-      if (isNetworkError(e)) {
-        _error = NetworkErrorKey.networkError;
-      } else {
-        _error = e.toString();
-      }
-      _isLoading = false;
-      notifyListeners();
+      _handleError(e);
       rethrow;
     }
   }
 
-  /// Retry configuration for network operations
-  /// Extended delays to handle network recovery after device sleep
-  static const int _maxRetries = 5;
-  static const List<Duration> _retryDelays = [
-    Duration(seconds: 1),
-    Duration(seconds: 2),
-    Duration(seconds: 4),
-    Duration(seconds: 8),
-    Duration(seconds: 16),
-  ];
-
   /// Get ID token for API calls with automatic retry on network errors.
   /// 
-  /// Will retry up to [_maxRetries] times with exponential backoff.
-  /// This helps handle transient network issues after device sleep recovery.
+  /// Uses [RetryHelper] to handle transient network issues.
   Future<String?> getIdToken({bool forceRefresh = false}) async {
     if (_user == null) return null;
 
-    Object? lastError;
-    
-    for (var attempt = 0; attempt < _maxRetries; attempt++) {
-      try {
-        return await _user!.getIdToken(forceRefresh);
-      } catch (e) {
-        lastError = e;
-        
-        // Only retry on network errors
-        if (!isNetworkError(e)) {
-          rethrow;
-        }
-        
-        // Don't delay after the last attempt
-        if (attempt < _maxRetries - 1) {
-          await Future.delayed(_retryDelays[attempt]);
-        }
-      }
+    return await RetryHelper.execute<String?>(
+      () => _user!.getIdToken(forceRefresh),
+      maxRetries: AppConfig.maxRetries,
+      retryDelays: AppConfig.retryDelays,
+    );
+  }
+
+  void _setLoading(bool loading) {
+    _isLoading = loading;
+    if (loading) {
+      _error = null;
     }
-    
-    // All retries exhausted, throw the last error
-    throw lastError!;
+    notifyListeners();
+  }
+
+  void _handleError(Object e) {
+    if (isNetworkError(e)) {
+      _error = NetworkErrorKey.networkError;
+    } else {
+      _error = e.toString();
+    }
+    _isLoading = false;
+    notifyListeners();
   }
 }

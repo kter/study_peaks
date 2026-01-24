@@ -17,6 +17,24 @@ class AppConfig {
   // 席データ更新間隔（他ユーザーの変更を反映するため）
   static const int seatRefreshIntervalSeconds = 60;
 
+  // Notification Configuration
+  static const String notificationChannelId = 'study_peaks_session';
+  static const String notificationChannelName = 'Study Session';
+  static const String notificationChannelDescription = 'Shows your current study session';
+  static const String notificationIconRes = '@drawable/ic_notification_silhouette';
+  static const String notificationIconMetaDataName = 
+      'com.pravera.flutter_foreground_task.notification.common.icon';
+
+  // Retry Configuration
+  static const int maxRetries = 5;
+  static const List<Duration> retryDelays = [
+    Duration(seconds: 1),
+    Duration(seconds: 2),
+    Duration(seconds: 4),
+    Duration(seconds: 8),
+    Duration(seconds: 16),
+  ];
+
   // Private constructor to prevent instantiation
   const AppConfig._();
 

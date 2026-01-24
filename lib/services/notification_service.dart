@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../config/app_config.dart';
+import '../utils/formatters.dart';
 
 /// Service for managing foreground notifications during study sessions.
 class NotificationService {
@@ -17,8 +19,15 @@ class NotificationService {
   Future<void> initialize() async {
     if (_isInitialized) return;
 
-    // Initialize local notifications
-    const androidSettings = AndroidInitializationSettings('@drawable/ic_notification_silhouette');
+    await _setupLocalNotifications();
+    _setupForegroundTask();
+
+    _isInitialized = true;
+    debugPrint('📢 NotificationService initialized');
+  }
+
+  Future<void> _setupLocalNotifications() async {
+    const androidSettings = AndroidInitializationSettings(AppConfig.notificationIconRes);
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -31,13 +40,14 @@ class NotificationService {
     );
 
     await _localNotifications.initialize(initSettings);
+  }
 
-    // Initialize foreground task
+  void _setupForegroundTask() {
     FlutterForegroundTask.init(
       androidNotificationOptions: AndroidNotificationOptions(
-        channelId: 'study_peaks_session',
-        channelName: 'Study Session',
-        channelDescription: 'Shows your current study session',
+        channelId: AppConfig.notificationChannelId,
+        channelName: AppConfig.notificationChannelName,
+        channelDescription: AppConfig.notificationChannelDescription,
         channelImportance: NotificationChannelImportance.LOW,
         priority: NotificationPriority.LOW,
       ),
@@ -52,9 +62,6 @@ class NotificationService {
         allowWifiLock: false,
       ),
     );
-
-    _isInitialized = true;
-    debugPrint('📢 NotificationService initialized');
   }
 
   /// Request notification permission (required for Android 13+).
@@ -99,7 +106,7 @@ class NotificationService {
         notificationTitle: notificationTitle,
         notificationText: notificationText,
         notificationIcon: const NotificationIcon(
-          metaDataName: 'com.pravera.flutter_foreground_task.notification.common.icon',
+          metaDataName: AppConfig.notificationIconMetaDataName,
         ),
         callback: _startCallback,
       );
@@ -148,15 +155,7 @@ class _StudySessionHandler extends TaskHandler {
   void onRepeatEvent(DateTime timestamp) {
     _elapsedSeconds += 60; // Add 1 minute
 
-    final hours = _elapsedSeconds ~/ 3600;
-    final minutes = (_elapsedSeconds % 3600) ~/ 60;
-
-    String durationText;
-    if (hours > 0) {
-      durationText = '${hours}h ${minutes}m';
-    } else {
-      durationText = '${minutes}m';
-    }
+    final durationText = Formatters.formatDuration(_elapsedSeconds);
 
     FlutterForegroundTask.updateService(
       notificationText: 'Studying - $durationText',
