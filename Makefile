@@ -70,7 +70,7 @@ setup-hooks:
 
 API_DIR := api
 API_IMAGE := asia-northeast1-docker.pkg.dev/studypeaks-prd/study-peaks/api
-API_TAG := v12
+API_TAG := v13
 
 api-tidy:
 	cd $(API_DIR) && go mod tidy
