@@ -39,6 +39,11 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+ 
+    // Add listener for session errors
+    final sessionProvider = context.read<SessionProvider>();
+    sessionProvider.addListener(_onErrorChanged);
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await context.read<RoomProvider>().fetchSeats(widget.room.roomId);
       _restoreUserSeat();
@@ -48,6 +53,28 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       const Duration(seconds: AppConfig.seatRefreshIntervalSeconds),
       (_) => _refreshSeats(),
     );
+  }
+
+  void _onErrorChanged() {
+    if (!mounted) return;
+    
+    final session = context.read<SessionProvider>();
+    if (session.error != null) {
+      final l10n = AppLocalizations.of(context)!;
+      final errorMessage = session.error == NetworkErrorKey.networkError
+          ? l10n.networkError
+          : session.error!;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Colors.red,
+        ),
+      );
+      
+      // Clear error immediately after showing SnackBar so it doesn't persist
+      session.clearError();
+    }
   }
 
   /// 席データをサーバーから再取得
@@ -61,6 +88,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
   @override
   void dispose() {
     _seatRefreshTimer?.cancel();
+    context.read<SessionProvider>().removeListener(_onErrorChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -117,7 +145,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       body: Column(
         children: [
           _buildTimerSection(),
-          _buildErrorBanner(),
+          // Persistent error banner removed
           _buildRoomInfoBar(),
           const SizedBox(height: 16),
           Expanded(
@@ -179,47 +207,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     );
   }
 
-  Widget _buildErrorBanner() {
-    return Consumer<SessionProvider>(
-      builder: (context, session, _) {
-        if (session.error == null) return const SizedBox.shrink();
 
-        // Localize error message if it's a known key
-        final l10n = AppLocalizations.of(context)!;
-        final errorMessage = session.error == NetworkErrorKey.networkError
-            ? l10n.networkError
-            : session.error!;
-
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.red.shade50,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.red.shade200),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  errorMessage,
-                  style: TextStyle(color: Colors.red.shade700, fontSize: 14),
-                ),
-              ),
-              IconButton(
-                icon: Icon(Icons.close, color: Colors.red.shade700, size: 18),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                onPressed: () => session.clearError(),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
 
   Widget _buildRoomInfoBar() {
     return Consumer<RoomProvider>(
