@@ -45,7 +45,12 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     sessionProvider.addListener(_onErrorChanged);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await context.read<RoomProvider>().fetchSeats(widget.room.roomId);
+      final roomProvider = context.read<RoomProvider>();
+      await roomProvider.fetchSeats(widget.room.roomId);
+      
+      // Try to restore session from seat map if user is found
+      await _restoreSessionFromSeatMapIfNeeded();
+      
       _restoreUserSeat();
     });
     // 定期的に席データを更新して他ユーザーの変更を反映
@@ -53,6 +58,40 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       const Duration(seconds: AppConfig.seatRefreshIntervalSeconds),
       (_) => _refreshSeats(),
     );
+  }
+
+  /// シートマップから自分のセッションを検出して復元
+  Future<void> _restoreSessionFromSeatMapIfNeeded() async {
+    if (!mounted) return;
+    
+    final sessionProvider = context.read<SessionProvider>();
+    final authProvider = context.read<AuthProvider>();
+    final roomProvider = context.read<RoomProvider>();
+    
+    // Only attempt restore if not already seated and user is signed in
+    if (sessionProvider.isSeated || !authProvider.isSignedIn) return;
+    
+    final seats = roomProvider.getSeats(widget.room.roomId);
+    final userId = authProvider.userId;
+    
+    final restored = await sessionProvider.restoreFromSeatData(
+      roomId: widget.room.roomId,
+      seats: seats,
+      userId: userId,
+      roomName: widget.room.name,
+    );
+    
+    if (restored && mounted) {
+      // Start timer if session was restored
+      context.read<TimerProvider>().start();
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Session restored from seat map'),
+          backgroundColor: Colors.blue,
+        ),
+      );
+    }
   }
 
   void _onErrorChanged() {

@@ -445,6 +445,90 @@ class SessionProvider extends ChangeNotifier {
     }
   }
 
+  /// Restore session from seat map data when user's ID is found on a seat.
+  /// Returns true if session was restored, false otherwise.
+  /// 
+  /// This should be called when the seat map is opened to handle the case where
+  /// the app was killed but the user's session still exists on the server.
+  /// 
+  /// [roomId] - The room ID to check
+  /// [seats] - The list of seats from the room
+  /// [userId] - The current user's ID to search for
+  Future<bool> restoreFromSeatData({
+    required String roomId,
+    required List<dynamic> seats,
+    required String userId,
+    String? roomName,
+  }) async {
+    // Already seated, no need to restore
+    if (isSeated) return false;
+    
+    // Find seat occupied by this user
+    dynamic userSeat;
+    for (final seat in seats) {
+      if (seat.isOccupied && seat.user?.userId == userId) {
+        userSeat = seat;
+        break;
+      }
+    }
+    
+    if (userSeat == null) return false;
+    
+    debugPrint('🔄 Found user session on seat map, attempting restore...');
+    
+    try {
+      // Try to get session info from server
+      await _ensureAuthToken();
+      
+      // Load persisted session data if available
+      final prefs = await SharedPreferences.getInstance();
+      final sessionId = prefs.getString(_keySessionId);
+      
+      if (sessionId != null) {
+        // Validate session with server
+        final sessionInfo = await _apiService.getSession(roomId, sessionId);
+        
+        if (sessionInfo != null) {
+          // Restore from server data
+          _sessionId = sessionInfo.sessionId;
+          _currentRoomId = sessionInfo.roomId;
+          _currentRoomName = sessionInfo.roomName;
+          _seatNumber = sessionInfo.seatNumber;
+          _sessionStartedAt = sessionInfo.sessionStartedAt;
+          _currentDuration = sessionInfo.currentDuration;
+          _state = SessionState.seated;
+          
+          _startSyncTimer();
+          
+          debugPrint('🔄 Session restored from server: $_sessionId in room $_currentRoomName');
+          notifyListeners();
+          return true;
+        }
+      }
+      
+      // Fallback: restore minimal state from seat data
+      // This allows the UI to be consistent even if we can't get full session info
+      _currentRoomId = roomId;
+      _currentRoomName = roomName;
+      _seatNumber = userSeat.seatNumber;
+      _sessionStartedAt = userSeat.sessionStartedAt;
+      _currentDuration = userSeat.currentSessionDuration;
+      _state = SessionState.seated;
+      
+      // Try to get session ID from persisted data or generate placeholder
+      _sessionId = sessionId ?? 'restored-${DateTime.now().millisecondsSinceEpoch}';
+      
+      _startSyncTimer();
+      
+      debugPrint('🔄 Session restored from seat data: seat $_seatNumber in room $roomId');
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('🔄 Error during session restore from seat data: $e');
+      return false;
+    }
+  }
+
   /// Restore session if there's an active foreground service and valid session.
   /// Returns true if session was restored, false otherwise.
   /// 
