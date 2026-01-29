@@ -32,8 +32,8 @@ class RoomCard extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Colors.white,
-                Colors.grey.shade50,
+                Theme.of(context).cardColor,
+                Theme.of(context).cardColor.withValues(alpha: 0.8),
               ],
             ),
           ),
@@ -46,12 +46,12 @@ class RoomCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1A237E).withValues(alpha: 0.1),
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.terrain,
-                      color: Color(0xFF1A237E),
+                      color: Theme.of(context).colorScheme.primary,
                       size: 28,
                     ),
                   ),
@@ -62,10 +62,10 @@ class RoomCard extends StatelessWidget {
                       children: [
                         Text(
                           room.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF1A237E),
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -73,7 +73,9 @@ class RoomCard extends StatelessWidget {
                           '${room.currentOccupancy} / ${room.capacity} studying',
                           style: TextStyle(
                             fontSize: 13,
-                            color: Colors.grey.shade600,
+                            color: Theme.of(context).brightness == Brightness.dark 
+                                ? Colors.grey.shade400 
+                                : Colors.grey.shade600,
                           ),
                         ),
                       ],
@@ -91,7 +93,9 @@ class RoomCard extends StatelessWidget {
                     child: LinearProgressIndicator(
                       value: occupancyPercent,
                       minHeight: 8,
-                      backgroundColor: Colors.grey.shade200,
+                      backgroundColor: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.grey.shade800
+                          : Colors.grey.shade200,
                       valueColor: AlwaysStoppedAnimation<Color>(
                         _getOccupancyColor(occupancyPercent),
                       ),
@@ -114,13 +118,13 @@ class RoomCard extends StatelessWidget {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1A237E),
+                          color: Theme.of(context).colorScheme.primary,
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: const Text(
+                        child: Text(
                           'Join',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),

@@ -27,15 +27,18 @@ class SeatWidget extends StatelessWidget {
     final theme = Theme.of(context);
     
     // Define colors based on whether this is the current user
+    final isDark = theme.brightness == Brightness.dark;
+    
+    // Define colors based on whether this is the current user
     final borderColor = isCurrentUser
         ? const Color(0xFFFFB300) // Gold/Amber for current user
         : seat.isOccupied 
-            ? const Color(0xFF1A237E) // Navy accent for other users
-            : Colors.grey.shade300;
+            ? theme.colorScheme.primary // Navy accent for other users
+            : (isDark ? Colors.grey.shade700 : Colors.grey.shade300);
     
     final shadowColor = isCurrentUser
         ? const Color(0xFFFFB300).withValues(alpha: 0.3)
-        : const Color(0xFF1A237E).withValues(alpha: 0.1);
+        : theme.colorScheme.primary.withValues(alpha: 0.1);
     
     return GestureDetector(
       onTap: onTap,
@@ -43,8 +46,8 @@ class SeatWidget extends StatelessWidget {
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: seat.isOccupied 
-              ? Colors.white 
-              : Colors.grey.shade100,
+              ? (isDark ? const Color(0xFF1E1E1E) : Colors.white)
+              : (isDark ? Colors.grey.shade900 : Colors.grey.shade100),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: borderColor,
@@ -77,7 +80,7 @@ class SeatWidget extends StatelessWidget {
         // Avatar with country flag badge
         Flexible(
           flex: 3,
-          child: _buildAvatarWithBadge(user),
+          child: _buildAvatarWithBadge(user, theme),
         ),
         const SizedBox(height: 4),
         // Username
@@ -86,7 +89,7 @@ class SeatWidget extends StatelessWidget {
             user.displayName,
             style: theme.textTheme.bodySmall?.copyWith(
               fontWeight: FontWeight.w600,
-              color: const Color(0xFF1A237E),
+              color: theme.colorScheme.primary,
               fontSize: 10,
             ),
             maxLines: 1,
@@ -95,7 +98,7 @@ class SeatWidget extends StatelessWidget {
         ),
         // Session duration
         Flexible(
-          child: _buildDurationBadge(),
+          child: _buildDurationBadge(theme),
         ),
       ],
     );
@@ -113,13 +116,13 @@ class SeatWidget extends StatelessWidget {
             width: size * 0.7,
             height: size * 0.7,
             decoration: BoxDecoration(
-              color: Colors.grey.shade200,
+              color: theme.brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade200,
               shape: BoxShape.circle,
             ),
             child: Icon(
               Icons.event_seat_outlined,
               size: size * 0.4,
-              color: Colors.grey.shade400,
+              color: theme.brightness == Brightness.dark ? Colors.grey.shade600 : Colors.grey.shade400,
             ),
           ),
         ),
@@ -128,7 +131,7 @@ class SeatWidget extends StatelessWidget {
           child: Text(
             '#${seat.seatNumber}',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: Colors.grey.shade500,
+              color: theme.brightness == Brightness.dark ? Colors.grey.shade500 : Colors.grey.shade500,
               fontSize: 10,
             ),
           ),
@@ -137,7 +140,7 @@ class SeatWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildAvatarWithBadge(SeatUser user) {
+  Widget _buildAvatarWithBadge(SeatUser user, ThemeData theme) {
     return SizedBox(
       width: size + 8,
       height: size + 8,
@@ -150,7 +153,7 @@ class SeatWidget extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: Colors.grey.shade200,
+                color: theme.brightness == Brightness.dark ? Colors.grey.shade700 : Colors.grey.shade200,
                 width: 2,
               ),
             ),
@@ -208,7 +211,7 @@ class SeatWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildDurationBadge() {
+  Widget _buildDurationBadge(ThemeData theme) {
     // Calculate duration from sessionStartedAt for accurate time tracking
     final duration = seat.sessionStartedAt != null
         ? DateTime.now().difference(seat.sessionStartedAt!)
@@ -228,15 +231,15 @@ class SeatWidget extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
-          color: const Color(0xFF1A237E).withValues(alpha: 0.1),
+          color: theme.colorScheme.primary.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
           durationText,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w500,
-            color: Color(0xFF1A237E),
+            color: theme.colorScheme.primary,
           ),
         ),
       ),

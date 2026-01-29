@@ -18,21 +18,25 @@ class TimerWidget extends StatelessWidget {
     return Consumer<TimerProvider>(
       builder: (context, timer, child) {
         if (isCollapsed) {
-          return _buildCollapsedView(timer);
+          return _buildCollapsedView(context, timer);
         }
         return _buildExpandedView(context, timer);
       },
     );
   }
 
-  Widget _buildCollapsedView(TimerProvider timer) {
+  Widget _buildCollapsedView(BuildContext context, TimerProvider timer) {
     final isPomodoroBreak = timer.mode == TimerMode.pomodoro &&
         timer.pomodoroPhase == PomodoroPhase.shortBreak;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -50,7 +54,7 @@ class TimerWidget extends StatelessWidget {
             decoration: BoxDecoration(
               color: isPomodoroBreak
                   ? Colors.green.shade100
-                  : const Color(0xFF1A237E).withValues(alpha: 0.1),
+                  : primaryColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
@@ -58,26 +62,26 @@ class TimerWidget extends StatelessWidget {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: isPomodoroBreak ? Colors.green.shade700 : const Color(0xFF1A237E),
+                color: isPomodoroBreak ? Colors.green.shade700 : primaryColor,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
           ),
           const SizedBox(width: 8),
           // Compact mode toggle
-          _buildCompactModeToggle(timer),
+          _buildCompactModeToggle(context, timer),
           const Spacer(),
           // Play/Pause button
           Container(
-            decoration: const BoxDecoration(
-              color: Color(0xFF1A237E),
+            decoration: BoxDecoration(
+              color: primaryColor,
               shape: BoxShape.circle,
             ),
             child: IconButton(
               onPressed: timer.isRunning ? timer.pause : timer.start,
               icon: Icon(timer.isRunning ? Icons.pause : Icons.play_arrow),
               iconSize: 20,
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.onPrimary,
               padding: const EdgeInsets.all(8),
               constraints: const BoxConstraints(),
             ),
@@ -98,23 +102,26 @@ class TimerWidget extends StatelessWidget {
   }
 
   /// Compact mode toggle for collapsed view
-  Widget _buildCompactModeToggle(TimerProvider timer) {
+  Widget _buildCompactModeToggle(BuildContext context, TimerProvider timer) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
-        color: Colors.grey.shade200,
+        color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           _buildCompactModeButton(
+            context,
             timer,
             TimerMode.normal,
             Icons.timer_outlined,
             'Normal',
           ),
           _buildCompactModeButton(
+            context,
             timer,
             TimerMode.pomodoro,
             Icons.hourglass_empty,
@@ -126,6 +133,7 @@ class TimerWidget extends StatelessWidget {
   }
 
   Widget _buildCompactModeButton(
+    BuildContext context,
     TimerProvider timer,
     TimerMode mode,
     IconData icon,
@@ -136,6 +144,8 @@ class TimerWidget extends StatelessWidget {
         timer.mode == TimerMode.pomodoro &&
         timer.pomodoroPhase == PomodoroPhase.shortBreak;
     
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    
     return Tooltip(
       message: tooltip,
       child: GestureDetector(
@@ -145,7 +155,7 @@ class TimerWidget extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
             color: isSelected
-                ? (isPomodoroBreak ? Colors.green : const Color(0xFF1A237E))
+                ? (isPomodoroBreak ? Colors.green : primaryColor)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(14),
           ),
@@ -155,7 +165,7 @@ class TimerWidget extends StatelessWidget {
               Icon(
                 icon,
                 size: 14,
-                color: isSelected ? Colors.white : Colors.grey.shade500,
+                color: isSelected ? Theme.of(context).colorScheme.onPrimary : Colors.grey.shade500,
               ),
               if (isSelected) ...[
                 const SizedBox(width: 4),
@@ -163,10 +173,10 @@ class TimerWidget extends StatelessWidget {
                   mode == TimerMode.pomodoro
                       ? (isPomodoroBreak ? 'Break' : 'Focus')
                       : 'Normal',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.onPrimary,
                   ),
                 ),
               ],
@@ -178,10 +188,13 @@ class TimerWidget extends StatelessWidget {
   }
 
   Widget _buildExpandedView(BuildContext context, TimerProvider timer) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -213,14 +226,14 @@ class TimerWidget extends StatelessWidget {
           _buildModeToggle(context, timer),
           const SizedBox(height: 16),
           // Timer display
-          _buildTimerDisplay(timer),
+          _buildTimerDisplay(context, timer),
           const SizedBox(height: 16),
           // Controls
-          _buildControls(timer),
+          _buildControls(context, timer),
           // Pomodoro info
           if (timer.mode == TimerMode.pomodoro) ...[
             const SizedBox(height: 12),
-            _buildPomodoroInfo(timer),
+            _buildPomodoroInfo(context, timer),
           ],
         ],
       ),
@@ -228,10 +241,11 @@ class TimerWidget extends StatelessWidget {
   }
 
   Widget _buildModeToggle(BuildContext context, TimerProvider timer) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
+        color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -264,13 +278,14 @@ class TimerWidget extends StatelessWidget {
     String label,
     IconData icon,
   ) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
     final isSelected = timer.mode == mode;
     return GestureDetector(
       onTap: timer.isRunning ? null : () => timer.setMode(mode),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF1A237E) : Colors.transparent,
+          color: isSelected ? primaryColor : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
@@ -278,13 +293,13 @@ class TimerWidget extends StatelessWidget {
             Icon(
               icon,
               size: 18,
-              color: isSelected ? Colors.white : Colors.grey.shade600,
+              color: isSelected ? Theme.of(context).colorScheme.onPrimary : Colors.grey.shade600,
             ),
             const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? Colors.white : Colors.grey.shade600,
+                color: isSelected ? Theme.of(context).colorScheme.onPrimary : Colors.grey.shade600,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
@@ -294,9 +309,12 @@ class TimerWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildTimerDisplay(TimerProvider timer) {
+  Widget _buildTimerDisplay(BuildContext context, TimerProvider timer) {
     final isPomodoroBreak = timer.mode == TimerMode.pomodoro &&
         timer.pomodoroPhase == PomodoroPhase.shortBreak;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Column(
       children: [
@@ -307,7 +325,7 @@ class TimerWidget extends StatelessWidget {
             decoration: BoxDecoration(
               color: isPomodoroBreak
                   ? Colors.green.shade100
-                  : const Color(0xFF1A237E).withValues(alpha: 0.1),
+                  : primaryColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
@@ -315,7 +333,7 @@ class TimerWidget extends StatelessWidget {
               style: TextStyle(
                 color: isPomodoroBreak
                     ? Colors.green.shade700
-                    : const Color(0xFF1A237E),
+                    : primaryColor,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -331,19 +349,19 @@ class TimerWidget extends StatelessWidget {
                     ? _getPomodoroProgress(timer)
                     : 1.0, // Fixed full circle for Normal mode instead of null (indeterminate/spinning)
                 strokeWidth: 6, // Slightly thinner
-                backgroundColor: Colors.grey.shade200,
+                backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  isPomodoroBreak ? Colors.green : const Color(0xFF1A237E),
+                  isPomodoroBreak ? Colors.green : primaryColor,
                 ),
               ),
             ),
             Text(
               timer.formattedTime,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 32, // Reduced font size
                 fontWeight: FontWeight.w300,
-                color: Color(0xFF1A237E),
-                fontFeatures: [FontFeature.tabularFigures()],
+                color: primaryColor,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
           ],
@@ -360,7 +378,9 @@ class TimerWidget extends StatelessWidget {
     }
   }
 
-  Widget _buildControls(TimerProvider timer) {
+  Widget _buildControls(BuildContext context, TimerProvider timer) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -374,15 +394,15 @@ class TimerWidget extends StatelessWidget {
         const SizedBox(width: 16),
         // Play/Pause button
         Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFF1A237E),
+          decoration: BoxDecoration(
+            color: primaryColor,
             shape: BoxShape.circle,
           ),
           child: IconButton(
             onPressed: timer.isRunning ? timer.pause : timer.start,
             icon: Icon(timer.isRunning ? Icons.pause : Icons.play_arrow),
             iconSize: 36,
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.onPrimary,
             padding: const EdgeInsets.all(16),
           ),
         ),
@@ -393,20 +413,22 @@ class TimerWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildPomodoroInfo(TimerProvider timer) {
+  Widget _buildPomodoroInfo(BuildContext context, TimerProvider timer) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Icon(
+        Icon(
           Icons.emoji_events_outlined,
           size: 18,
-          color: Color(0xFF1A237E),
+          color: primaryColor,
         ),
         const SizedBox(width: 6),
         Text(
           '${timer.pomodoroCompletedCycles} cycles completed',
-          style: const TextStyle(
-            color: Color(0xFF1A237E),
+          style: TextStyle(
+            color: primaryColor,
             fontWeight: FontWeight.w500,
           ),
         ),

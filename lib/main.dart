@@ -58,15 +58,19 @@ class StudyPeaksApp extends StatelessWidget {
           },
         ),
       ],
-      child: MaterialApp(
-        title: 'Global Study Peaks',
-        debugShowCheckedModeBanner: false,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        theme: _buildLightTheme(),
-        darkTheme: _buildDarkTheme(),
-        themeMode: context.watch<UserSettingsProvider>().themeMode,
-        home: const RoomListScreen(),
+      child: Consumer<UserSettingsProvider>(
+        builder: (context, userSettings, _) {
+          return MaterialApp(
+            title: 'Global Study Peaks',
+            debugShowCheckedModeBanner: false,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            theme: _buildLightTheme(),
+            darkTheme: _buildDarkTheme(),
+            themeMode: userSettings.themeMode,
+            home: const RoomListScreen(),
+          );
+        },
       ),
     );
   }
@@ -90,11 +94,16 @@ class StudyPeaksApp extends StatelessWidget {
   }
 
   ThemeData _buildDarkTheme() {
+    // Use a more vibrant primary color for dark mode to ensures buttons stand out
+    const primaryColor = Color(0xFF5C6BC0); 
+    
     return ThemeData(
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF5C6BC0),
+        seedColor: primaryColor,
         brightness: Brightness.dark,
+        primary: const Color(0xFF7986CB), // Lighter indigo for better visibility on dark backgrounds
+        onPrimary: Colors.white, // Ensure text/icons on primary buttons are white
       ),
       scaffoldBackgroundColor: const Color(0xFF121212),
       textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),

@@ -179,7 +179,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: _buildAppBar(),
       body: Column(
         children: [
@@ -205,21 +205,21 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
 
   AppBar _buildAppBar() {
     return AppBar(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
       elevation: 0,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back, color: Color(0xFF1A237E)),
+        icon: Icon(Icons.arrow_back, color: Theme.of(context).appBarTheme.foregroundColor),
         onPressed: () => Navigator.of(context).pop(),
       ),
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.terrain, color: Color(0xFF1A237E), size: 24),
+          Icon(Icons.terrain, color: Theme.of(context).appBarTheme.foregroundColor, size: 24),
           const SizedBox(width: 8),
           Text(
             widget.room.name,
-            style: const TextStyle(
-              color: Color(0xFF1A237E),
+            style: TextStyle(
+              color: Theme.of(context).appBarTheme.foregroundColor,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -228,7 +228,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       centerTitle: true,
       actions: [
         IconButton(
-          icon: const Icon(Icons.info_outline, color: Color(0xFF1A237E)),
+          icon: Icon(Icons.info_outline, color: Theme.of(context).appBarTheme.foregroundColor),
           onPressed: () => showRoomInfoDialog(context: context, room: widget.room),
         ),
       ],
@@ -254,11 +254,15 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
         final seats = roomProvider.getSeats(widget.room.roomId);
         final occupiedCount = seats.where((s) => s.isOccupied).length;
 
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+        final primaryColor = Theme.of(context).colorScheme.primary;
+
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 16),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: cardColor,
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
@@ -270,14 +274,14 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
           ),
           child: Row(
             children: [
-              const Icon(Icons.people_outline, color: Color(0xFF1A237E)),
+              Icon(Icons.people_outline, color: primaryColor),
               const SizedBox(width: 8),
               Text(
                 '$occupiedCount studying',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A237E),
+                  color: primaryColor,
                 ),
               ),
               const Spacer(),

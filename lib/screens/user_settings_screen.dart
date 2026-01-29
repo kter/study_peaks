@@ -62,18 +62,18 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF1A237E)),
+          icon: Icon(Icons.arrow_back, color: Theme.of(context).appBarTheme.foregroundColor),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
+        title: Text(
           'Profile Settings',
           style: TextStyle(
-            color: Color(0xFF1A237E),
+            color: Theme.of(context).appBarTheme.foregroundColor,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -121,10 +121,10 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w600,
-        color: Color(0xFF1A237E),
+        color: Theme.of(context).colorScheme.primary,
       ),
     );
   }
@@ -139,10 +139,14 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
         auth.photoUrl != null && 
         userSettings.useGoogleAvatar;
     
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -164,7 +168,7 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: const Color(0xFF1A237E).withValues(alpha: 0.2),
+                    color: primaryColor.withValues(alpha: 0.2),
                     width: 3,
                   ),
                 ),
@@ -190,7 +194,7 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                 child: Container(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
+                    border: Border.all(color: cardColor, width: 2),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.1),
@@ -198,7 +202,9 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                       ),
                     ],
                   ),
-                  child: ClipOval(
+                child: ClipOval(
+                  child: Container(
+                    color: Colors.white,
                     child: CountryFlag.fromCountryCode(
                       userSettings.countryCode,
                       height: 28,
@@ -207,15 +213,16 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                   ),
                 ),
               ),
+            ),
             ],
           ),
           const SizedBox(height: 16),
           Text(
             userSettings.displayName,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1A237E),
+              color: primaryColor,
             ),
           ),
           if (auth.isSignedIn) ...[
@@ -296,8 +303,8 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
               icon: const Icon(Icons.refresh),
               label: const Text('Regenerate Icon'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF1A237E),
-                side: const BorderSide(color: Color(0xFF1A237E)),
+                foregroundColor: Theme.of(context).colorScheme.primary,
+                side: BorderSide(color: Theme.of(context).colorScheme.primary),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                 ),
@@ -317,9 +324,13 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
   }
 
   Widget _buildNameField(BuildContext context, UserSettingsProvider userSettings) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -331,20 +342,22 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
       ),
       child: TextField(
         controller: _nameController,
+        style: TextStyle(color: isDark ? Colors.white : Colors.black),
         decoration: InputDecoration(
           hintText: 'Enter your display name',
+          hintStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,
           ),
           filled: true,
-          fillColor: Colors.white,
+          fillColor: cardColor,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,
             vertical: 14,
           ),
           suffixIcon: IconButton(
-            icon: const Icon(Icons.check, color: Color(0xFF1A237E)),
+            icon: Icon(Icons.check, color: primaryColor),
             onPressed: () async {
               await userSettings.setDisplayName(_nameController.text);
               if (mounted) {
@@ -375,9 +388,12 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
   }
 
   Widget _buildCountrySelector(BuildContext context, UserSettingsProvider userSettings) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -395,21 +411,29 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
             borderSide: BorderSide.none,
           ),
           filled: true,
-          fillColor: Colors.white,
+          fillColor: cardColor,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,
             vertical: 14,
           ),
+        ),
+        dropdownColor: cardColor,
+        style: TextStyle(
+          color: isDark ? Colors.white : Colors.black,
+          fontSize: 16,
         ),
         items: _countries.map((country) {
           return DropdownMenuItem<String>(
             value: country['code'],
             child: Row(
               children: [
-                CountryFlag.fromCountryCode(
-                  country['code']!,
-                  height: 20,
-                  width: 28,
+                Container(
+                  color: Colors.white,
+                  child: CountryFlag.fromCountryCode(
+                    country['code']!,
+                    height: 20,
+                    width: 28,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Text(country['name']!),
@@ -429,11 +453,14 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
 
   Widget _buildThemeSelector(BuildContext context, UserSettingsProvider userSettings) {
     final l10n = AppLocalizations.of(context)!;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final primaryColor = Theme.of(context).colorScheme.primary;
     
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -471,15 +498,15 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
             if (states.contains(WidgetState.selected)) {
-              return const Color(0xFFE8EAF6);
+              return isDark ? primaryColor.withValues(alpha: 0.2) : const Color(0xFFE8EAF6);
             }
             return Colors.transparent;
           }),
           foregroundColor: WidgetStateProperty.resolveWith<Color>((states) {
             if (states.contains(WidgetState.selected)) {
-              return const Color(0xFF1A237E);
+              return isDark ? primaryColor : const Color(0xFF1A237E);
             }
-            return Colors.grey.shade700;
+            return isDark ? Colors.grey.shade400 : Colors.grey.shade700;
           }),
         ),
       ),
@@ -487,10 +514,14 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
   }
 
   Widget _buildAuthSection(BuildContext context, AuthProvider auth) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -503,12 +534,12 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Account',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF1A237E),
+              color: primaryColor,
             ),
           ),
           const SizedBox(height: 12),
@@ -517,7 +548,12 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
               children: [
                 const Icon(Icons.check_circle, color: Colors.green, size: 20),
                 const SizedBox(width: 8),
-                const Text('Signed in with Google'),
+                Text(
+                  'Signed in with Google',
+                  style: TextStyle(
+                     color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
                 const Spacer(),
                 TextButton(
                   onPressed: () async {
@@ -537,7 +573,7 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
               'Sign in to sync your study progress across devices.',
               style: TextStyle(
                 fontSize: 14,
-                color: Colors.grey.shade600,
+                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
               ),
             ),
             const SizedBox(height: 12),
@@ -580,7 +616,7 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                     : const Icon(Icons.login),
                 label: Text(auth.isLoading ? 'Signing in...' : 'Sign in with Google'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1A237E),
+                  backgroundColor: primaryColor,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(

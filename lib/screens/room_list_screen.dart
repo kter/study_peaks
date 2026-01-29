@@ -54,23 +54,23 @@ class _RoomListScreenState extends State<RoomListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         elevation: 0,
-        title: const Row(
+        title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               Icons.landscape,
-              color: Color(0xFF1A237E),
+              color: Theme.of(context).appBarTheme.foregroundColor,
               size: 28,
             ),
             SizedBox(width: 8),
             Text(
               'Global Study Peaks',
               style: TextStyle(
-                color: Color(0xFF1A237E),
+                color: Theme.of(context).appBarTheme.foregroundColor,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -112,16 +112,16 @@ class _RoomListScreenState extends State<RoomListScreen> {
       body: Consumer<RoomProvider>(
         builder: (context, provider, child) {
           if (provider.isLoading) {
-            return const Center(
+            return Center(
               child: CircularProgressIndicator(
-                color: Color(0xFF1A237E),
+                color: Theme.of(context).colorScheme.primary,
               ),
             );
           }
 
           return RefreshIndicator(
             onRefresh: provider.fetchRooms,
-            color: const Color(0xFF1A237E),
+            color: Theme.of(context).colorScheme.primary,
             child: CustomScrollView(
               slivers: [
                 // Header
@@ -131,12 +131,12 @@ class _RoomListScreenState extends State<RoomListScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Choose Your Peak',
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF1A237E),
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -144,7 +144,9 @@ class _RoomListScreenState extends State<RoomListScreen> {
                           'Join a virtual study room and start focusing',
                           style: TextStyle(
                             fontSize: 14,
-                            color: Colors.grey.shade600,
+                            color: Theme.of(context).brightness == Brightness.dark 
+                                ? Colors.grey.shade400 
+                                : Colors.grey.shade600,
                           ),
                         ),
                       ],
@@ -227,7 +229,11 @@ class _RoomListScreenState extends State<RoomListScreen> {
               ),
               Text(
                 auth.email,
-                style: TextStyle(color: Colors.grey.shade600),
+                style: TextStyle(
+                  color: Theme.of(context).brightness == Brightness.dark 
+                      ? Colors.grey.shade400 
+                      : Colors.grey.shade600
+                ),
               ),
             ] else ...[
               Icon(
@@ -236,9 +242,14 @@ class _RoomListScreenState extends State<RoomListScreen> {
                 color: Colors.grey.shade400,
               ),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'Sign in to save your study progress and sync across devices.',
                 textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Theme.of(context).brightness == Brightness.dark 
+                      ? Colors.grey.shade400 
+                      : Colors.black,
+                ),
               ),
             ],
             if (auth.error != null) ...[
