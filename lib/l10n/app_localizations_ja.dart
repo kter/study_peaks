@@ -106,4 +106,16 @@ class AppLocalizationsJa extends AppLocalizations {
   String notificationStudying(String duration) {
     return '勉強中 - $duration';
   }
+
+  @override
+  String get theme => 'テーマ';
+
+  @override
+  String get themeSystem => 'システム';
+
+  @override
+  String get themeLight => 'ライト';
+
+  @override
+  String get themeDark => 'ダーク';
 }

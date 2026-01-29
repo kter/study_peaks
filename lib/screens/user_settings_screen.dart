@@ -102,6 +102,12 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                 _buildCountrySelector(context, userSettings),
                 const SizedBox(height: 32),
 
+                // Theme section
+                _buildSectionTitle(AppLocalizations.of(context)!.theme),
+                const SizedBox(height: 12),
+                _buildThemeSelector(context, userSettings),
+                const SizedBox(height: 32),
+
                 // Auth section
                 _buildAuthSection(context, auth),
               ],
@@ -417,6 +423,65 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
             await userSettings.setCountryCode(value);
           }
         },
+      ),
+    );
+  }
+
+  Widget _buildThemeSelector(BuildContext context, UserSettingsProvider userSettings) {
+    final l10n = AppLocalizations.of(context)!;
+    
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(8),
+      child: SegmentedButton<ThemeMode>(
+        segments: [
+          ButtonSegment<ThemeMode>(
+            value: ThemeMode.system,
+            label: Text(l10n.themeSystem),
+            icon: const Icon(Icons.brightness_auto),
+          ),
+          ButtonSegment<ThemeMode>(
+            value: ThemeMode.light,
+            label: Text(l10n.themeLight),
+            icon: const Icon(Icons.light_mode),
+          ),
+          ButtonSegment<ThemeMode>(
+            value: ThemeMode.dark,
+            label: Text(l10n.themeDark),
+            icon: const Icon(Icons.dark_mode),
+          ),
+        ],
+        selected: {userSettings.themeMode},
+        onSelectionChanged: (Set<ThemeMode> newSelection) {
+          userSettings.setThemeMode(newSelection.first);
+        },
+        style: ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+            if (states.contains(WidgetState.selected)) {
+              return const Color(0xFFE8EAF6);
+            }
+            return Colors.transparent;
+          }),
+          foregroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+            if (states.contains(WidgetState.selected)) {
+              return const Color(0xFF1A237E);
+            }
+            return Colors.grey.shade700;
+          }),
+        ),
       ),
     );
   }

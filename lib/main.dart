@@ -65,7 +65,7 @@ class StudyPeaksApp extends StatelessWidget {
         supportedLocales: AppLocalizations.supportedLocales,
         theme: _buildLightTheme(),
         darkTheme: _buildDarkTheme(),
-        themeMode: ThemeMode.system,
+        themeMode: context.watch<UserSettingsProvider>().themeMode,
         home: const RoomListScreen(),
       ),
     );

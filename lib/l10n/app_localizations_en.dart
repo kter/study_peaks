@@ -108,4 +108,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String notificationStudying(String duration) {
     return 'Studying - $duration';
   }
+
+  @override
+  String get theme => 'Theme';
+
+  @override
+  String get themeSystem => 'System Default';
+
+  @override
+  String get themeLight => 'Light';
+
+  @override
+  String get themeDark => 'Dark';
 }

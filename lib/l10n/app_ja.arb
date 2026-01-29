@@ -30,5 +30,9 @@
   "seatTaken": "この席は他の人に取られました。別の席を選んでください。",
   "notificationStudyingAt": "{roomName}で勉強中",
   "notificationSessionStarted": "セッション開始 - 0分",
-  "notificationStudying": "勉強中 - {duration}"
+  "notificationStudying": "勉強中 - {duration}",
+  "theme": "テーマ",
+  "themeSystem": "システム",
+  "themeLight": "ライト",
+  "themeDark": "ダーク"
 }

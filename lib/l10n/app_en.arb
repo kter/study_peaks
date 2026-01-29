@@ -46,5 +46,9 @@
     "placeholders": {
       "duration": {"type": "String"}
     }
-  }
+  },
+  "theme": "Theme",
+  "themeSystem": "System Default",
+  "themeLight": "Light",
+  "themeDark": "Dark"
 }
