@@ -34,6 +34,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     with WidgetsBindingObserver {
   bool _isTimerCollapsed = true;
   Timer? _seatRefreshTimer;
+  SessionProvider? _sessionProvider;
 
   @override
   void initState() {
@@ -41,8 +42,8 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     WidgetsBinding.instance.addObserver(this);
  
     // Add listener for session errors
-    final sessionProvider = context.read<SessionProvider>();
-    sessionProvider.addListener(_onErrorChanged);
+    _sessionProvider = context.read<SessionProvider>();
+    _sessionProvider?.addListener(_onErrorChanged);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final roomProvider = context.read<RoomProvider>();
@@ -127,7 +128,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
   @override
   void dispose() {
     _seatRefreshTimer?.cancel();
-    context.read<SessionProvider>().removeListener(_onErrorChanged);
+    _sessionProvider?.removeListener(_onErrorChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
