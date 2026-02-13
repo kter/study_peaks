@@ -5,6 +5,8 @@ import '../config/app_config.dart';
 import '../services/api_service.dart';
 import '../services/network_exception.dart';
 import '../services/notification_service.dart';
+import '../models/study_session.dart';
+import '../repositories/study_history_repository.dart';
 import 'auth_provider.dart';
 import 'user_settings_provider.dart';
 
@@ -32,6 +34,7 @@ class SessionProvider extends ChangeNotifier {
   Timer? _syncTimer;
   String? _error;
   final NotificationService _notificationService = NotificationService();
+  final StudyHistoryRepository _historyRepository = StudyHistoryRepository();
   
   // Stored localized notification strings
   String? _notificationTitle;
@@ -298,6 +301,20 @@ class SessionProvider extends ChangeNotifier {
     
     // Clear persisted session
     await _clearPersistedSession();
+
+    // Save session to history
+    if (_currentDuration > 0 && _currentRoomId != null) {
+      try {
+        await _historyRepository.saveSession(StudySession(
+          roomId: _currentRoomId!,
+          startTime: _sessionStartedAt ?? DateTime.now().subtract(Duration(seconds: _currentDuration)),
+          durationSeconds: _currentDuration,
+        ));
+        debugPrint('📜 Session saved to history: $_currentDuration seconds');
+      } catch (e) {
+        debugPrint('📜 Failed to save session history: $e');
+      }
+    }
     
     _reset();
 

@@ -9,7 +9,9 @@ import '../providers/session_provider.dart';
 import '../providers/user_settings_provider.dart';
 import '../services/network_exception.dart';
 import '../widgets/room_card.dart';
+import '../widgets/room_card.dart';
 import 'room_detail_screen.dart';
+import 'study_history_screen.dart';
 import 'user_settings_screen.dart';
 
 /// Main screen displaying list of available study rooms.
@@ -78,6 +80,17 @@ class _RoomListScreenState extends State<RoomListScreen> {
         ),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: 'Study History',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const StudyHistoryScreen(),
+                ),
+              );
+            },
+          ),
           Consumer2<AuthProvider, UserSettingsProvider>(
             builder: (context, auth, userSettings, _) {
               final showGoogleAvatar = auth.isSignedIn && 
