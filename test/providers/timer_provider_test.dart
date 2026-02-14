@@ -73,6 +73,18 @@ void main() {
         seconds: any(named: 'seconds'),
       )).called(1);
     });
+
+    test('setInitialDuration sets paused duration', () {
+      const initial = Duration(minutes: 5);
+      timerProvider.setInitialDuration(initial);
+      
+      expect(timerProvider.elapsedSeconds, initial.inSeconds);
+      
+      // Start and check it continues from there
+      timerProvider.start();
+      // Immediately after start, now - startedAt is approx 0.
+      expect(timerProvider.elapsedSeconds, closeTo(initial.inSeconds, 1));
+    });
   });
 
   group('TimerProvider - Pomodoro Mode', () {

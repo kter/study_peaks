@@ -187,6 +187,13 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// Set the initial duration (e.g. when restoring a session).
+  void setInitialDuration(Duration duration) {
+    if (_isRunning) return;
+    _pausedDuration = duration;
+    notifyListeners();
+  }
+
   /// Switch between focus and break phases in Pomodoro mode.
   void _switchPomodoroPhase() {
     if (_pomodoroPhase == PomodoroPhase.focus) {

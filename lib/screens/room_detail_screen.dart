@@ -35,6 +35,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
   bool _isTimerCollapsed = true;
   Timer? _seatRefreshTimer;
   SessionProvider? _sessionProvider;
+  TimerProvider? _timerProvider;
 
   @override
   void initState() {
@@ -45,12 +46,27 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     _sessionProvider = context.read<SessionProvider>();
     _sessionProvider?.addListener(_onErrorChanged);
 
+    _timerProvider = context.read<TimerProvider>();
+    _timerProvider?.addListener(_onTimerTick);
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final roomProvider = context.read<RoomProvider>();
       await roomProvider.fetchSeats(widget.room.roomId);
       
       // Try to restore session from seat map if user is found
       await _restoreSessionFromSeatMapIfNeeded();
+      
+      // If already seated (or just restored), ensure timer is running and synced
+      if (mounted) {
+        final session = context.read<SessionProvider>();
+        final timer = context.read<TimerProvider>();
+        if (session.isSeated && !timer.isRunning) {
+          if (session.currentDuration > 0) {
+            timer.setInitialDuration(Duration(seconds: session.currentDuration));
+          }
+          timer.start();
+        }
+      }
       
       _restoreUserSeat();
     });
@@ -84,7 +100,12 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     
     if (restored && mounted) {
       // Start timer if session was restored
-      context.read<TimerProvider>().start();
+      final timer = context.read<TimerProvider>();
+      final session = context.read<SessionProvider>();
+      if (session.currentDuration > 0) {
+        timer.setInitialDuration(Duration(seconds: session.currentDuration));
+      }
+      timer.start();
       
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -129,8 +150,17 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
   void dispose() {
     _seatRefreshTimer?.cancel();
     _sessionProvider?.removeListener(_onErrorChanged);
+    _timerProvider?.removeListener(_onTimerTick);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _onTimerTick() {
+    if (!mounted) return;
+    final session = context.read<SessionProvider>();
+    if (session.isSeated && _timerProvider != null) {
+      session.updateDuration(_timerProvider!.totalStudySeconds);
+    }
   }
 
   @override
