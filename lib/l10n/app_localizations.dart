@@ -331,6 +331,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Break Finished!'**
   String get notificationBreakFinished;
+
+  /// No description provided for @notificationTimeForBreak.
+  ///
+  /// In en, this message translates to:
+  /// **'Time for a break.'**
+  String get notificationTimeForBreak;
+
+  /// No description provided for @notificationTimeToFocus.
+  ///
+  /// In en, this message translates to:
+  /// **'Time to focus.'**
+  String get notificationTimeToFocus;
 }
 
 class _AppLocalizationsDelegate

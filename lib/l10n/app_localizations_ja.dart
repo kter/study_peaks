@@ -134,4 +134,10 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get notificationBreakFinished => '休憩時間終了！';
+
+  @override
+  String get notificationTimeForBreak => '休憩の時間です。';
+
+  @override
+  String get notificationTimeToFocus => '集中の時間です。';
 }

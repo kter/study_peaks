@@ -64,5 +64,7 @@
     }
   },
   "notificationFocusFinished": "Focus Finished!",
-  "notificationBreakFinished": "Break Finished!"
+  "notificationBreakFinished": "Break Finished!",
+  "notificationTimeForBreak": "Time for a break.",
+  "notificationTimeToFocus": "Time to focus."
 }

@@ -40,6 +40,24 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
   }
 
+  // Localized strings for notifications
+  String? _focusFinishedTitle;
+  String? _breakFinishedTitle;
+  String? _focusFinishedBody;
+  String? _breakFinishedBody;
+
+  void updateLocalization({
+    required String focusFinishedTitle,
+    required String breakFinishedTitle,
+    required String focusFinishedBody,
+    required String breakFinishedBody,
+  }) {
+    _focusFinishedTitle = focusFinishedTitle;
+    _breakFinishedTitle = breakFinishedTitle;
+    _focusFinishedBody = focusFinishedBody;
+    _breakFinishedBody = breakFinishedBody;
+  }
+
   TimerMode get mode => _mode;
   bool get isRunning => _isRunning;
   PomodoroPhase get pomodoroPhase => _pomodoroPhase;
@@ -196,6 +214,25 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Switch between focus and break phases in Pomodoro mode.
   void _switchPomodoroPhase() {
+    // Notify about the finished phase BEFORE switching
+    // Determine the title/body based on what JUST finished
+    final finishedPhase = _pomodoroPhase;
+    
+    // Use localized strings if available, otherwise fall back to English defaults
+    final title = finishedPhase == PomodoroPhase.focus 
+        ? (_focusFinishedTitle ?? 'Focus Finished!') 
+        : (_breakFinishedTitle ?? 'Break Finished!');
+        
+    final body = finishedPhase == PomodoroPhase.focus
+        ? (_focusFinishedBody ?? 'Time for a break.')
+        : (_breakFinishedBody ?? 'Time to focus.');
+
+    _notificationService.showPhaseFinishedNotification(
+      phase: finishedPhase,
+      title: title,
+      body: body,
+    );
+
     if (_pomodoroPhase == PomodoroPhase.focus) {
       _pomodoroPhase = PomodoroPhase.shortBreak;
       _pomodoroCompletedCycles++;

@@ -48,5 +48,7 @@
     }
   },
   "notificationFocusFinished": "集中時間終了！",
-  "notificationBreakFinished": "休憩時間終了！"
+  "notificationBreakFinished": "休憩時間終了！",
+  "notificationTimeForBreak": "休憩の時間です。",
+  "notificationTimeToFocus": "集中の時間です。"
 }

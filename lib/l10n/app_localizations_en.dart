@@ -136,4 +136,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get notificationBreakFinished => 'Break Finished!';
+
+  @override
+  String get notificationTimeForBreak => 'Time for a break.';
+
+  @override
+  String get notificationTimeToFocus => 'Time to focus.';
 }

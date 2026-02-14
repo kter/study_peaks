@@ -11,8 +11,13 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FlutterLocalNotificationsPlugin _localNotifications =
+  FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
+
+  @visibleForTesting
+  set localNotifications(FlutterLocalNotificationsPlugin plugin) {
+    _localNotifications = plugin;
+  }
 
   bool _isInitialized = false;
 
@@ -176,6 +181,42 @@ class NotificationService {
   /// Check if the foreground service is running.
   Future<bool> isRunning() async {
     return await FlutterForegroundTask.isRunningService;
+  }
+
+  /// Show a high-priority notification when a timer phase finishes.
+  Future<void> showPhaseFinishedNotification({
+    required PomodoroPhase phase,
+    required String title,
+    required String body,
+  }) async {
+    const androidPlatformChannelSpecifics = AndroidNotificationDetails(
+      'timer_finished_channel',
+      'Timer Finished',
+      channelDescription: 'Notifications for when the timer finishes',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+    );
+
+    const iOSPlatformChannelSpecifics = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      sound: 'default', 
+    );
+
+    const platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+      iOS: iOSPlatformChannelSpecifics,
+    );
+
+    await _localNotifications.show(
+      0, // Notification ID
+      title,
+      body,
+      platformChannelSpecifics,
+    );
   }
 }
 
