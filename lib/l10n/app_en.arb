@@ -50,5 +50,19 @@
   "theme": "Theme",
   "themeSystem": "System Default",
   "themeLight": "Light",
-  "themeDark": "Dark"
+  "themeDark": "Dark",
+  "notificationFocusRemaining": "Focus: {duration} remaining",
+  "@notificationFocusRemaining": {
+    "placeholders": {
+      "duration": {"type": "String"}
+    }
+  },
+  "notificationBreakRemaining": "Break: {duration} remaining",
+  "@notificationBreakRemaining": {
+    "placeholders": {
+      "duration": {"type": "String"}
+    }
+  },
+  "notificationFocusFinished": "Focus Finished!",
+  "notificationBreakFinished": "Break Finished!"
 }

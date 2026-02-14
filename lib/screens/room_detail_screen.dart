@@ -369,6 +369,10 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
           notificationTitle: l10n.notificationStudyingAt(widget.room.name),
           notificationSessionStarted: l10n.notificationSessionStarted,
           notificationStudyingFormat: l10n.notificationStudying('{duration}'),
+          notificationFocusRemaining: l10n.notificationFocusRemaining('{duration}'),
+          notificationBreakRemaining: l10n.notificationBreakRemaining('{duration}'),
+          notificationFocusFinished: l10n.notificationFocusFinished,
+          notificationBreakFinished: l10n.notificationBreakFinished,
         );
 
     if (!context.mounted) return;

@@ -111,11 +111,27 @@ class AppLocalizationsJa extends AppLocalizations {
   String get theme => 'テーマ';
 
   @override
-  String get themeSystem => 'システム';
+  String get themeSystem => 'システム設定';
 
   @override
   String get themeLight => 'ライト';
 
   @override
   String get themeDark => 'ダーク';
+
+  @override
+  String notificationFocusRemaining(String duration) {
+    return '集中: 残り$duration';
+  }
+
+  @override
+  String notificationBreakRemaining(String duration) {
+    return '休憩: 残り$duration';
+  }
+
+  @override
+  String get notificationFocusFinished => '集中時間終了！';
+
+  @override
+  String get notificationBreakFinished => '休憩時間終了！';
 }

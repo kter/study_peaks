@@ -2,18 +2,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import '../config/app_config.dart';
+import '../services/notification_service.dart';
 
-/// Timer mode for study sessions.
-enum TimerMode {
-  normal,
-  pomodoro,
-}
+import '../models/timer_mode.dart';
+export '../models/timer_mode.dart'; // Export for other files using TimerProvider
 
-/// Pomodoro phase.
-enum PomodoroPhase {
-  focus,
-  shortBreak,
-}
 
 /// Provider for managing timer state.
 /// 
@@ -40,7 +33,10 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   DateTime? _pomodoroPhaseStartedAt;
   int _pomodoroElapsedBeforePause = 0;
 
-  TimerProvider() {
+  final NotificationService _notificationService;
+
+  TimerProvider({NotificationService? notificationService}) 
+      : _notificationService = notificationService ?? NotificationService() {
     WidgetsBinding.instance.addObserver(this);
   }
 
@@ -120,6 +116,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+
   /// Start the timer.
   void start() {
     if (_isRunning) return;
@@ -132,12 +129,16 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _pomodoroPhaseStartedAt = DateTime.now();
     }
 
+    _updateNotification();
+
     // Timer for UI updates only (the actual time is calculated from timestamps)
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_mode == TimerMode.pomodoro && pomodoroRemainingSeconds <= 0) {
         _switchPomodoroPhase();
       }
       notifyListeners();
+      // We don't need to update notification on every tick because background task handles it,
+      // EXCEPT when phase changes (handled in _switchPomodoroPhase).
     });
     notifyListeners();
   }
@@ -164,6 +165,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
     
+    _updateNotification();
     notifyListeners();
   }
 
@@ -181,6 +183,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _pomodoroPhaseStartedAt = null;
     _pomodoroElapsedBeforePause = 0;
     
+    _updateNotification();
     notifyListeners();
   }
 
@@ -198,7 +201,26 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_isRunning) {
       _pomodoroPhaseStartedAt = DateTime.now();
     }
+    
+    _updateNotification();
   }
+
+  Future<void> _updateNotification() async {
+    // Only update if service is running
+    if (!await _notificationService.isRunning()) return;
+
+    final seconds = _mode == TimerMode.normal 
+        ? elapsedSeconds 
+        : pomodoroRemainingSeconds;
+
+    await _notificationService.updateTimerState(
+      mode: _mode,
+      isRunning: _isRunning,
+      pomodoroPhase: _mode == TimerMode.pomodoro ? _pomodoroPhase : null,
+      seconds: seconds,
+    );
+  }
+
 
   /// Get total study time (for both modes).
   int get totalStudySeconds {

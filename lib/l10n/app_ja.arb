@@ -32,7 +32,21 @@
   "notificationSessionStarted": "セッション開始 - 0分",
   "notificationStudying": "勉強中 - {duration}",
   "theme": "テーマ",
-  "themeSystem": "システム",
+  "themeSystem": "システム設定",
   "themeLight": "ライト",
-  "themeDark": "ダーク"
+  "themeDark": "ダーク",
+  "notificationFocusRemaining": "集中: 残り{duration}",
+  "@notificationFocusRemaining": {
+    "placeholders": {
+      "duration": {"type": "String"}
+    }
+  },
+  "notificationBreakRemaining": "休憩: 残り{duration}",
+  "@notificationBreakRemaining": {
+    "placeholders": {
+      "duration": {"type": "String"}
+    }
+  },
+  "notificationFocusFinished": "集中時間終了！",
+  "notificationBreakFinished": "休憩時間終了！"
 }

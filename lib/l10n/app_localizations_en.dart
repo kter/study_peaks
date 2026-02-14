@@ -120,4 +120,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get themeDark => 'Dark';
+
+  @override
+  String notificationFocusRemaining(String duration) {
+    return 'Focus: $duration remaining';
+  }
+
+  @override
+  String notificationBreakRemaining(String duration) {
+    return 'Break: $duration remaining';
+  }
+
+  @override
+  String get notificationFocusFinished => 'Focus Finished!';
+
+  @override
+  String get notificationBreakFinished => 'Break Finished!';
 }

@@ -307,6 +307,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dark'**
   String get themeDark;
+
+  /// No description provided for @notificationFocusRemaining.
+  ///
+  /// In en, this message translates to:
+  /// **'Focus: {duration} remaining'**
+  String notificationFocusRemaining(String duration);
+
+  /// No description provided for @notificationBreakRemaining.
+  ///
+  /// In en, this message translates to:
+  /// **'Break: {duration} remaining'**
+  String notificationBreakRemaining(String duration);
+
+  /// No description provided for @notificationFocusFinished.
+  ///
+  /// In en, this message translates to:
+  /// **'Focus Finished!'**
+  String get notificationFocusFinished;
+
+  /// No description provided for @notificationBreakFinished.
+  ///
+  /// In en, this message translates to:
+  /// **'Break Finished!'**
+  String get notificationBreakFinished;
 }
 
 class _AppLocalizationsDelegate

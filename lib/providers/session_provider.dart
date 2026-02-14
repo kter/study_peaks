@@ -106,6 +106,10 @@ class SessionProvider extends ChangeNotifier {
     String? notificationTitle,
     String? notificationSessionStarted,
     String? notificationStudyingFormat,
+    String? notificationFocusRemaining,
+    String? notificationBreakRemaining,
+    String? notificationFocusFinished,
+    String? notificationBreakFinished,
   }) async {
     try {
       _error = null;
@@ -141,6 +145,19 @@ class SessionProvider extends ChangeNotifier {
         notificationText: notificationSessionStarted ?? 'Session started - 0m',
       );
       
+      // Update localization for Pomodoro mode if provided
+      if (notificationFocusRemaining != null && 
+          notificationBreakRemaining != null &&
+          notificationFocusFinished != null &&
+          notificationBreakFinished != null) {
+        await _notificationService.updatePomodoroLocalization(
+          focusRemainingFormat: notificationFocusRemaining,
+          breakRemainingFormat: notificationBreakRemaining,
+          focusFinishedText: notificationFocusFinished,
+          breakFinishedText: notificationBreakFinished,
+        );
+      }
+      
       // Persist session for recovery after app restart
       await _persistSession();
 
@@ -149,6 +166,7 @@ class SessionProvider extends ChangeNotifier {
 
     } catch (e) {
       // 401 Retry Logic
+
       if (e is ApiException && e.statusCode == 401) {
         try {
           // Force token refresh
@@ -231,21 +249,6 @@ class SessionProvider extends ChangeNotifier {
   void updateDuration(int durationSeconds) {
     _currentDuration = durationSeconds;
     
-    // Update foreground notification with current duration
-    if (isSeated) {
-      final hours = durationSeconds ~/ 3600;
-      final minutes = (durationSeconds % 3600) ~/ 60;
-      
-      String durationText;
-      if (hours > 0) {
-        durationText = '${hours}h ${minutes}m';
-      } else {
-        durationText = '${minutes}m';
-      }
-      
-      final notificationText = _studyingFormat.replaceAll('{duration}', durationText);
-      _notificationService.updateSessionDuration(notificationText);
-    }
     
     notifyListeners();
   }

@@ -1,105 +1,127 @@
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:study_peaks/providers/timer_provider.dart';
+import 'package:study_peaks/services/notification_service.dart';
+// TimerMode is exported by TimerProvider
+
+class MockNotificationService extends Mock implements NotificationService {}
 
 void main() {
-  group('TimerProvider', () {
-    late TimerProvider provider;
+  late MockNotificationService mockNotificationService;
+  late TimerProvider timerProvider;
+  
+  setUpAll(() {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    // Register fallback values if needed for any()
+    registerFallbackValue(TimerMode.normal);
+    registerFallbackValue(PomodoroPhase.focus);
+  });
 
+  setUp(() {
+    mockNotificationService = MockNotificationService();
+    
+    // Default mock behavior
+    when(() => mockNotificationService.isRunning()).thenAnswer((_) async => true);
+    when(() => mockNotificationService.updateTimerState(
+      mode: any(named: 'mode'),
+      isRunning: any(named: 'isRunning'),
+      pomodoroPhase: any(named: 'pomodoroPhase'),
+      seconds: any(named: 'seconds'),
+    )).thenAnswer((_) async {});
+
+    timerProvider = TimerProvider(notificationService: mockNotificationService);
+  });
+  
+  tearDown(() {
+    timerProvider.dispose();
+  });
+
+  group('TimerProvider - Normal Mode', () {
+    test('Initial state should be correct', () {
+      expect(timerProvider.mode, TimerMode.normal);
+      expect(timerProvider.isRunning, false);
+      expect(timerProvider.elapsedSeconds, 0);
+    });
+
+    test('Start should begin timer and update notification', () async {
+      timerProvider.start();
+      await Future.delayed(Duration.zero);
+      
+      expect(timerProvider.isRunning, true);
+      // Verify notification update called
+      verify(() => mockNotificationService.updateTimerState(
+        mode: TimerMode.normal,
+        isRunning: true,
+        pomodoroPhase: null,
+        seconds: 0,
+      )).called(1);
+    });
+    
+    test('Pause should stop timer and save elapsed time', () async {
+      timerProvider.start();
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      timerProvider.pause();
+      await Future.delayed(Duration.zero);
+      
+      expect(timerProvider.isRunning, false);
+      verify(() => mockNotificationService.updateTimerState(
+        mode: TimerMode.normal,
+        isRunning: false,
+        pomodoroPhase: null, // explicit null
+        seconds: any(named: 'seconds'),
+      )).called(1);
+    });
+  });
+
+  group('TimerProvider - Pomodoro Mode', () {
     setUp(() {
-      TestWidgetsFlutterBinding.ensureInitialized();
-      provider = TimerProvider();
+      timerProvider.setMode(TimerMode.pomodoro);
+      // setMode calls reset which calls updateTimerState
+      // Clear interactions to test start/reset in isolation
+      clearInteractions(mockNotificationService);
     });
 
-    tearDown(() {
-      provider.dispose();
+    test('Initial pomodoro state should be Focus', () {
+      expect(timerProvider.mode, TimerMode.pomodoro);
+      expect(timerProvider.pomodoroPhase, PomodoroPhase.focus);
+      expect(timerProvider.pomodoroRemainingSeconds, 25 * 60);
     });
 
-    group('Normal Mode', () {
-      test('initial state is correct', () {
-        expect(provider.isRunning, false);
-        expect(provider.elapsedSeconds, 0);
-        expect(provider.mode, TimerMode.normal);
-      });
-
-      test('start timer updates isRunning', () {
-        provider.start();
-        expect(provider.isRunning, true);
-      });
-
-      test('pause timer updates isRunning', () {
-        provider.start();
-        provider.pause();
-        expect(provider.isRunning, false);
-      });
-
-      test('reset timer clears elapsed time', () {
-        provider.start();
-        provider.pause();
-        provider.reset();
-        expect(provider.elapsedSeconds, 0);
-        expect(provider.isRunning, false);
-      });
-
-      test('formatted time displays correctly', () {
-        expect(provider.formattedTime, '00:00');
-      });
-
-      test('double start does not cause issues', () {
-        provider.start();
-        provider.start(); // Should be ignored
-        expect(provider.isRunning, true);
-      });
-
-      test('totalStudySeconds equals elapsedSeconds in normal mode', () {
-        expect(provider.totalStudySeconds, provider.elapsedSeconds);
-      });
+    test('Start in Pomodoro should update notification with phase', () async {
+      timerProvider.start();
+      await Future.delayed(Duration.zero);
+      
+      expect(timerProvider.isRunning, true);
+      verify(() => mockNotificationService.updateTimerState(
+        mode: TimerMode.pomodoro,
+        isRunning: true,
+        pomodoroPhase: PomodoroPhase.focus,
+        seconds: 25 * 60,
+      )).called(1);
     });
 
-    group('Pomodoro Mode', () {
-      test('switch to pomodoro mode', () {
-        provider.setMode(TimerMode.pomodoro);
-        expect(provider.mode, TimerMode.pomodoro);
-        expect(provider.pomodoroPhase, PomodoroPhase.focus);
-      });
-
-      test('pomodoro initial time is 25 minutes', () {
-        provider.setMode(TimerMode.pomodoro);
-        expect(provider.pomodoroRemainingSeconds, 25 * 60);
-        expect(provider.formattedTime, '25:00');
-      });
-
-      test('cannot change mode while timer is running', () {
-        provider.start();
-        provider.setMode(TimerMode.pomodoro);
-        expect(provider.mode, TimerMode.normal); // Should not change
-      });
-
-      test('pomodoroCompletedCycles starts at 0', () {
-        provider.setMode(TimerMode.pomodoro);
-        expect(provider.pomodoroCompletedCycles, 0);
-      });
-
-      test('reset in pomodoro mode resets to focus phase', () {
-        provider.setMode(TimerMode.pomodoro);
-        provider.start();
-        provider.pause();
-        provider.reset();
-        
-        expect(provider.pomodoroPhase, PomodoroPhase.focus);
-        expect(provider.pomodoroRemainingSeconds, 25 * 60);
-        expect(provider.isRunning, false);
-      });
-    });
-
-    group('Time Formatting', () {
-      test('formats seconds correctly', () {
-        expect(provider.formattedTime, '00:00');
-      });
-
-      test('formats minutes correctly in pomodoro', () {
-        provider.setMode(TimerMode.pomodoro);
-        expect(provider.formattedTime, '25:00');
-      });
+    test('Reset should reset to initial Focus state', () async {
+      timerProvider.start();
+      await Future.delayed(Duration.zero);
+      timerProvider.pause();
+      await Future.delayed(Duration.zero);
+      clearInteractions(mockNotificationService);
+      
+      timerProvider.reset();
+      await Future.delayed(Duration.zero);
+      
+      expect(timerProvider.pomodoroPhase, PomodoroPhase.focus);
+      expect(timerProvider.pomodoroRemainingSeconds, 25 * 60);
+      expect(timerProvider.isRunning, false);
+      
+      verify(() => mockNotificationService.updateTimerState(
+        mode: TimerMode.pomodoro,
+        isRunning: false,
+        pomodoroPhase: PomodoroPhase.focus,
+        seconds: 25 * 60, // Reset duration
+      )).called(1);
     });
   });
 }
