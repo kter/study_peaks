@@ -6,9 +6,9 @@ import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../providers/room_provider.dart';
 import '../providers/session_provider.dart';
+import '../providers/timer_provider.dart';
 import '../providers/user_settings_provider.dart';
 import '../services/network_exception.dart';
-import '../widgets/room_card.dart';
 import '../widgets/room_card.dart';
 import 'room_detail_screen.dart';
 import 'study_history_screen.dart';
@@ -34,6 +34,18 @@ class _RoomListScreenState extends State<RoomListScreen> {
       // Fetch rooms first
       await roomProvider.fetchRooms();
       
+      
+      // Update TimerProvider with localized strings
+      if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
+        context.read<TimerProvider>().updateLocalization(
+          focusFinishedTitle: l10n.notificationFocusFinished,
+          breakFinishedTitle: l10n.notificationBreakFinished,
+          focusFinishedBody: l10n.notificationTimeForBreak,
+          breakFinishedBody: l10n.notificationTimeToFocus,
+        );
+      }
+
       // Try to restore session if foreground service is running
       final restored = await sessionProvider.restoreSessionIfNeeded();
       if (restored && mounted) {
