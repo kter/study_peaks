@@ -30,6 +30,12 @@ void main() {
       seconds: any(named: 'seconds'),
     )).thenAnswer((_) async {});
 
+    when(() => mockNotificationService.showPhaseFinishedNotification(
+      phase: any(named: 'phase'),
+      title: any(named: 'title'),
+      body: any(named: 'body'),
+    )).thenAnswer((_) async {});
+
     timerProvider = TimerProvider(notificationService: mockNotificationService);
   });
   
@@ -136,5 +142,64 @@ void main() {
       )).called(1);
     });
 
+    test('Timer should stop and switch phase when duration completes', () async {
+      // Set a short duration for testing
+      timerProvider.pomodoroFocusDuration = 1; // 1 second
+      
+      timerProvider.start();
+      await Future.delayed(Duration.zero);
+      expect(timerProvider.isRunning, true);
+      
+      // key is that we can't easily jump time with DateTime.now() without a custom clock.
+      // However, we can use the fact that TimerProvider uses real time.
+      // We wait for > 1 second.
+      await Future.delayed(const Duration(milliseconds: 1100));
+      
+      // We need to trigger a tick because Timer.periodic fires asynchronously
+      // The tick logic is what calls _switchPomodoroPhase.
+      // Since we are in a test environment with async, we just wait enough time.
+      // BUT, in widget tests or unit tests with fake async, this might be different.
+      // Here we are using real async execution (no fakeAsync wrapper around the test body).
+      
+      // Let's check status.
+      // We might need to give a bit more buffer for the periodic timer to fire.
+      
+      // To be safe and deterministic without waiting too long, we can manually check 
+      // if the condition for switching is met and trigger a listener if we could.
+      // But let's try the real wait first since 1 second is acceptable.
+      
+      expect(timerProvider.pomodoroPhase, PomodoroPhase.shortBreak);
+      expect(timerProvider.isRunning, false);
+      expect(timerProvider.pomodoroRemainingSeconds, timerProvider.pomodoroBreakDuration);
+      
+      verify(() => mockNotificationService.showPhaseFinishedNotification(
+        phase: PomodoroPhase.focus,
+        title: any(named: 'title'),
+        body: any(named: 'body'),
+      )).called(1);
+    });
+
+    test('Should use localized strings for notifications', () async {
+      timerProvider.pomodoroFocusDuration = 1;
+      
+      const customTitle = 'Custom Title';
+      const customBody = 'Custom Body';
+      
+      timerProvider.updateLocalization(
+        focusFinishedTitle: customTitle,
+        breakFinishedTitle: 'Break Done',
+        focusFinishedBody: customBody,
+        breakFinishedBody: 'Break Body',
+      );
+      
+      timerProvider.start();
+      await Future.delayed(const Duration(milliseconds: 1100));
+      
+      verify(() => mockNotificationService.showPhaseFinishedNotification(
+        phase: PomodoroPhase.focus,
+        title: customTitle,
+        body: customBody,
+      )).called(1);
+    });
   });
 }

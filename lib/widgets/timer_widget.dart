@@ -372,9 +372,9 @@ class TimerWidget extends StatelessWidget {
 
   double _getPomodoroProgress(TimerProvider timer) {
     if (timer.pomodoroPhase == PomodoroPhase.focus) {
-      return timer.pomodoroRemainingSeconds / TimerProvider.pomodoroFocusDuration;
+      return timer.pomodoroRemainingSeconds / timer.pomodoroFocusDuration;
     } else {
-      return timer.pomodoroRemainingSeconds / TimerProvider.pomodoroBreakDuration;
+      return timer.pomodoroRemainingSeconds / timer.pomodoroBreakDuration;
     }
   }
 

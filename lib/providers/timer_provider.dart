@@ -22,10 +22,8 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Duration _pausedDuration = Duration.zero;
 
   // Pomodoro settings
-  static final int pomodoroFocusDuration =
-      AppConfig.pomodoroFocusDurationMinutes * 60;
-  static final int pomodoroBreakDuration =
-      AppConfig.pomodoroBreakDurationMinutes * 60;
+  int pomodoroFocusDuration = AppConfig.pomodoroFocusDurationMinutes * 60;
+  int pomodoroBreakDuration = AppConfig.pomodoroBreakDurationMinutes * 60;
   PomodoroPhase _pomodoroPhase = PomodoroPhase.focus;
   int _pomodoroCompletedCycles = 0;
 
@@ -242,11 +240,12 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     
     // Reset phase timer
     _pomodoroElapsedBeforePause = 0;
-    if (_isRunning) {
-      _pomodoroPhaseStartedAt = DateTime.now();
-    }
+    _pomodoroPhaseStartedAt = null;
+    _isRunning = false;
+    _timer?.cancel();
     
     _updateNotification();
+    notifyListeners();
   }
 
   Future<void> _updateNotification() async {
