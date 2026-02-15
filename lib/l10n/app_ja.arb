@@ -50,5 +50,13 @@
   "notificationFocusFinished": "集中時間終了！",
   "notificationBreakFinished": "休憩時間終了！",
   "notificationTimeForBreak": "休憩の時間です。",
-  "notificationTimeToFocus": "集中の時間です。"
+  "notificationTimeToFocus": "集中の時間です。",
+  "lockScreenDuringFocus": "集中時に画面を固定する",
+  "lockTaskDialogTitle": "画面固定を開始します",
+  "lockTaskDialogBody": "集中を助けるため、他のアプリを開けないようにします。解除するには「戻るボタンと履歴ボタンを同時に長押し」してください。\n\n※この後、Androidシステムから最終確認の許可を求められます。",
+  "lockTaskDialogPinAndStart": "固定して開始",
+  "lockTaskDialogStartWithoutLock": "固定せずに開始",
+  "lockTaskDialogCancel": "キャンセル",
+  "lockTaskUnpinHint": "解除：戻る＋履歴ボタン長押し",
+  "lockTaskExitedMessage": "画面固定が解除されました"
 }

@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import '../config/app_config.dart';
+import '../services/lock_task_service.dart';
 import '../services/notification_service.dart';
 
 import '../models/timer_mode.dart';
@@ -33,9 +33,26 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   final NotificationService _notificationService;
 
-  TimerProvider({NotificationService? notificationService}) 
-      : _notificationService = notificationService ?? NotificationService() {
+  // Lock task (screen pinning) state
+  final LockTaskService _lockTaskService;
+  bool _screenLockEnabled = false;
+  bool _isScreenLocked = false;
+  StreamSubscription<bool>? _lockTaskExitedSubscription;
+
+  /// Callback invoked when lock task mode is exited by the user.
+  /// The UI layer can set this to show a Toast/SnackBar.
+  VoidCallback? onLockTaskExited;
+
+  TimerProvider({
+    NotificationService? notificationService,
+    LockTaskService? lockTaskService,
+  })  : _notificationService = notificationService ?? NotificationService(),
+        _lockTaskService = lockTaskService ?? LockTaskService() {
     WidgetsBinding.instance.addObserver(this);
+    _lockTaskExitedSubscription =
+        _lockTaskService.onLockTaskModeExited.listen((_) {
+      _handleLockTaskExited();
+    });
   }
 
   // Localized strings for notifications
@@ -60,6 +77,10 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool get isRunning => _isRunning;
   PomodoroPhase get pomodoroPhase => _pomodoroPhase;
   int get pomodoroCompletedCycles => _pomodoroCompletedCycles;
+
+  // Lock task getters
+  bool get screenLockEnabled => _screenLockEnabled;
+  bool get isScreenLocked => _isScreenLocked;
 
   /// Get elapsed seconds using timestamp-based calculation.
   /// This ensures accurate time even when the app is in background.
@@ -132,6 +153,11 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// Toggle screen lock preference (opt-in).
+  void setScreenLockEnabled(bool enabled) {
+    _screenLockEnabled = enabled;
+    notifyListeners();
+  }
 
   /// Start the timer.
   void start() {
@@ -157,6 +183,14 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
       // EXCEPT when phase changes (handled in _switchPomodoroPhase).
     });
     notifyListeners();
+  }
+
+  /// Start timer with screen lock (called from UI after dialog confirmation).
+  Future<void> startWithLock() async {
+    await _lockTaskService.startLockTask();
+    await _lockTaskService.setKeepScreenOn(true);
+    _isScreenLocked = true;
+    start();
   }
 
   /// Pause the timer.
@@ -199,6 +233,9 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _pomodoroPhaseStartedAt = null;
     _pomodoroElapsedBeforePause = 0;
     
+    // Release lock task if active
+    _releaseLockTask();
+    
     _updateNotification();
     notifyListeners();
   }
@@ -234,6 +271,8 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_pomodoroPhase == PomodoroPhase.focus) {
       _pomodoroPhase = PomodoroPhase.shortBreak;
       _pomodoroCompletedCycles++;
+      // Release lock task when switching to break
+      _releaseLockTask();
     } else {
       _pomodoroPhase = PomodoroPhase.focus;
     }
@@ -264,6 +303,23 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     );
   }
 
+  /// Release lock task mode and keep-screen-on flag.
+  void _releaseLockTask() {
+    if (_isScreenLocked) {
+      _lockTaskService.stopLockTask();
+      _lockTaskService.setKeepScreenOn(false);
+      _isScreenLocked = false;
+    }
+  }
+
+  /// Handle when the user manually exits lock task mode.
+  void _handleLockTaskExited() {
+    _isScreenLocked = false;
+    _lockTaskService.setKeepScreenOn(false);
+    // Notify UI to show a message, but DON'T stop the timer
+    onLockTaskExited?.call();
+    notifyListeners();
+  }
 
   /// Get total study time (for both modes).
   int get totalStudySeconds {
@@ -282,6 +338,9 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   @override
   void dispose() {
     _timer?.cancel();
+    _releaseLockTask();
+    _lockTaskExitedSubscription?.cancel();
+    _lockTaskService.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

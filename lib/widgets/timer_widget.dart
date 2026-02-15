@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/timer_provider.dart';
+import 'dialogs/lock_task_dialog.dart';
 
 /// Timer widget with circular progress and controls.
-class TimerWidget extends StatelessWidget {
+class TimerWidget extends StatefulWidget {
   final bool isCollapsed;
   final VoidCallback? onToggleCollapsed;
 
@@ -14,10 +16,15 @@ class TimerWidget extends StatelessWidget {
   });
 
   @override
+  State<TimerWidget> createState() => _TimerWidgetState();
+}
+
+class _TimerWidgetState extends State<TimerWidget> {
+  @override
   Widget build(BuildContext context) {
     return Consumer<TimerProvider>(
       builder: (context, timer, child) {
-        if (isCollapsed) {
+        if (widget.isCollapsed) {
           return _buildCollapsedView(context, timer);
         }
         return _buildExpandedView(context, timer);
@@ -71,6 +78,12 @@ class TimerWidget extends StatelessWidget {
           // Compact mode toggle
           _buildCompactModeToggle(context, timer),
           const Spacer(),
+          // Lock indicator (shown when screen is locked)
+          if (timer.isScreenLocked)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Icon(Icons.lock, size: 16, color: primaryColor),
+            ),
           // Play/Pause button
           Container(
             decoration: BoxDecoration(
@@ -78,7 +91,7 @@ class TimerWidget extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             child: IconButton(
-              onPressed: timer.isRunning ? timer.pause : timer.start,
+              onPressed: () => _handlePlayPause(context, timer),
               icon: Icon(timer.isRunning ? Icons.pause : Icons.play_arrow),
               iconSize: 20,
               color: Theme.of(context).colorScheme.onPrimary,
@@ -89,7 +102,7 @@ class TimerWidget extends StatelessWidget {
           const SizedBox(width: 8),
           // Expand button
           IconButton(
-            onPressed: onToggleCollapsed,
+            onPressed: widget.onToggleCollapsed,
             icon: const Icon(Icons.expand_more),
             iconSize: 24,
             color: Colors.grey.shade600,
@@ -212,7 +225,7 @@ class TimerWidget extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               IconButton(
-                onPressed: onToggleCollapsed,
+                onPressed: widget.onToggleCollapsed,
                 icon: const Icon(Icons.expand_less),
                 iconSize: 24,
                 color: Colors.grey.shade600,
@@ -224,6 +237,9 @@ class TimerWidget extends StatelessWidget {
           ),
           // Mode toggle
           _buildModeToggle(context, timer),
+          const SizedBox(height: 8),
+          // Screen lock switch
+          _buildScreenLockSwitch(context, timer),
           const SizedBox(height: 16),
           // Timer display
           _buildTimerDisplay(context, timer),
@@ -235,7 +251,89 @@ class TimerWidget extends StatelessWidget {
             const SizedBox(height: 12),
             _buildPomodoroInfo(context, timer),
           ],
+          // Unlock hint (shown briefly when screen is locked)
+          if (timer.isScreenLocked) ...[
+            const SizedBox(height: 8),
+            _buildUnlockHint(context),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildScreenLockSwitch(BuildContext context, TimerProvider timer) {
+    final l10n = AppLocalizations.of(context);
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey.shade800.withValues(alpha: 0.5) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.lock_outline, size: 16, color: primaryColor),
+          const SizedBox(width: 6),
+          Text(
+            l10n?.lockScreenDuringFocus ?? 'Lock screen during focus',
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+            ),
+          ),
+          const SizedBox(width: 4),
+          SizedBox(
+            height: 32,
+            child: Switch(
+              value: timer.screenLockEnabled,
+              onChanged: timer.isRunning ? null : (v) => timer.setScreenLockEnabled(v),
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUnlockHint(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return AnimatedOpacity(
+      opacity: 1.0,
+      duration: const Duration(milliseconds: 300),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.amber.shade900.withValues(alpha: 0.3)
+              : Colors.amber.shade50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isDark
+                ? Colors.amber.shade700.withValues(alpha: 0.5)
+                : Colors.amber.shade200,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.info_outline, size: 14, color: Colors.amber.shade700),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                l10n?.lockTaskUnpinHint ?? 'Unpin: long-press Back + Recent',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDark ? Colors.amber.shade300 : Colors.amber.shade800,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -355,14 +453,24 @@ class TimerWidget extends StatelessWidget {
                 ),
               ),
             ),
-            Text(
-              timer.formattedTime,
-              style: TextStyle(
-                fontSize: 32, // Reduced font size
-                fontWeight: FontWeight.w300,
-                color: primaryColor,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  timer.formattedTime,
+                  style: TextStyle(
+                    fontSize: 32, // Reduced font size
+                    fontWeight: FontWeight.w300,
+                    color: primaryColor,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                if (timer.isScreenLocked)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Icon(Icons.lock, size: 14, color: primaryColor.withValues(alpha: 0.6)),
+                  ),
+              ],
             ),
           ],
         ),
@@ -399,7 +507,7 @@ class TimerWidget extends StatelessWidget {
             shape: BoxShape.circle,
           ),
           child: IconButton(
-            onPressed: timer.isRunning ? timer.pause : timer.start,
+            onPressed: () => _handlePlayPause(context, timer),
             icon: Icon(timer.isRunning ? Icons.pause : Icons.play_arrow),
             iconSize: 36,
             color: Theme.of(context).colorScheme.onPrimary,
@@ -411,6 +519,41 @@ class TimerWidget extends StatelessWidget {
         const SizedBox(width: 44),
       ],
     );
+  }
+
+  /// Handle play/pause with optional lock task dialog.
+  Future<void> _handlePlayPause(BuildContext context, TimerProvider timer) async {
+    if (timer.isRunning) {
+      timer.pause();
+      return;
+    }
+
+    // Check if lock should be activated
+    final shouldShowDialog = timer.screenLockEnabled &&
+        !timer.isScreenLocked &&
+        (timer.mode == TimerMode.normal ||
+            (timer.mode == TimerMode.pomodoro &&
+                timer.pomodoroPhase == PomodoroPhase.focus));
+
+    if (shouldShowDialog) {
+      final result = await showLockTaskDialog(context: context);
+      if (!context.mounted) return;
+
+      switch (result) {
+        case LockTaskDialogResult.lockAndStart:
+          await timer.startWithLock();
+          break;
+        case LockTaskDialogResult.startWithoutLock:
+          timer.start();
+          break;
+        case LockTaskDialogResult.cancel:
+        case null:
+          // Do nothing
+          break;
+      }
+    } else {
+      timer.start();
+    }
   }
 
   Widget _buildPomodoroInfo(BuildContext context, TimerProvider timer) {

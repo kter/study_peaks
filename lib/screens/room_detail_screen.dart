@@ -49,6 +49,9 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     _timerProvider = context.read<TimerProvider>();
     _timerProvider?.addListener(_onTimerTick);
 
+    // Set up lock task exit callback
+    _timerProvider?.onLockTaskExited = _onLockTaskExited;
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final roomProvider = context.read<RoomProvider>();
       await roomProvider.fetchSeats(widget.room.roomId);
@@ -146,11 +149,23 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     _restoreUserSeat();
   }
 
+  void _onLockTaskExited() {
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(l10n.lockTaskExitedMessage),
+        backgroundColor: Colors.orange,
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _seatRefreshTimer?.cancel();
     _sessionProvider?.removeListener(_onErrorChanged);
     _timerProvider?.removeListener(_onTimerTick);
+    _timerProvider?.onLockTaskExited = null;
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -450,7 +465,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('You have left your seat.')),
       );
-      // Reset timer when leaving
+      // Reset timer when leaving (this also releases lock task if active)
       context.read<TimerProvider>().reset();
       if (seatNumber != null) {
         context.read<RoomProvider>().clearSeatOccupancy(

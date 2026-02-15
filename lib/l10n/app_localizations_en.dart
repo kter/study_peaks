@@ -142,4 +142,29 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get notificationTimeToFocus => 'Time to focus.';
+
+  @override
+  String get lockScreenDuringFocus => 'Lock screen during focus';
+
+  @override
+  String get lockTaskDialogTitle => 'Start Screen Pinning';
+
+  @override
+  String get lockTaskDialogBody =>
+      'To help you stay focused, other apps will be blocked.\nTo unpin, long-press the Back and Recent buttons together.\n\nNote: Android will ask for confirmation after this.';
+
+  @override
+  String get lockTaskDialogPinAndStart => 'Pin & Start';
+
+  @override
+  String get lockTaskDialogStartWithoutLock => 'Start without Pinning';
+
+  @override
+  String get lockTaskDialogCancel => 'Cancel';
+
+  @override
+  String get lockTaskUnpinHint => 'Unpin: long-press Back + Recent';
+
+  @override
+  String get lockTaskExitedMessage => 'Screen pinning was released';
 }
