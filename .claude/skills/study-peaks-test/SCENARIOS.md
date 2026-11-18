@@ -18,7 +18,7 @@
 | タイマーの再生・一時停止 | 793, 412 |
 | タイマーの展開（∨） | 939, 412 |
 | 展開後の Pomodoro / 再生 | 686, 561 ／ 546, 1278 |
-| Leave Seat | 810, 634 |
+| Leave Seat | 810, 634（タイマーを展開中は 807, 1630） |
 | ルーム情報（i） | 1015, 215 |
 
 ## 確認の道具
@@ -33,6 +33,8 @@ curl -s $DEV/v1/rooms | python3 -c "import sys,json;[print(r['roomId'],r['curren
 gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="study-peaks-api-dev" AND httpRequest.userAgent:"Dart"' --project=studypeaks-dev --freshness=5m --limit=10 --format='value(timestamp,httpRequest.requestMethod,httpRequest.requestUrl,httpRequest.status)'
 # API のパニックやエラー（時刻は直前のリクエストに合わせる）
 gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="study-peaks-api-dev" AND timestamp>="<UTC時刻>"' --project=studypeaks-dev --limit=80 --order=asc --format='value(textPayload)'
+# 端末に保存されたセッションとタイマーの状態（タイマーの sessionId がセッションと一致しているか）
+adb -s emulator-5554 shell run-as com.studypeaks.app.dev cat shared_prefs/FlutterSharedPreferences.xml | grep -oE "persisted_(session_id|timer_state)[^<]*" | sed 's/&quot;/"/g'
 # アプリのログ
 adb -s emulator-5554 logcat -d -s flutter | tail -20
 # フォアグラウンドサービスの通知
@@ -67,6 +69,7 @@ adb -s emulator-5554 shell dumpsys notification --noredact | grep -A3 "pkg=com.s
 
 - 操作：Pomodoro を動かしたまま `adb shell run-as com.studypeaks.app.dev kill -9 <pid>` し、ランチャーから起動し直す（最近使ったアプリの画面はエミュレーターで開かないことがある）。
 - 画面：Mt. Fuji の座席マップに戻り、席に座ったまま。タイマーが Pomodoro のまま、止めていた間の時間も進んでいる。
+- 端末：kill の前に、保存されたタイマー状態の `sessionId` が `persisted_session_id` と同じであること（モード切り替えのあとも）。
 - ログ：`Session restored: ... in room Mt. Fuji`。
 
 ## S6. 退席と人数の同期
@@ -74,6 +77,7 @@ adb -s emulator-5554 shell dumpsys notification --noredact | grep -A3 "pkg=com.s
 - 操作：Leave Seat → Leave。続けてルーム情報（i）を開き、戻ってルーム一覧を見る。
 - 画面：情報シートが「Currently: 0 studying」、一覧が「0 / 50」。引っ張って更新しなくても正しい。
 - サーバー：`POST /leave` が 200、座席 API が `occupied: []`、通知が消える。
+- 端末：`persisted_session_id` と `persisted_timer_state` が両方消えている。
 
 ## S7. プロフィール
 
