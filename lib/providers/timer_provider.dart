@@ -27,6 +27,10 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Timer? _timer;
   bool _disposed = false;
   static const _keyTimerState = 'persisted_timer_state';
+
+  // Seat session the running timer belongs to. Saved with the timer state so
+  // a stale timer from an ended session is never restored onto another one.
+  String? _sessionId;
   Future<void> _pendingPersistence = Future<void>.value();
 
   // Timestamp-based tracking for accurate elapsed time
@@ -127,9 +131,12 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// Start the timer.
-  void start() {
+  ///
+  /// [sessionId] ties the saved timer state to the current seat session.
+  void start({String? sessionId}) {
     if (_isRunning) return;
 
+    if (sessionId != null) _sessionId = sessionId;
     _isRunning = true;
 
     if (_mode == TimerMode.normal) {
@@ -198,6 +205,13 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// Reset the timer and forget its seat session. Call when leaving the seat;
+  /// plain [reset] (reset button, mode switch) keeps the session binding.
+  void endSession() {
+    _sessionId = null;
+    reset();
+  }
+
   /// Switch between focus and break phases in Pomodoro mode.
   void _switchPomodoroPhase() {
     if (_pomodoroPhase == PomodoroPhase.focus) {
@@ -216,7 +230,10 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// Restore saved timestamps and restart UI updates for a running timer.
-  Future<bool> restoreState() async {
+  ///
+  /// Only restores state saved for the same [sessionId]; state from another
+  /// (ended) session is discarded and false is returned.
+  Future<bool> restoreState({String? sessionId}) async {
     try {
       await _pendingPersistence;
       final prefs = await SharedPreferences.getInstance();
@@ -225,6 +242,10 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
       if (saved == null) return false;
 
       final state = jsonDecode(saved) as Map<String, dynamic>;
+      if ((state['sessionId'] as String?) != sessionId) {
+        _queuePersistence(null);
+        return false;
+      }
       final mode = TimerMode.values[state['mode'] as int];
       final isRunning = state['isRunning'] as bool;
       final phase = PomodoroPhase.values[state['pomodoroPhase'] as int];
@@ -258,6 +279,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _pomodoroCompletedCycles = cycles;
       _pomodoroPhaseStartedAt = isRunning ? phaseStartedAt : null;
       _pomodoroElapsedBeforePause = elapsedBeforePause;
+      _sessionId = sessionId;
       if (_isRunning) {
         // Match the periodic tick: an expired phase advances once and starts now.
         if (_mode == TimerMode.pomodoro && pomodoroRemainingSeconds <= 0) {
@@ -276,6 +298,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   void _persistState() {
     // Snapshot before awaiting so subsequent changes cannot alter this write.
     _queuePersistence(jsonEncode({
+      'sessionId': _sessionId,
       'mode': _mode.index,
       'isRunning': _isRunning,
       'startedAt': _startedAt?.millisecondsSinceEpoch,
@@ -301,6 +324,16 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
         debugPrint('Failed to persist timer state: $e');
       }
     });
+  }
+
+  /// Remove any saved timer state (e.g. when the seat session is cleared).
+  static Future<void> clearPersistedState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_keyTimerState);
+    } catch (e) {
+      debugPrint('Failed to clear timer state: $e');
+    }
   }
 
   /// Get total study time (for both modes).

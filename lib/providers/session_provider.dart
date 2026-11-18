@@ -6,6 +6,7 @@ import '../services/api_service.dart';
 import '../services/network_exception.dart';
 import '../services/notification_service.dart';
 import 'auth_provider.dart';
+import 'timer_provider.dart';
 import 'user_settings_provider.dart';
 
 /// Session state.
@@ -439,6 +440,7 @@ class SessionProvider extends ChangeNotifier {
       await prefs.remove(_keyRoomName);
       await prefs.remove(_keySeatNumber);
       await prefs.remove(_keySessionStartedAt);
+      await TimerProvider.clearPersistedState();
       debugPrint('📦 Persisted session cleared');
     } catch (e) {
       debugPrint('📦 Failed to clear persisted session: $e');

@@ -206,6 +206,64 @@ void main() {
         addTearDown(restored.dispose);
         expect(await restored.restoreState(), false);
       });
+
+      test('restores only the state saved for the same session', () async {
+        provider.start(sessionId: 'session-A');
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        provider.dispose();
+        provider = TimerProvider();
+
+        expect(await provider.restoreState(sessionId: 'session-A'), true);
+        expect(provider.isRunning, true);
+      });
+
+      test('discards state saved for a different session', () async {
+        provider.start(sessionId: 'session-old');
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        provider.dispose();
+        provider = TimerProvider();
+
+        expect(await provider.restoreState(sessionId: 'session-new'), false);
+        expect(provider.isRunning, false);
+        expect(provider.elapsedSeconds, 0);
+        // The stale state is removed, so even the old session cannot restore it.
+        expect(await provider.restoreState(sessionId: 'session-old'), false);
+      });
+
+      test('mode switch and reset keep the session binding', () async {
+        provider.start(sessionId: 'session-A');
+        provider.pause();
+        provider.setMode(TimerMode.pomodoro);
+        provider.start();
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        provider.dispose();
+        provider = TimerProvider();
+
+        expect(await provider.restoreState(sessionId: 'session-A'), true);
+        expect(provider.mode, TimerMode.pomodoro);
+        expect(provider.isRunning, true);
+      });
+
+      test('endSession clears the binding and saved state', () async {
+        provider.start(sessionId: 'session-A');
+        provider.endSession();
+        provider.start();
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        provider.dispose();
+        provider = TimerProvider();
+
+        expect(await provider.restoreState(sessionId: 'session-A'), false);
+      });
+
+      test('clearPersistedState removes saved state', () async {
+        provider.start(sessionId: 'session-A');
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        provider.dispose();
+        await TimerProvider.clearPersistedState();
+        provider = TimerProvider();
+
+        expect(await provider.restoreState(sessionId: 'session-A'), false);
+      });
     });
 
     group('Time Formatting', () {

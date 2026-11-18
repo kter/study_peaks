@@ -37,9 +37,11 @@ class _RoomListScreenState extends State<RoomListScreen> {
       final restored = await sessionProvider.restoreSessionIfNeeded();
       if (restored && mounted) {
         final timerProvider = context.read<TimerProvider>();
-        final timerRestored = await timerProvider.restoreState();
+        final sessionId = sessionProvider.sessionId;
+        final timerRestored =
+            await timerProvider.restoreState(sessionId: sessionId);
         if (!mounted) return;
-        if (!timerRestored) timerProvider.start();
+        if (!timerRestored) timerProvider.start(sessionId: sessionId);
         // Find the room the user was in and navigate to it
         final roomId = sessionProvider.currentRoomId;
         if (roomId != null) {

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:study_peaks/providers/auth_provider.dart';
 import 'package:study_peaks/providers/session_provider.dart';
 
@@ -157,6 +158,26 @@ void main() {
       expect(provider.sessionId, isNull);
       expect(provider.seatNumber, isNull);
       expect(provider.currentRoomId, isNull);
+      provider.dispose();
+    });
+
+    test('leave also clears the saved timer state', () async {
+      await setupMockSharedPreferences({'persisted_timer_state': '{}'});
+      final provider = SessionProvider(apiService: mockApiService);
+      when(() => mockApiService.sit('room-1', 5)).thenAnswer(
+        (_) async => createMockSitResponse(
+          sessionId: 'session-123',
+          seatNumber: 5,
+        ),
+      );
+      await provider.sit('room-1', 5);
+      when(() => mockApiService.leave('room-1', 'session-123', any()))
+          .thenAnswer((_) async => createMockLeaveResponse());
+
+      expect(await provider.leave(), true);
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.containsKey('persisted_timer_state'), false);
       provider.dispose();
     });
 

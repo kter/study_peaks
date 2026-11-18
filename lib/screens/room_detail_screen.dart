@@ -84,10 +84,12 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     
     if (restored && mounted) {
       final timerProvider = context.read<TimerProvider>();
-      final timerRestored = await timerProvider.restoreState();
+      final timerRestored = await timerProvider.restoreState(
+        sessionId: sessionProvider.sessionId,
+      );
       if (!mounted) return;
       if (!timerRestored) {
-        timerProvider.start();
+        timerProvider.start(sessionId: sessionProvider.sessionId);
       }
       
       ScaffoldMessenger.of(context).showSnackBar(
@@ -389,7 +391,9 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
         ),
       );
       // Start timer when sitting down
-      context.read<TimerProvider>().start();
+      context.read<TimerProvider>().start(
+        sessionId: context.read<SessionProvider>().sessionId,
+      );
       final userSettings = context.read<UserSettingsProvider>();
       context.read<RoomProvider>().updateSeatOccupancy(
             roomId: widget.room.roomId,
@@ -425,7 +429,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
         const SnackBar(content: Text('You have left your seat.')),
       );
       // Reset timer when leaving
-      context.read<TimerProvider>().reset();
+      context.read<TimerProvider>().endSession();
       if (seatNumber != null) {
         context.read<RoomProvider>().clearSeatOccupancy(
               widget.room.roomId,
