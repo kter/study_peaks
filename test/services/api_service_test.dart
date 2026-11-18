@@ -1,12 +1,106 @@
+import 'dart:async';
+
+// fake_async is provided by flutter_test.
+// ignore: depend_on_referenced_packages
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:mocktail/mocktail.dart';
 import 'package:study_peaks/services/api_service.dart';
+import 'package:study_peaks/services/network_exception.dart';
 
 import '../helpers/test_helpers.dart';
 
 void main() {
-  test('clearAuthToken removes Authorization from subsequent requests', () async {
+  final requests = <String, Future<Object?> Function(ApiService)>{
+    'rooms': (api) => api.getRooms(),
+    'seats': (api) => api.getRoomSeats('room-1'),
+    'sit': (api) => api.sit('room-1', 1),
+    'sync': (api) => api.sync('room-1', 'session-1', 0),
+    'leave': (api) => api.leave('room-1', 'session-1', 0),
+  };
+
+  setUpAll(registerMocktailFallbacks);
+
+  for (final entry in requests.entries) {
+    test('hung ${entry.key} requests fail after 27 seconds', () {
+      fakeAsync((async) {
+        final client = MockHttpClient();
+        final apiService = ApiService(
+          baseUrl: 'https://example.com',
+          client: client,
+        );
+        var attempts = 0;
+        Future<http.Response> hang() {
+          attempts++;
+          return Completer<http.Response>().future;
+        }
+
+        when(() => client.get(any(), headers: any(named: 'headers')))
+            .thenAnswer((_) => hang());
+        when(() => client.post(any(),
+            headers: any(named: 'headers'),
+            body: any(named: 'body'))).thenAnswer((_) => hang());
+
+        Object? error;
+        entry.value(apiService).then<void>(
+          (_) => fail('A hung request must fail'),
+          onError: (Object e) {
+            error = e;
+          },
+        );
+
+        async.elapse(const Duration(seconds: 26));
+        expect(error, isNull);
+        async.elapse(const Duration(seconds: 1));
+        expect(
+            error,
+            isA<NetworkException>().having(
+              (e) => e.originalError,
+              'originalError',
+              isA<TimeoutException>(),
+            ));
+        expect(attempts, 3);
+        expect(async.pendingTimers, isEmpty);
+        apiService.dispose();
+      });
+    });
+  }
+
+  test('hung session lookups resolve to null after 27 seconds', () {
+    fakeAsync((async) {
+      final client = MockHttpClient();
+      final apiService = ApiService(
+        baseUrl: 'https://example.com',
+        client: client,
+      );
+      var attempts = 0;
+      when(() => client.get(any(), headers: any(named: 'headers')))
+          .thenAnswer((_) {
+        attempts++;
+        return Completer<http.Response>().future;
+      });
+
+      var completed = false;
+      Object? result = 'pending';
+      apiService.getSession('room-1', 'session-1').then((value) {
+        completed = true;
+        result = value;
+      });
+
+      async.elapse(const Duration(seconds: 26));
+      expect(completed, isFalse);
+      async.elapse(const Duration(seconds: 1));
+      expect(completed, isTrue);
+      expect(result, isNull);
+      expect(attempts, 3);
+      expect(async.pendingTimers, isEmpty);
+      apiService.dispose();
+    });
+  });
+
+  test('clearAuthToken removes Authorization from subsequent requests',
+      () async {
     final client = MockHttpClient();
     final apiService = ApiService(
       baseUrl: 'https://example.com',

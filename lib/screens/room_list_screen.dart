@@ -126,7 +126,37 @@ class _RoomListScreenState extends State<RoomListScreen> {
             onRefresh: provider.fetchRooms,
             color: Theme.of(context).colorScheme.primary,
             child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
+                if (provider.error != null)
+                  SliverToBoxAdapter(
+                    child: Card(
+                      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              provider.error == NetworkErrorKey.networkError
+                                  ? AppLocalizations.of(context)!.networkError
+                                  : AppLocalizations.of(context)!.loadRoomsFailed,
+                              style: TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme.onErrorContainer,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            TextButton(
+                              onPressed: provider.fetchRooms,
+                              child: Text(AppLocalizations.of(context)!.retry),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 // Header
                 SliverToBoxAdapter(
                   child: Padding(

@@ -6,6 +6,13 @@ import 'package:flutter/services.dart' show appFlavor;
 /// throughout the codebase, making configuration changes easier.
 class AppConfig {
   // API設定
+  static const Duration apiRequestTimeout = Duration(seconds: 8);
+  static const int apiMaxAttempts = 3;
+  static const List<Duration> apiRetryDelays = [
+    Duration(seconds: 1),
+    Duration(seconds: 2),
+  ];
+
   static String get apiBaseUrl => apiBaseUrlForFlavor(appFlavor);
 
   static String apiBaseUrlForFlavor(String? flavor) => flavor == 'dev'
