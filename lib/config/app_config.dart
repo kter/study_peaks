@@ -5,6 +5,9 @@ import 'package:flutter/services.dart' show appFlavor;
 /// Contains all magic numbers and strings that were previously scattered
 /// throughout the codebase, making configuration changes easier.
 class AppConfig {
+  // Authentication Configuration
+  static const Duration signInTimeout = Duration(seconds: 30);
+
   // API設定
   static const Duration apiRequestTimeout = Duration(seconds: 8);
   static const int apiMaxAttempts = 3;

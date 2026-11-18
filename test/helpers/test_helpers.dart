@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:study_peaks/services/api_service.dart';
-import 'package:study_peaks/models/models.dart';
 
 /// Mock HTTP client for testing
 class MockHttpClient extends Mock implements http.Client {}
@@ -22,8 +21,8 @@ class MockGoogleSignIn extends Mock implements GoogleSignIn {}
 /// Mock Google Sign In Account
 class MockGoogleSignInAccount extends Mock implements GoogleSignInAccount {}
 
-/// Mock Google Sign In Authentication
-class MockGoogleSignInAuthentication extends Mock implements GoogleSignInAuthentication {}
+/// Fake Firebase credential for mocktail argument matching.
+class FakeAuthCredential extends Fake implements AuthCredential {}
 
 /// Mock Firebase User
 class MockUser extends Mock implements User {}
@@ -34,6 +33,7 @@ class MockUserCredential extends Mock implements UserCredential {}
 /// Register fallback values for mocktail
 void registerMocktailFallbacks() {
   registerFallbackValue(Uri.parse('https://example.com'));
+  registerFallbackValue(FakeAuthCredential());
 }
 
 /// Setup SharedPreferences for testing with initial values

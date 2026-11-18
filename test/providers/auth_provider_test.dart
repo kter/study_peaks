@@ -1,149 +1,25 @@
 import 'dart:async';
+// fake_async is provided by flutter_test.
+// ignore: depend_on_referenced_packages
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:study_peaks/config/app_config.dart';
+import 'package:study_peaks/providers/auth_provider.dart';
+import 'package:study_peaks/services/network_exception.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../helpers/test_helpers.dart';
 
-/// Testable AuthProvider that allows injection of mocked dependencies.
-/// This class mirrors the behavior of AuthProvider but accepts mocked
-/// FirebaseAuth and GoogleSignIn instances for testing.
-class TestableAuthProvider {
-  final FirebaseAuth _auth;
-  final GoogleSignIn _googleSignIn;
-
-  User? _user;
-  bool _isLoading = false;
-  String? _error;
-  StreamSubscription<User?>? _authSubscription;
-
-  User? get user => _user;
-  bool get isLoading => _isLoading;
-  bool get isSignedIn => _user != null;
-  String? get error => _error;
-  String get displayName => _user?.displayName ?? 'Anonymous';
-  String get email => _user?.email ?? '';
-  String? get photoUrl => _user?.photoURL;
-  String get userId => _user?.uid ?? '';
-
-  final List<void Function()> _listeners = [];
-
-  TestableAuthProvider({
-    required FirebaseAuth auth,
-    required GoogleSignIn googleSignIn,
-  })  : _auth = auth,
-        _googleSignIn = googleSignIn {
-    _authSubscription = _auth.authStateChanges().listen((User? user) {
-      _user = user;
-      _notifyListeners();
-    });
-  }
-
-  void addListener(void Function() listener) {
-    _listeners.add(listener);
-  }
-
-  void removeListener(void Function() listener) {
-    _listeners.remove(listener);
-  }
-
-  void _notifyListeners() {
-    for (final listener in _listeners) {
-      listener();
-    }
-  }
-
-  Future<bool> signInWithGoogle() async {
-    try {
-      _isLoading = true;
-      _error = null;
-      _notifyListeners();
-
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) {
-        _isLoading = false;
-        _notifyListeners();
-        return false; // User cancelled
-      }
-
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      await _auth.signInWithCredential(credential);
-
-      _isLoading = false;
-      _notifyListeners();
-      return true;
-    } catch (e) {
-      _error = e.toString();
-      _isLoading = false;
-      _notifyListeners();
-      return false;
-    }
-  }
-
-  Future<void> signOut() async {
-    try {
-      _isLoading = true;
-      _notifyListeners();
-
-      await _googleSignIn.signOut();
-      await _auth.signOut();
-
-      _isLoading = false;
-      _notifyListeners();
-    } catch (e) {
-      _error = e.toString();
-      _isLoading = false;
-      _notifyListeners();
-    }
-  }
-
-  Future<void> updateUserName(String name) async {
-    try {
-      _isLoading = true;
-      _notifyListeners();
-
-      await _user?.updateDisplayName(name);
-      await _user?.reload();
-      _user = _auth.currentUser;
-
-      _isLoading = false;
-      _notifyListeners();
-    } catch (e) {
-      _error = e.toString();
-      _isLoading = false;
-      _notifyListeners();
-      rethrow;
-    }
-  }
-
-  Future<String?> getIdToken() async {
-    return await _user?.getIdToken();
-  }
-
-  void dispose() {
-    _authSubscription?.cancel();
-  }
-}
-
-/// Fake AuthCredential for mocktail fallback registration
-class FakeAuthCredential extends Fake implements AuthCredential {}
-
 void main() {
   late MockFirebaseAuth mockFirebaseAuth;
   late MockGoogleSignIn mockGoogleSignIn;
-  late TestableAuthProvider provider;
+  late AuthProvider provider;
   late StreamController<User?> authStateController;
 
   setUpAll(() {
-    registerFallbackValue(FakeAuthCredential());
+    registerMocktailFallbacks();
   });
 
   setUp(() {
@@ -154,7 +30,9 @@ void main() {
     when(() => mockFirebaseAuth.authStateChanges())
         .thenAnswer((_) => authStateController.stream);
 
-    provider = TestableAuthProvider(
+    when(() => mockGoogleSignIn.initialize()).thenAnswer((_) async {});
+
+    provider = AuthProvider(
       auth: mockFirebaseAuth,
       googleSignIn: mockGoogleSignIn,
     );
@@ -194,16 +72,19 @@ void main() {
 
     group('signInWithGoogle', () {
       test('returns false when user cancels sign in', () async {
-        when(() => mockGoogleSignIn.signIn()).thenAnswer((_) async => null);
+        when(() => mockGoogleSignIn.authenticate()).thenThrow(
+          const GoogleSignInException(code: GoogleSignInExceptionCode.canceled),
+        );
 
         final result = await provider.signInWithGoogle();
 
         expect(result, false);
+        expect(provider.error, isNull);
         expect(provider.isLoading, false);
       });
 
       test('returns false and sets error on exception', () async {
-        when(() => mockGoogleSignIn.signIn())
+        when(() => mockGoogleSignIn.authenticate())
             .thenThrow(Exception('Sign in failed'));
 
         final result = await provider.signInWithGoogle();
@@ -214,8 +95,8 @@ void main() {
       });
 
       test('sets isLoading during sign in attempt', () async {
-        final completer = Completer<GoogleSignInAccount?>();
-        when(() => mockGoogleSignIn.signIn())
+        final completer = Completer<GoogleSignInAccount>();
+        when(() => mockGoogleSignIn.authenticate())
             .thenAnswer((_) => completer.future);
 
         final future = provider.signInWithGoogle();
@@ -223,8 +104,10 @@ void main() {
         // Should be loading while waiting
         expect(provider.isLoading, true);
 
-        // Complete with null (cancelled)
-        completer.complete(null);
+        // Cancel the interactive authentication.
+        completer.completeError(
+          const GoogleSignInException(code: GoogleSignInExceptionCode.canceled),
+        );
         await future;
 
         expect(provider.isLoading, false);
@@ -232,23 +115,174 @@ void main() {
 
       test('successful sign in returns true', () async {
         final mockAccount = MockGoogleSignInAccount();
-        final mockAuthentication = MockGoogleSignInAuthentication();
         final mockCredential = MockUserCredential();
 
-        when(() => mockGoogleSignIn.signIn())
+        when(() => mockGoogleSignIn.authenticate())
             .thenAnswer((_) async => mockAccount);
         when(() => mockAccount.authentication)
-            .thenAnswer((_) async => mockAuthentication);
-        when(() => mockAuthentication.accessToken).thenReturn('access-token');
-        when(() => mockAuthentication.idToken).thenReturn('id-token');
+            .thenReturn(const GoogleSignInAuthentication(idToken: 'id-token'));
         when(() => mockFirebaseAuth.signInWithCredential(any()))
             .thenAnswer((_) async => mockCredential);
 
         final result = await provider.signInWithGoogle();
 
+        final credential = verify(() => mockFirebaseAuth.signInWithCredential(
+              captureAny(),
+            )).captured.single as OAuthCredential;
+        expect(credential.idToken, 'id-token');
+        expect(credential.accessToken, isNull);
         expect(result, true);
         expect(provider.isLoading, false);
         expect(provider.error, isNull);
+      });
+    });
+
+    group('7.x authentication', () {
+      void stubSuccessfulAuthentication() {
+        final account = MockGoogleSignInAccount();
+        when(() => mockGoogleSignIn.authenticate())
+            .thenAnswer((_) async => account);
+        when(() => account.authentication)
+            .thenReturn(const GoogleSignInAuthentication(idToken: 'id-token'));
+        when(() => mockFirebaseAuth.signInWithCredential(any()))
+            .thenAnswer((_) async => MockUserCredential());
+      }
+
+      test('reports Google configuration errors', () async {
+        when(() => mockGoogleSignIn.authenticate()).thenThrow(
+          const GoogleSignInException(
+            code: GoogleSignInExceptionCode.clientConfigurationError,
+            description: 'Invalid client configuration',
+          ),
+        );
+        expect(await provider.signInWithGoogle(), false);
+        expect(provider.error, contains('Invalid client configuration'));
+        expect(provider.isLoading, false);
+      });
+
+      test('maps network errors to the localized error key', () async {
+        stubSuccessfulAuthentication();
+        when(() => mockFirebaseAuth.signInWithCredential(any()))
+            .thenThrow(const NetworkException('Offline'));
+        expect(await provider.signInWithGoogle(), false);
+        expect(provider.error, NetworkErrorKey.networkError);
+        expect(provider.isLoading, false);
+      });
+
+      test('times out Firebase credential exchange and clears loading', () {
+        fakeAsync((async) {
+          stubSuccessfulAuthentication();
+          final exchange = Completer<UserCredential>();
+          when(() => mockFirebaseAuth.signInWithCredential(any()))
+              .thenAnswer((_) => exchange.future);
+          bool? result;
+          provider.signInWithGoogle().then((value) => result = value);
+          async.flushMicrotasks();
+          expect(provider.isLoading, true);
+          async.elapse(
+              AppConfig.signInTimeout - const Duration(milliseconds: 1));
+          expect(result, isNull);
+          expect(provider.isLoading, true);
+          async.elapse(const Duration(milliseconds: 1));
+          expect(result, false);
+          expect(provider.error, NetworkErrorKey.networkError);
+          expect(provider.isLoading, false);
+        });
+      });
+
+      test('does not time out interactive authentication', () {
+        fakeAsync((async) {
+          final interaction = Completer<GoogleSignInAccount>();
+          when(() => mockGoogleSignIn.authenticate())
+              .thenAnswer((_) => interaction.future);
+          bool? result;
+          provider.signInWithGoogle().then((value) => result = value);
+          async.flushMicrotasks();
+          async.elapse(AppConfig.signInTimeout * 2);
+          expect(result, isNull);
+          expect(provider.isLoading, true);
+          verifyNever(() => mockFirebaseAuth.signInWithCredential(any()));
+          interaction.completeError(const GoogleSignInException(
+            code: GoogleSignInExceptionCode.canceled,
+          ));
+          async.flushMicrotasks();
+          expect(result, false);
+          expect(provider.error, isNull);
+          expect(provider.isLoading, false);
+        });
+      });
+
+      test('initializes only once across two sign-ins', () async {
+        stubSuccessfulAuthentication();
+        expect(await provider.signInWithGoogle(), true);
+        expect(await provider.signInWithGoogle(), true);
+        verify(() => mockGoogleSignIn.initialize()).called(1);
+      });
+
+      test('retries initialization after a failed attempt', () async {
+        stubSuccessfulAuthentication();
+        var calls = 0;
+        when(() => mockGoogleSignIn.initialize()).thenAnswer((_) async {
+          calls++;
+          if (calls == 1) throw Exception('init failed');
+        });
+
+        expect(await provider.signInWithGoogle(), false);
+        expect(provider.error, isNotNull);
+        expect(await provider.signInWithGoogle(), true);
+        verify(() => mockGoogleSignIn.initialize()).called(2);
+      });
+
+      test('concurrent sign-ins await the same initialization', () async {
+        stubSuccessfulAuthentication();
+        final initialization = Completer<void>();
+        when(() => mockGoogleSignIn.initialize())
+            .thenAnswer((_) => initialization.future);
+        final first = provider.signInWithGoogle();
+        final second = provider.signInWithGoogle();
+        verify(() => mockGoogleSignIn.initialize()).called(1);
+        verifyNever(() => mockGoogleSignIn.authenticate());
+        initialization.complete();
+        expect(await first, true);
+        expect(await second, true);
+      });
+    });
+
+    group('getIdToken', () {
+      test('returns null when signed out', () async {
+        expect(await provider.getIdToken(), isNull);
+      });
+
+      test('retries network errors and preserves forceRefresh', () async {
+        final user = MockUser();
+        authStateController.add(user);
+        await Future<void>.delayed(Duration.zero);
+        fakeAsync((async) {
+          var attempts = 0;
+          when(() => user.getIdToken(true)).thenAnswer((_) async {
+            if (++attempts == 1) throw const NetworkException('Offline');
+            return 'refreshed-token';
+          });
+          String? token;
+          provider
+              .getIdToken(forceRefresh: true)
+              .then((value) => token = value);
+          async.flushMicrotasks();
+          expect(attempts, 1);
+          async.elapse(AppConfig.retryDelays.first);
+          expect(token, 'refreshed-token');
+          verify(() => user.getIdToken(true)).called(2);
+        });
+      });
+
+      test('does not retry non-network errors', () async {
+        final user = MockUser();
+        when(() => user.getIdToken(false))
+            .thenThrow(StateError('Invalid user'));
+        authStateController.add(user);
+        await Future<void>.delayed(Duration.zero);
+        await expectLater(provider.getIdToken(), throwsStateError);
+        verify(() => user.getIdToken(false)).called(1);
       });
     });
 
