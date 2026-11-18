@@ -11,7 +11,7 @@ description: Study Peaks アプリの動作確認・テストの手順。「動�
 
 - 書き込みを伴う操作（着席・退席・タイマー・サインイン・プロフィール変更）は **dev flavor（`com.studypeaks.app.dev`）と dev API だけ**で行う。prd に対しては GET で見るだけにする。
 - dev へのデプロイ（`terraform apply`）や GCP の設定変更は、plan を見せてユーザーの承認を得てから行う。
-- ユーザーの未コミット変更、特に `pubspec.yaml` / `pubspec.lock` を壊さない。`flutter pub get` の前に `pubspec.lock` を scratchpad に退避し、終わったら差分を確認して戻す（Flutter のバージョン差で SDK 固定パッケージが書き換わる）。
+- ユーザーの未コミット変更、特に `pubspec.yaml` / `pubspec.lock` を壊さない。`flutter pub get` や `flutter build`（内部で pub get が走る）の前に `pubspec.lock` を scratchpad に退避し、終わったら差分を確認して戻す（Flutter のバージョン差で SDK 固定パッケージが書き換わる）。
 
 ## 1. 環境を用意する
 
