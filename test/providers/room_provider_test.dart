@@ -23,6 +23,34 @@ void main() {
       expect(provider.error, isNull);
     });
 
+    test('fetchSeats failure does not set roomsError', () async {
+      when(() => mockApiService.getRoomSeats('fuji'))
+          .thenThrow(Exception('seat refresh failed'));
+
+      await provider.fetchSeats('fuji');
+
+      expect(provider.error, contains('seat refresh failed'));
+      expect(provider.roomsError, isNull);
+    });
+
+    test('only fetchRooms sets and clears roomsError', () async {
+      when(() => mockApiService.getRooms())
+          .thenThrow(Exception('room fetch failed'));
+      await provider.fetchRooms();
+      expect(provider.roomsError, contains('room fetch failed'));
+
+      when(() => mockApiService.getRoomSeats('fuji'))
+          .thenAnswer((_) async => []);
+      await provider.fetchSeats('fuji');
+      expect(provider.error, isNull);
+      expect(provider.roomsError, contains('room fetch failed'));
+
+      when(() => mockApiService.getRooms()).thenAnswer((_) async => mockRooms);
+      await provider.fetchRooms();
+      expect(provider.roomsError, isNull);
+      expect(provider.error, isNull);
+    });
+
     test('fetchRooms sets isLoading while fetching', () async {
       // Setup mock to delay response
       when(() => mockApiService.getRooms()).thenAnswer(

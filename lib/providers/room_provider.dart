@@ -12,6 +12,7 @@ class RoomProvider extends ChangeNotifier {
   List<Room> _rooms = [];
   bool _isLoading = false;
   String? _error;
+  String? _roomsError;
 
   RoomProvider({
     ApiService? apiService,
@@ -24,6 +25,7 @@ class RoomProvider extends ChangeNotifier {
   List<Room> get rooms => _rooms;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  String? get roomsError => _roomsError;
 
   /// Get seats for a specific room
   List<Seat> getSeats(String roomId) => _roomSeats[roomId] ?? [];
@@ -93,6 +95,7 @@ class RoomProvider extends ChangeNotifier {
   Future<void> fetchRooms() async {
     _isLoading = true;
     _error = null;
+    _roomsError = null;
     notifyListeners();
 
     try {
@@ -104,6 +107,7 @@ class RoomProvider extends ChangeNotifier {
       } else {
         _error = e.toString();
       }
+      _roomsError = _error;
       // Use mock data for development (if repository provided)
       _rooms = _mockDataRepository?.getMockRooms() ?? [];
     } finally {

@@ -36,8 +36,10 @@ class _RoomListScreenState extends State<RoomListScreen> {
       // Try to restore session if foreground service is running
       final restored = await sessionProvider.restoreSessionIfNeeded();
       if (restored && mounted) {
-        await context.read<TimerProvider>().restoreState();
+        final timerProvider = context.read<TimerProvider>();
+        final timerRestored = await timerProvider.restoreState();
         if (!mounted) return;
+        if (!timerRestored) timerProvider.start();
         // Find the room the user was in and navigate to it
         final roomId = sessionProvider.currentRoomId;
         if (roomId != null) {
@@ -128,7 +130,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
-                if (provider.error != null)
+                if (provider.roomsError != null)
                   SliverToBoxAdapter(
                     child: Card(
                       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -139,7 +141,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              provider.error == NetworkErrorKey.networkError
+                              provider.roomsError == NetworkErrorKey.networkError
                                   ? AppLocalizations.of(context)!.networkError
                                   : AppLocalizations.of(context)!.loadRoomsFailed,
                               style: TextStyle(
