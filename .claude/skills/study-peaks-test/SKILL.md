@@ -11,7 +11,14 @@ description: Study Peaks アプリの動作確認・テストの手順。「動�
 
 - 書き込みを伴う操作（着席・退席・タイマー・サインイン・プロフィール変更）は **dev flavor（`com.studypeaks.app.dev`）と dev API だけ**で行う。prd に対しては GET で見るだけにする。
 - dev へのデプロイ（`terraform apply`）や GCP の設定変更は、plan を見せてユーザーの承認を得てから行う。
-- ユーザーの未コミット変更、特に `pubspec.yaml` / `pubspec.lock` を壊さない。`flutter pub get` や `flutter build`（内部で pub get が走る）の前に `pubspec.lock` を scratchpad に退避し、終わったら差分を確認して戻す（Flutter のバージョン差で SDK 固定パッケージが書き換わる）。
+- ユーザーの未コミット変更、特に `pubspec.yaml` / `pubspec.lock` を壊さない。`flutter pub get` や `flutter build`（内部で pub get が走る）の前に `pubspec.lock` をリポジトリ外の一時ディレクトリに退避し、終わったら差分を確認して戻す（Flutter のバージョン差で SDK 固定パッケージが書き換わる）。
+
+## 使うエージェントによる違い
+
+このスキルは Claude Code（`.claude/skills/`）と Codex（`.agents/skills/` からのシンボリックリンク）の両方で使う。実体は `.claude/skills/study-peaks-test/` の1か所だけで、ここを直せば両方に反映される。
+
+- 画面操作は mobile-mcp を使う。Claude Code ではツール名が `mcp__mobile-mcp__*`。Codex では `~/.codex/config.toml` の mobile-mcp を使い、直接のツールが見えないときは `node ~/.local/share/android-mcp/call.mjs mobile '{"name":"mobile_list_available_devices"}'` で呼ぶ。
+- Codex のサンドボックスでは、`flutter`（SDK キャッシュに書き込めない）、`adb`、`gcloud`、`curl` によるネットワーク接続が失敗することがある。失敗したら Codex の承認（サンドボックス外での実行）を求める。サンドボックスを無効にする起動オプションは使わない。
 
 ## 1. 環境を用意する
 
