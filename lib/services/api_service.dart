@@ -22,6 +22,11 @@ class ApiService {
     _authToken = token;
   }
 
+  /// Clear the authentication token for guest API requests.
+  void clearAuthToken() {
+    _authToken = null;
+  }
+
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
         if (_authToken != null) 'Authorization': 'Bearer $_authToken',

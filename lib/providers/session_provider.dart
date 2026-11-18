@@ -68,11 +68,11 @@ class SessionProvider extends ChangeNotifier {
 
   /// Ensure API has valid auth token
   Future<void> _ensureAuthToken() async {
-    if (_authProvider != null) {
-      final token = await _authProvider!.getIdToken();
-      if (token != null) {
-        _apiService.setAuthToken(token);
-      }
+    final token = await _authProvider?.getIdToken();
+    if (token != null) {
+      _apiService.setAuthToken(token);
+    } else {
+      _apiService.clearAuthToken();
     }
   }
 

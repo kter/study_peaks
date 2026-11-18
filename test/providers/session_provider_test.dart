@@ -1,8 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:study_peaks/providers/auth_provider.dart';
 import 'package:study_peaks/providers/session_provider.dart';
 
 import '../helpers/test_helpers.dart';
+
+class MockAuthProvider extends Mock implements AuthProvider {}
 
 void main() {
   late MockApiService mockApiService;
@@ -16,6 +19,47 @@ void main() {
   });
 
   group('SessionProvider', () {
+    for (final hasAuthProvider in [true, false]) {
+      test(
+        'sit clears auth token before request when ${hasAuthProvider ? 'token is null' : 'auth provider is absent'}',
+        () async {
+          final provider = SessionProvider(
+            apiService: mockApiService,
+            useMockFallback: false,
+          );
+          addTearDown(provider.dispose);
+          await setupMockSharedPreferences();
+          if (hasAuthProvider) {
+            final authProvider = MockAuthProvider();
+            when(() => authProvider.getIdToken()).thenAnswer((_) async => null);
+            when(() => authProvider.displayName).thenReturn('Anonymous');
+            when(() => authProvider.userId).thenReturn('');
+            provider.setAuthProvider(authProvider);
+          }
+          when(() => mockApiService.sit(
+                'room-1',
+                5,
+                displayName: hasAuthProvider ? 'Anonymous' : null,
+                userId: hasAuthProvider ? '' : null,
+              ))
+              .thenAnswer((_) async => createMockSitResponse(seatNumber: 5));
+
+          expect(await provider.sit('room-1', 5), true);
+
+          verifyInOrder([
+            () => mockApiService.clearAuthToken(),
+            () => mockApiService.sit(
+                  'room-1',
+                  5,
+                  displayName: hasAuthProvider ? 'Anonymous' : null,
+                  userId: hasAuthProvider ? '' : null,
+                ),
+          ]);
+          verifyNever(() => mockApiService.setAuthToken(any()));
+        },
+      );
+    }
+
     test('initial state is idle', () {
       final provider = SessionProvider(apiService: mockApiService);
       expect(provider.state, SessionState.idle);
