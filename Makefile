@@ -1,7 +1,8 @@
 .PHONY: help flutter-get flutter-analyze flutter-run flutter-build \
+        flutter-run-dev flutter-run-prd flutter-build-apk flutter-build-aab flutter-build-apk-dev \
         tf-init tf-validate tf-dev-plan tf-dev-apply tf-prd-plan tf-prd-apply \
         tf-workspace-dev tf-workspace-prd \
-        api-build api-push api-deploy api-run
+        api-build api-push api-deploy api-deploy-dev api-run
 
 # Default target
 help:
@@ -10,16 +11,21 @@ help:
 	@echo "Flutter:"
 	@echo "  make flutter-get         - Install dependencies"
 	@echo "  make flutter-analyze     - Run static analysis"
-	@echo "  make flutter-run         - Run on connected device"
+	@echo "  make flutter-run         - Run dev on connected device (alias)"
+	@echo "  make flutter-run-dev     - Run dev on connected device"
+	@echo "  make flutter-run-prd     - Run prd on connected device"
 	@echo "  make flutter-test        - Run all tests"
 	@echo "  make flutter-test-fast   - Run tests (excluding golden)"
-	@echo "  make flutter-build-apk   - Build Android APK"
+	@echo "  make flutter-build-apk   - Build prd release APK"
+	@echo "  make flutter-build-aab   - Build prd release app bundle"
+	@echo "  make flutter-build-apk-dev - Build dev debug APK"
 	@echo "  make setup-hooks         - Install pre-commit hook"
 	@echo ""
 	@echo "Backend API:"
 	@echo "  make api-build         - Build Docker image"
 	@echo "  make api-push          - Push to Artifact Registry (prd)"
 	@echo "  make api-deploy        - Build, push, and deploy to Cloud Run"
+	@echo "  make api-deploy-dev    - Build, push, and deploy to dev Cloud Run"
 	@echo "  make api-run           - Run API locally"
 	@echo ""
 	@echo "Terraform:"
@@ -40,14 +46,22 @@ flutter-get:
 flutter-analyze:
 	flutter analyze
 
-flutter-run:
-	flutter run
+flutter-run: flutter-run-dev
+
+flutter-run-dev:
+	flutter run --flavor dev
+
+flutter-run-prd:
+	flutter run --flavor prd
 
 flutter-build-apk:
-	flutter build apk --release
+	flutter build apk --release --flavor prd
 
 flutter-build-aab:
-	flutter build appbundle --release
+	flutter build appbundle --release --flavor prd
+
+flutter-build-apk-dev:
+	flutter build apk --debug --flavor dev
 
 flutter-test:
 	flutter test
@@ -70,6 +84,7 @@ setup-hooks:
 
 API_DIR := api
 API_IMAGE := asia-northeast1-docker.pkg.dev/studypeaks-prd/study-peaks/api
+API_IMAGE_DEV := asia-northeast1-docker.pkg.dev/studypeaks-dev/study-peaks/api
 API_TAG := v13
 
 api-tidy:
@@ -84,6 +99,10 @@ api-push: api-build
 api-deploy:
 	docker buildx build --platform linux/amd64 -t $(API_IMAGE):$(API_TAG) --push $(API_DIR)
 	cd terraform && terraform workspace select prd && terraform apply -var-file="env/prd.tfvars" -var="api_image=$(API_IMAGE):$(API_TAG)"
+
+api-deploy-dev:
+	docker buildx build --platform linux/amd64 -t $(API_IMAGE_DEV):$(API_TAG) --push $(API_DIR)
+	cd terraform && terraform workspace select dev && terraform apply -var-file="env/dev.tfvars" -var="api_image=$(API_IMAGE_DEV):$(API_TAG)"
 
 api-run:
 	cd $(API_DIR) && go run main.go

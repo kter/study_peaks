@@ -12,9 +12,10 @@ class ApiService {
   String? _authToken;
 
   ApiService({
-    this.baseUrl = AppConfig.apiBaseUrl,
+    String? baseUrl,
     http.Client? client,
-  }) : _client = client ?? http.Client();
+  }) : baseUrl = baseUrl ?? AppConfig.apiBaseUrl,
+       _client = client ?? http.Client();
 
   /// Set the authentication token for API requests.
   void setAuthToken(String token) {
