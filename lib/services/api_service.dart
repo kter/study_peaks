@@ -34,17 +34,25 @@ class ApiService {
 
   /// Execute a request with automatic retry on network errors.
   ///
-  /// Makes up to 3 attempts, each limited to 8 seconds, with 1 and 2 second
-  /// delays between attempts (27 seconds total for hung requests).
+  /// By default, makes up to 3 attempts, each limited to 8 seconds, with
+  /// 1 and 2 second delays between attempts (27 seconds for hung requests).
   /// Only retries on network-related errors (DNS, timeout, connection issues).
-  Future<T> _withRetry<T>(Future<T> Function() request) async {
+  Future<T> _withRetry<T>(
+    Future<T> Function() request, {
+    bool retryOnTimeout = true,
+    Duration? timeout,
+  }) async {
     Object? lastError;
     
     for (var attempt = 0; attempt < AppConfig.apiMaxAttempts; attempt++) {
       try {
-        return await request().timeout(AppConfig.apiRequestTimeout);
+        return await request().timeout(timeout ?? AppConfig.apiRequestTimeout);
       } catch (e) {
         lastError = e;
+        // A timed-out mutation may still complete on the server.
+        if (e is TimeoutException && !retryOnTimeout) {
+          throw NetworkException('Request timed out', e);
+        }
         
         // Only retry on network errors
         if (!isNetworkError(e)) {
@@ -132,7 +140,7 @@ class ApiService {
         return SitResponse.fromJson(data);
       }
       throw ApiException('Failed to sit', response.statusCode);
-    });
+    }, retryOnTimeout: false, timeout: AppConfig.apiMutationTimeout);
   }
 
   /// Sync session (called every 5 minutes).
@@ -183,7 +191,7 @@ class ApiService {
         return LeaveResponse.fromJson(data);
       }
       throw ApiException('Failed to leave', response.statusCode);
-    });
+    }, retryOnTimeout: false, timeout: AppConfig.apiMutationTimeout);
   }
 
   /// Get session info to validate if a session is still active.

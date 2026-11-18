@@ -10,6 +10,7 @@ class AppConfig {
 
   // API設定
   static const Duration apiRequestTimeout = Duration(seconds: 8);
+  static const Duration apiMutationTimeout = Duration(seconds: 15);
   static const int apiMaxAttempts = 3;
   static const List<Duration> apiRetryDelays = [
     Duration(seconds: 1),

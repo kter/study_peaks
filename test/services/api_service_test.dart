@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 // fake_async is provided by flutter_test.
 // ignore: depend_on_referenced_packages
@@ -23,7 +24,9 @@ void main() {
   setUpAll(registerMocktailFallbacks);
 
   for (final entry in requests.entries) {
-    test('hung ${entry.key} requests fail after 27 seconds', () {
+    final isMutation = entry.key == 'sit' || entry.key == 'leave';
+    final timeoutSeconds = isMutation ? 15 : 27;
+    test('hung ${entry.key} requests fail after $timeoutSeconds seconds', () {
       fakeAsync((async) {
         final client = MockHttpClient();
         final apiService = ApiService(
@@ -50,7 +53,7 @@ void main() {
           },
         );
 
-        async.elapse(const Duration(seconds: 26));
+        async.elapse(Duration(seconds: timeoutSeconds - 1));
         expect(error, isNull);
         async.elapse(const Duration(seconds: 1));
         expect(
@@ -60,12 +63,49 @@ void main() {
               'originalError',
               isA<TimeoutException>(),
             ));
-        expect(attempts, 3);
+        expect(attempts, isMutation ? 1 : 3);
+        if (isMutation) {
+          verify(() => client.post(any(),
+              headers: any(named: 'headers'),
+              body: any(named: 'body'))).called(1);
+        }
         expect(async.pendingTimers, isEmpty);
         apiService.dispose();
       });
     });
   }
+
+  test('sit retries a SocketException', () {
+    fakeAsync((async) {
+      final client = MockHttpClient();
+      final apiService = ApiService(
+        baseUrl: 'https://example.com',
+        client: client,
+      );
+      var attempts = 0;
+      when(() => client.post(any(),
+          headers: any(named: 'headers'),
+          body: any(named: 'body'))).thenAnswer((_) async {
+        if (++attempts == 1) throw const SocketException('offline');
+        return http.Response(
+          '{"sessionId":"session-1","seatNumber":1,'
+          '"sessionStartedAt":"2026-01-01T00:00:00Z"}',
+          200,
+        );
+      });
+
+      SitResponse? result;
+      apiService.sit('room-1', 1).then((value) => result = value);
+      async.flushMicrotasks();
+      expect(attempts, 1);
+      expect(result, isNull);
+      async.elapse(const Duration(seconds: 1));
+      expect(attempts, 2);
+      expect(result?.sessionId, 'session-1');
+      expect(async.pendingTimers, isEmpty);
+      apiService.dispose();
+    });
+  });
 
   test('hung session lookups resolve to null after 27 seconds', () {
     fakeAsync((async) {
