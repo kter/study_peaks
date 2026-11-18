@@ -85,16 +85,20 @@ class AuthProvider extends ChangeNotifier {
 
   /// Sign out
   Future<void> signOut() async {
+    _setLoading(true);
     try {
-      _setLoading(true);
+      try {
+        await _initializeGoogleSignIn();
+        await _googleSignIn.signOut();
+      } catch (e) {
+        debugPrint('Google sign-out failed: $e');
+      }
 
-      await _initializeGoogleSignIn();
-      await _googleSignIn.signOut();
       await _auth.signOut();
-
-      _setLoading(false);
     } catch (e) {
       _handleError(e);
+    } finally {
+      _setLoading(false);
     }
   }
 

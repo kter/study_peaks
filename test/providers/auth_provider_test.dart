@@ -298,13 +298,35 @@ void main() {
         expect(provider.isLoading, false);
       });
 
-      test('sets error on exception', () async {
-        when(() => mockGoogleSignIn.signOut())
-            .thenThrow(Exception('Sign out failed'));
+      for (final failsInitialization in [true, false]) {
+        final googleStep = failsInitialization ? 'initialize' : 'signOut';
+        test('still signs out Firebase when Google $googleStep fails', () async {
+          when(() => mockFirebaseAuth.signOut()).thenAnswer((_) async {});
+          if (failsInitialization) {
+            when(() => mockGoogleSignIn.initialize())
+                .thenAnswer((_) async => throw Exception('init failed'));
+          } else {
+            when(() => mockGoogleSignIn.signOut()).thenAnswer(
+                (_) async => throw Exception('Google sign out failed'));
+          }
+
+          await provider.signOut();
+
+          verify(() => mockFirebaseAuth.signOut()).called(1);
+          expect(provider.isLoading, false);
+          expect(provider.error, isNull);
+        });
+      }
+
+      test('sets error when Firebase signOut fails', () async {
+        when(() => mockGoogleSignIn.signOut()).thenAnswer((_) async {});
+        when(() => mockFirebaseAuth.signOut())
+            .thenThrow(Exception('Firebase sign out failed'));
 
         await provider.signOut();
 
-        expect(provider.error, contains('Sign out failed'));
+        verify(() => mockFirebaseAuth.signOut()).called(1);
+        expect(provider.error, contains('Firebase sign out failed'));
         expect(provider.isLoading, false);
       });
     });
