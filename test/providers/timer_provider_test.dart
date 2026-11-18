@@ -1,12 +1,18 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:study_peaks/providers/timer_provider.dart';
+
+import '../helpers/test_helpers.dart';
 
 void main() {
   group('TimerProvider', () {
     late TimerProvider provider;
 
-    setUp(() {
+    setUp(() async {
       TestWidgetsFlutterBinding.ensureInitialized();
+      await setupMockSharedPreferences();
       provider = TimerProvider();
     });
 
@@ -84,10 +90,121 @@ void main() {
         provider.start();
         provider.pause();
         provider.reset();
-        
+
         expect(provider.pomodoroPhase, PomodoroPhase.focus);
         expect(provider.pomodoroRemainingSeconds, 25 * 60);
         expect(provider.isRunning, false);
+      });
+    });
+
+    group('Persistence', () {
+      Future<TimerProvider> restoreNewProvider() async {
+        final restored = TimerProvider();
+        addTearDown(restored.dispose);
+        expect(await restored.restoreState(), true);
+        return restored;
+      }
+
+      test('running normal timer survives recreation and keeps elapsed time',
+          () async {
+        provider.start();
+        await Future<void>.delayed(const Duration(seconds: 1));
+        final elapsed = provider.elapsedSeconds;
+        expect(elapsed, greaterThanOrEqualTo(1));
+        provider.dispose();
+        await Future<void>.delayed(const Duration(seconds: 1));
+        provider = TimerProvider();
+
+        expect(await provider.restoreState(), true);
+        expect(provider.isRunning, true);
+        expect(provider.elapsedSeconds, greaterThanOrEqualTo(elapsed + 1));
+        var notifications = 0;
+        provider.addListener(() => notifications++);
+        final before = provider.elapsedSeconds;
+        await Future<void>.delayed(const Duration(seconds: 1));
+        expect(provider.elapsedSeconds, greaterThan(before));
+        expect(notifications, greaterThan(0));
+      });
+
+      test('paused pomodoro retains phase, elapsed time and completed cycles',
+          () async {
+        await setupMockSharedPreferences({
+          'persisted_timer_state': jsonEncode({
+            'mode': TimerMode.pomodoro.index,
+            'isRunning': true,
+            'pausedDurationMs': 0,
+            'pomodoroPhase': PomodoroPhase.shortBreak.index,
+            'pomodoroCompletedCycles': 1,
+            'pomodoroElapsedBeforePause': 0,
+            'pomodoroPhaseStartedAt': DateTime.now()
+                .subtract(const Duration(seconds: 20))
+                .millisecondsSinceEpoch,
+          }),
+        });
+        expect(await provider.restoreState(), true);
+        provider.pause();
+        final remaining = provider.pomodoroRemainingSeconds;
+        expect(await provider.restoreState(), true);
+        final restored = await restoreNewProvider();
+
+        expect(restored.mode, TimerMode.pomodoro);
+        expect(restored.isRunning, false);
+        expect(restored.pomodoroPhase, PomodoroPhase.shortBreak);
+        expect(remaining, lessThan(TimerProvider.pomodoroBreakDuration));
+        expect(restored.pomodoroRemainingSeconds, remaining);
+        expect(restored.pomodoroCompletedCycles, 1);
+      });
+
+      test('restoring expired focus switches phase and counts the cycle',
+          () async {
+        provider.setMode(TimerMode.pomodoro);
+        provider.start();
+        // Wait for the fire-and-forget writes before simulating time spent dead.
+        final prefs = await SharedPreferences.getInstance();
+        await provider.restoreState();
+        final state = jsonDecode(prefs.getString('persisted_timer_state')!)
+            as Map<String, dynamic>;
+        state['pomodoroPhaseStartedAt'] = DateTime.now()
+            .subtract(
+                Duration(seconds: TimerProvider.pomodoroFocusDuration + 5))
+            .millisecondsSinceEpoch;
+        await prefs.setString('persisted_timer_state', jsonEncode(state));
+        final restored = await restoreNewProvider();
+
+        expect(restored.isRunning, true);
+        expect(restored.pomodoroPhase, PomodoroPhase.shortBreak);
+        expect(restored.pomodoroCompletedCycles, 1);
+        expect(restored.pomodoroRemainingSeconds, greaterThan(0));
+      });
+
+      test('mode selection is saved before starting', () async {
+        provider.setMode(TimerMode.pomodoro);
+        expect(await provider.restoreState(), true);
+        final restored = await restoreNewProvider();
+        expect(restored.mode, TimerMode.pomodoro);
+        expect(restored.isRunning, false);
+        expect(restored.pomodoroRemainingSeconds,
+            TimerProvider.pomodoroFocusDuration);
+      });
+
+      test('invalid saved data does not throw or change the timer', () async {
+        await setupMockSharedPreferences({
+          'persisted_timer_state': 'invalid json',
+        });
+        expect(await provider.restoreState(), false);
+        expect(provider.mode, TimerMode.normal);
+        expect(provider.isRunning, false);
+      });
+
+      test('reset clears saved state even with pending writes', () async {
+        provider.setMode(TimerMode.pomodoro);
+        provider.start();
+        provider.pause();
+        provider.reset();
+        expect(await provider.restoreState(), false);
+        final restored = TimerProvider();
+        addTearDown(restored.dispose);
+        expect(await restored.restoreState(), false);
       });
     });
 

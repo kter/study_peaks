@@ -6,6 +6,7 @@ import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../providers/room_provider.dart';
 import '../providers/session_provider.dart';
+import '../providers/timer_provider.dart';
 import '../providers/user_settings_provider.dart';
 import '../services/network_exception.dart';
 import '../widgets/room_card.dart';
@@ -35,6 +36,8 @@ class _RoomListScreenState extends State<RoomListScreen> {
       // Try to restore session if foreground service is running
       final restored = await sessionProvider.restoreSessionIfNeeded();
       if (restored && mounted) {
+        await context.read<TimerProvider>().restoreState();
+        if (!mounted) return;
         // Find the room the user was in and navigate to it
         final roomId = sessionProvider.currentRoomId;
         if (roomId != null) {

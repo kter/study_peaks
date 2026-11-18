@@ -83,8 +83,12 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     );
     
     if (restored && mounted) {
-      // Start timer if session was restored
-      context.read<TimerProvider>().start();
+      final timerProvider = context.read<TimerProvider>();
+      final timerRestored = await timerProvider.restoreState();
+      if (!mounted) return;
+      if (!timerRestored) {
+        timerProvider.start();
+      }
       
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

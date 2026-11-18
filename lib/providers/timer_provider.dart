@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
 
 /// Timer mode for study sessions.
@@ -16,13 +18,16 @@ enum PomodoroPhase {
 }
 
 /// Provider for managing timer state.
-/// 
+///
 /// Uses timestamp-based calculation to ensure accurate time tracking
 /// even when the app is in background or the screen is off.
 class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   TimerMode _mode = TimerMode.normal;
   bool _isRunning = false;
   Timer? _timer;
+  bool _disposed = false;
+  static const _keyTimerState = 'persisted_timer_state';
+  Future<void> _pendingPersistence = Future<void>.value();
 
   // Timestamp-based tracking for accurate elapsed time
   DateTime? _startedAt;
@@ -55,7 +60,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_startedAt == null) {
       return _pausedDuration.inSeconds;
     }
-    return _pausedDuration.inSeconds + 
+    return _pausedDuration.inSeconds +
         DateTime.now().difference(_startedAt!).inSeconds;
   }
 
@@ -64,7 +69,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     final phaseDuration = _pomodoroPhase == PomodoroPhase.focus
         ? pomodoroFocusDuration
         : pomodoroBreakDuration;
-    
+
     int elapsed;
     if (_pomodoroPhaseStartedAt == null) {
       elapsed = _pomodoroElapsedBeforePause;
@@ -72,7 +77,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
       elapsed = _pomodoroElapsedBeforePause +
           DateTime.now().difference(_pomodoroPhaseStartedAt!).inSeconds;
     }
-    
+
     final remaining = phaseDuration - elapsed;
     return remaining > 0 ? remaining : 0;
   }
@@ -104,7 +109,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
       // Force UI update when app resumes - the getters will calculate
       // the correct time based on timestamps
       notifyListeners();
-      
+
       // Check if pomodoro phase should switch
       if (_mode == TimerMode.pomodoro && pomodoroRemainingSeconds <= 0) {
         _switchPomodoroPhase();
@@ -117,6 +122,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_isRunning) return; // Can't change mode while running
     _mode = mode;
     reset();
+    _persistState();
     notifyListeners();
   }
 
@@ -125,30 +131,36 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_isRunning) return;
 
     _isRunning = true;
-    
+
     if (_mode == TimerMode.normal) {
       _startedAt = DateTime.now();
     } else {
       _pomodoroPhaseStartedAt = DateTime.now();
     }
 
-    // Timer for UI updates only (the actual time is calculated from timestamps)
+    _startUiTimer();
+    _persistState();
+    notifyListeners();
+  }
+
+  // The actual time is calculated from timestamps; this timer only updates UI.
+  void _startUiTimer() {
+    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_mode == TimerMode.pomodoro && pomodoroRemainingSeconds <= 0) {
         _switchPomodoroPhase();
       }
       notifyListeners();
     });
-    notifyListeners();
   }
 
   /// Pause the timer.
   void pause() {
     if (!_isRunning) return;
-    
+
     _timer?.cancel();
     _isRunning = false;
-    
+
     if (_mode == TimerMode.normal) {
       // Save elapsed time when pausing
       if (_startedAt != null) {
@@ -158,12 +170,13 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     } else {
       // Save pomodoro elapsed time when pausing
       if (_pomodoroPhaseStartedAt != null) {
-        _pomodoroElapsedBeforePause += 
+        _pomodoroElapsedBeforePause +=
             DateTime.now().difference(_pomodoroPhaseStartedAt!).inSeconds;
         _pomodoroPhaseStartedAt = null;
       }
     }
-    
+
+    _persistState();
     notifyListeners();
   }
 
@@ -171,16 +184,17 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   void reset() {
     _timer?.cancel();
     _isRunning = false;
-    
+
     // Reset normal mode
     _startedAt = null;
     _pausedDuration = Duration.zero;
-    
+
     // Reset pomodoro mode
     _pomodoroPhase = PomodoroPhase.focus;
     _pomodoroPhaseStartedAt = null;
     _pomodoroElapsedBeforePause = 0;
-    
+
+    _queuePersistence(null);
     notifyListeners();
   }
 
@@ -192,12 +206,101 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     } else {
       _pomodoroPhase = PomodoroPhase.focus;
     }
-    
+
     // Reset phase timer
     _pomodoroElapsedBeforePause = 0;
     if (_isRunning) {
       _pomodoroPhaseStartedAt = DateTime.now();
     }
+    _persistState();
+  }
+
+  /// Restore saved timestamps and restart UI updates for a running timer.
+  Future<bool> restoreState() async {
+    try {
+      await _pendingPersistence;
+      final prefs = await SharedPreferences.getInstance();
+      if (_disposed) return false;
+      final saved = prefs.getString(_keyTimerState);
+      if (saved == null) return false;
+
+      final state = jsonDecode(saved) as Map<String, dynamic>;
+      final mode = TimerMode.values[state['mode'] as int];
+      final isRunning = state['isRunning'] as bool;
+      final phase = PomodoroPhase.values[state['pomodoroPhase'] as int];
+      final cycles = state['pomodoroCompletedCycles'] as int;
+      final pausedDurationMs = state['pausedDurationMs'] as int;
+      final elapsedBeforePause = state['pomodoroElapsedBeforePause'] as int;
+      final startedAtMs = state['startedAt'] as int?;
+      final phaseStartedAtMs = state['pomodoroPhaseStartedAt'] as int?;
+      if (cycles < 0 ||
+          pausedDurationMs < 0 ||
+          elapsedBeforePause < 0 ||
+          (isRunning &&
+              (mode == TimerMode.normal
+                  ? startedAtMs == null
+                  : phaseStartedAtMs == null))) {
+        return false;
+      }
+      final startedAt = startedAtMs == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(startedAtMs);
+      final phaseStartedAt = phaseStartedAtMs == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(phaseStartedAtMs);
+
+      _timer?.cancel();
+      _mode = mode;
+      _isRunning = isRunning;
+      _startedAt = isRunning ? startedAt : null;
+      _pausedDuration = Duration(milliseconds: pausedDurationMs);
+      _pomodoroPhase = phase;
+      _pomodoroCompletedCycles = cycles;
+      _pomodoroPhaseStartedAt = isRunning ? phaseStartedAt : null;
+      _pomodoroElapsedBeforePause = elapsedBeforePause;
+      if (_isRunning) {
+        // Match the periodic tick: an expired phase advances once and starts now.
+        if (_mode == TimerMode.pomodoro && pomodoroRemainingSeconds <= 0) {
+          _switchPomodoroPhase();
+        }
+        _startUiTimer();
+      }
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Failed to restore timer state: $e');
+      return false;
+    }
+  }
+
+  void _persistState() {
+    // Snapshot before awaiting so subsequent changes cannot alter this write.
+    _queuePersistence(jsonEncode({
+      'mode': _mode.index,
+      'isRunning': _isRunning,
+      'startedAt': _startedAt?.millisecondsSinceEpoch,
+      'pausedDurationMs': _pausedDuration.inMilliseconds,
+      'pomodoroPhase': _pomodoroPhase.index,
+      'pomodoroCompletedCycles': _pomodoroCompletedCycles,
+      'pomodoroPhaseStartedAt': _pomodoroPhaseStartedAt?.millisecondsSinceEpoch,
+      'pomodoroElapsedBeforePause': _pomodoroElapsedBeforePause,
+    }));
+  }
+
+  void _queuePersistence(String? state) {
+    // Keep saves and reset's removal in order, including rapid start/pause/reset.
+    _pendingPersistence = _pendingPersistence.then((_) async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        if (state == null) {
+          await prefs.remove(_keyTimerState);
+        } else {
+          await prefs.setString(_keyTimerState, state);
+        }
+      } catch (e) {
+        debugPrint('Failed to persist timer state: $e');
+      }
+    });
   }
 
   /// Get total study time (for both modes).
@@ -206,7 +309,8 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return elapsedSeconds;
     } else {
       // Calculate total focus time in Pomodoro mode
-      final completedFocusTime = _pomodoroCompletedCycles * pomodoroFocusDuration;
+      final completedFocusTime =
+          _pomodoroCompletedCycles * pomodoroFocusDuration;
       final currentFocusTime = _pomodoroPhase == PomodoroPhase.focus
           ? pomodoroFocusDuration - pomodoroRemainingSeconds
           : 0;
@@ -216,6 +320,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _disposed = true;
     _timer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
