@@ -234,7 +234,11 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       actions: [
         IconButton(
           icon: Icon(Icons.info_outline, color: Theme.of(context).appBarTheme.foregroundColor),
-          onPressed: () => showRoomInfoDialog(context: context, room: widget.room),
+          onPressed: () => showRoomInfoDialog(
+            context: context,
+            room: context.read<RoomProvider>().getRoom(widget.room.roomId) ??
+                widget.room,
+          ),
         ),
       ],
     );

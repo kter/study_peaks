@@ -28,6 +28,31 @@ class RoomProvider extends ChangeNotifier {
   /// Get seats for a specific room
   List<Seat> getSeats(String roomId) => _roomSeats[roomId] ?? [];
 
+  /// Get the latest known room data (falls back to null if not loaded).
+  Room? getRoom(String roomId) =>
+      _rooms.where((r) => r.roomId == roomId).firstOrNull;
+
+  /// Keep the room's occupancy count in sync with its seat list, so the room
+  /// list and room info show the same number as the seat map.
+  void _syncRoomOccupancy(String roomId) {
+    final seats = _roomSeats[roomId];
+    if (seats == null || seats.isEmpty) return;
+    final index = _rooms.indexWhere((r) => r.roomId == roomId);
+    if (index == -1) return;
+
+    final room = _rooms[index];
+    final occupied = seats.where((s) => s.isOccupied).length;
+    if (room.currentOccupancy == occupied) return;
+
+    _rooms = List.from(_rooms)
+      ..[index] = Room(
+        roomId: room.roomId,
+        name: room.name,
+        capacity: room.capacity,
+        currentOccupancy: occupied,
+      );
+  }
+
   /// Update a seat's occupancy status locally (for sit/leave without refetch)
   void updateSeatOccupancy({
     required String roomId,
@@ -51,6 +76,7 @@ class RoomProvider extends ChangeNotifier {
         sessionStartedAt: sessionStartedAt ?? (isOccupied ? DateTime.now() : null),
         currentSessionDuration: 0,
       );
+    _syncRoomOccupancy(roomId);
     notifyListeners();
   }
 
@@ -100,6 +126,7 @@ class RoomProvider extends ChangeNotifier {
       } else {
         _roomSeats[roomId] = seats;
       }
+      _syncRoomOccupancy(roomId);
     } catch (e) {
       // Use localization key for network errors
       if (isNetworkError(e)) {
