@@ -176,7 +176,7 @@ void main() {
       final result = await provider.leave();
 
       // Assert
-      expect(result, true);
+      expect((result as LeaveCompleted).record.durationSeconds, 100);
       verify(() => mockAuthProvider.getIdToken(forceRefresh: true)).called(1);
       verify(() => mockApiService.leave(any(), any(), any())).called(2);
     });

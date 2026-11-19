@@ -11,11 +11,13 @@ import '../providers/timer_provider.dart';
 import '../providers/user_settings_provider.dart';
 import '../services/network_exception.dart';
 import '../widgets/dialogs/leave_confirmation_dialog.dart';
+import '../widgets/dialogs/leave_summary_dialog.dart';
 import '../widgets/dialogs/room_info_dialog.dart';
 import '../widgets/dialogs/sit_confirmation_dialog.dart';
 import '../widgets/dialogs/user_info_dialog.dart';
 import '../widgets/seat_grid.dart';
 import '../widgets/timer_widget.dart';
+import 'study_history_screen.dart';
 
 /// Screen displaying theater-style seat grid for a room.
 class RoomDetailScreen extends StatefulWidget {
@@ -33,6 +35,7 @@ class RoomDetailScreen extends StatefulWidget {
 class _RoomDetailScreenState extends State<RoomDetailScreen>
     with WidgetsBindingObserver {
   bool _isTimerCollapsed = true;
+  bool _leaveFlowActive = false;
   Timer? _seatRefreshTimer;
   SessionProvider? _sessionProvider;
   TimerProvider? _timerProvider;
@@ -135,11 +138,12 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     final session = context.read<SessionProvider>();
     if (session.error != null) {
       final l10n = AppLocalizations.of(context)!;
-      final errorMessage = session.error == NetworkErrorKey.networkError
-          ? l10n.networkError
-          : session.error == 'historySaveFailed' ? l10n.historySaveFailed
-          : session.error == 'historyOtherOwnerActive' ? l10n.historyOtherOwnerActive
-          : session.error!;
+      final errorMessage = switch (session.error!) {
+        NetworkErrorKey.networkError => l10n.networkError,
+        'historySaveFailed' => l10n.historySaveFailed,
+        'historyOtherOwnerActive' => l10n.historyOtherOwnerActive,
+        final message => message,
+      };
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -201,6 +205,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
   void _restoreUserSeat() {
     final session = context.read<SessionProvider>();
     if (session.isSeated &&
+        !session.hasReleasedSeat &&
         session.currentRoomId == widget.room.roomId &&
         session.seatNumber != null) {
       final userSettings = context.read<UserSettingsProvider>();
@@ -358,15 +363,18 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
   Widget _buildSeatActionButton() {
     return Consumer<SessionProvider>(
       builder: (context, session, _) {
-        final isSeated = session.isSeated;
+        final canLeave = session.isSeated && !_leaveFlowActive;
+        final l10n = AppLocalizations.of(context)!;
         return OutlinedButton.icon(
-          onPressed: isSeated ? () => _handleLeaveRequest(context, session) : null,
+          onPressed: canLeave ? () => _handleLeaveRequest(session) : null,
           icon: const Icon(Icons.exit_to_app),
-          label: const Text('Leave Seat'),
+          label: Text(
+            session.isFinalizing ? l10n.leaveRetry : l10n.leaveSeat,
+          ),
           style: OutlinedButton.styleFrom(
             foregroundColor: Colors.red,
             disabledForegroundColor: Colors.grey,
-            side: BorderSide(color: isSeated ? Colors.red : Colors.grey),
+            side: BorderSide(color: canLeave ? Colors.red : Colors.grey),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
@@ -472,25 +480,92 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     }
   }
 
-  Future<void> _handleLeaveRequest(BuildContext context, SessionProvider session) async {
-    final confirmed = await showLeaveConfirmationDialog(context: context);
-    if (confirmed != true || !context.mounted) return;
-
-    final seatNumber = session.seatNumber;
-    final success = await session.leave();
-
-    if (context.mounted && success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You have left your seat.')),
-      );
-      // End the timer's session when leaving (also releases lock task)
-      context.read<TimerProvider>().endSession();
-      if (seatNumber != null) {
-        context.read<RoomProvider>().clearSeatOccupancy(
-              widget.room.roomId,
-              seatNumber,
-            );
+  Future<void> _handleLeaveRequest(SessionProvider session) async {
+    if (_leaveFlowActive) return;
+    setState(() => _leaveFlowActive = true);
+    try {
+      if (!session.isFinalizing) {
+        final confirmed = await showLeaveConfirmationDialog(context: context);
+        if (confirmed != true || !mounted) return;
       }
+
+      final navigator = Navigator.of(context, rootNavigator: true);
+      final rooms = context.read<RoomProvider>();
+      final roomId = session.currentRoomId;
+      final seatNumber = session.seatNumber;
+      final result = await session.leave();
+      if (!navigator.mounted) return;
+
+      switch (result) {
+        case LeaveFailure.unavailable:
+          return;
+        case LeaveFailure.storage:
+        case LeaveFailure.storageAfterRelease:
+          if (result == LeaveFailure.storageAfterRelease && roomId != null) {
+            unawaited(rooms.fetchSeats(roomId));
+          }
+          final l10n = AppLocalizations.of(navigator.context)!;
+          ScaffoldMessenger.of(navigator.context).showSnackBar(
+            SnackBar(
+              content: Text(l10n.historySaveFailed),
+              backgroundColor: Colors.red,
+            ),
+          );
+        case LeaveCompleted():
+          final record = result.record;
+          final cachedSeatIsOurs = rooms.getSeats(record.roomId).any((seat) =>
+              seat.seatNumber == seatNumber &&
+              seat.sessionStartedAt?.isAtSameMomentAs(record.startTime) == true);
+          if (result.serverFailure == null && cachedSeatIsOurs) {
+            rooms.clearSeatOccupancy(record.roomId, seatNumber!);
+          } else {
+            unawaited(rooms.fetchSeats(record.roomId));
+          }
+          await _showLeaveFeedback(navigator, session, result);
+      }
+    } finally {
+      if (mounted) setState(() => _leaveFlowActive = false);
+    }
+  }
+
+  Future<void> _showLeaveFeedback(
+    NavigatorState navigator,
+    SessionProvider session,
+    LeaveCompleted result,
+  ) async {
+    final context = navigator.context;
+    final l10n = AppLocalizations.of(context)!;
+    final warning = switch (result.serverFailure) {
+      LeaveServerFailure.connection => l10n.leaveConnectionFailed,
+      LeaveServerFailure.request => l10n.leaveRequestFailed,
+      null => null,
+    };
+    final messenger = ScaffoldMessenger.of(context)..clearSnackBars();
+    final record = result.record;
+    if (record.durationSeconds == 0 ||
+        !record.isVisibleTo(session.historyOwnerId)) {
+      messenger.showSnackBar(SnackBar(content: Text(warning ?? l10n.leftSeat)));
+      return;
+    }
+
+    final repository = session.historyRepository;
+    final openHistory = await showDialog<bool>(
+      context: context,
+      builder: (_) => LeaveSummaryDialog(
+        record: record,
+        warning: warning,
+        loadHistory: () => repository.getHistory(ownerId: record.ownerId),
+      ),
+    );
+    if (openHistory == true &&
+        navigator.mounted &&
+        record.isVisibleTo(session.historyOwnerId)) {
+      unawaited(navigator.push(MaterialPageRoute<void>(
+        builder: (_) => StudyHistoryScreen(
+          repository: repository,
+          showLegacyHistory: record.ownerId == StudySession.legacyOwner,
+        ),
+      )));
     }
   }
 }

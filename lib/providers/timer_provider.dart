@@ -217,7 +217,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Toggle timer mode.
   void setMode(TimerMode mode) {
-    if (_isRunning) return; // Can't change mode while running
+    if (_isRunning || _finalizing) return;
     _mode = mode;
     reset();
     _persistState();
@@ -290,6 +290,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Start timer with screen lock (called from UI after dialog confirmation).
   Future<void> startWithLock() async {
+    if (_finalizing || _recoveryBlocked) return;
     await _lockTaskService.startLockTask();
     await _lockTaskService.setKeepScreenOn(true);
     _isScreenLocked = true;
@@ -329,6 +330,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// The stopped, reset state is saved for the current session so that a
   /// restore keeps it stopped (and keeps the mode) instead of auto-starting.
   void reset() {
+    if (_finalizing) return;
     _resetFields();
     _persistState();
     notifyListeners();

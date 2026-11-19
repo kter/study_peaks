@@ -78,6 +78,42 @@ class AppLocalizationsEn extends AppLocalizations {
   String get leave => 'Leave';
 
   @override
+  String get leaveSeat => 'Leave Seat';
+
+  @override
+  String get leaveSeatConfirmation =>
+      'Are you sure you want to leave your seat?';
+
+  @override
+  String get leaveConnectionFailed =>
+      'Could not confirm that your seat was released. Check your internet connection.';
+
+  @override
+  String get leaveRequestFailed =>
+      'Could not confirm that your seat was released.';
+
+  @override
+  String get leftSeat => 'You have left your seat.';
+
+  @override
+  String get leaveSummaryTitle => 'Study time recorded';
+
+  @override
+  String get leaveSummarySession => 'This session';
+
+  @override
+  String get leaveRetry => 'Retry leaving';
+
+  @override
+  String leaveSummaryAllocation(String today, String week) {
+    return 'From this session, $today counts toward today and $week toward this week.';
+  }
+
+  @override
+  String get leaveSummaryTotalsUnavailable =>
+      'Could not load today’s and this week’s totals.';
+
+  @override
   String get anonymous => 'Anonymous User';
 
   @override

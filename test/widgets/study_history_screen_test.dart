@@ -12,6 +12,7 @@ import 'package:study_peaks/models/study_session.dart';
 import 'package:study_peaks/providers/auth_provider.dart';
 import 'package:study_peaks/repositories/study_history_repository.dart';
 import 'package:study_peaks/screens/study_history_screen.dart';
+import 'package:study_peaks/widgets/dialogs/leave_summary_dialog.dart';
 
 class _Auth extends ChangeNotifier implements AuthProvider {
   @override
@@ -80,6 +81,116 @@ void main() {
     await tester.tap(finder);
     await tester.pumpAndSettle();
   }
+
+  Future<void> showSummary(
+    WidgetTester tester,
+    String language,
+    StudySession record,
+    Future<StudyHistory> Function() loadHistory,
+  ) =>
+      tester.pumpWidget(
+        ChangeNotifierProvider<AuthProvider>.value(
+          value: auth,
+          child: MaterialApp(
+            locale: Locale(language),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: LeaveSummaryDialog(
+              record: record,
+              loadHistory: loadHistory,
+              now: () => today,
+            ),
+          ),
+        ),
+      );
+
+  for (final language in ['en', 'ja']) {
+    testWidgets('leave summary splits a Sunday-to-Monday record ($language)',
+        (tester) async {
+      today = DateTime.utc(2027, 1, 4);
+      final start = today.subtract(const Duration(seconds: 15));
+      final record = StudySession(
+        roomId: 'fuji',
+        startTime: start,
+        durationSeconds: 25,
+        intervals: [
+          FocusInterval(
+            start: start,
+            end: today.add(const Duration(seconds: 10)),
+            offsetMinutes: 0,
+          ),
+        ],
+      );
+      final history = StudyHistory([
+        record,
+        StudySession(
+          roomId: 'fuji',
+          startTime: today,
+          durationSeconds: 20,
+        ),
+      ]);
+      query().thenAnswer((_) async => history);
+      await showSummary(
+        tester,
+        language,
+        record,
+        () => repository.getHistory(ownerId: record.ownerId),
+      );
+      await tester.pumpAndSettle();
+
+      final isJapanese = language == 'ja';
+      final sessionDuration = isJapanese ? '25秒' : '25s';
+      final aggregateDuration = isJapanese ? '30秒' : '30s';
+      expect(find.text(sessionDuration), findsOneWidget);
+      expect(find.text(aggregateDuration), findsNWidgets(2));
+      expect(
+        find.text(
+          isJapanese
+              ? '今回のうち、今日の合計に10秒、今週の合計に10秒入っています。'
+              : 'From this session, 10s counts toward today and 10s toward this week.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text(isJapanese ? '閉じる' : 'Close'), findsOneWidget);
+      expect(find.text(isJapanese ? '学習履歴' : 'Study History'), findsOneWidget);
+
+      await show(tester, language: language);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+            of: find.byType(Card), matching: find.text(aggregateDuration)),
+        findsNWidgets(2),
+      );
+    });
+  }
+
+  testWidgets('a summary hides an earlier owner’s record after auth changes',
+      (tester) async {
+    final record = StudySession(
+      roomId: 'fuji',
+      startTime: today,
+      durationSeconds: 20,
+    );
+    await showSummary(
+      tester,
+      'en',
+      record,
+      () async => throw StateError('could not read database'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('20s'), findsOneWidget);
+    expect(
+      find.text('Could not load today’s and this week’s totals.'),
+      findsOneWidget,
+    );
+    auth.changeUser('another-owner');
+    await tester.pumpAndSettle();
+
+    expect(find.text('20s'), findsNothing);
+    expect(find.text('Study History'), findsNothing);
+    expect(find.text('You have left your seat.'), findsOneWidget);
+  });
 
   testWidgets('calendar periods, exact short values and zero days', (
     tester,

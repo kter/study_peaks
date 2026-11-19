@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/foundation.dart';
@@ -5,6 +6,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:study_peaks/models/study_session.dart';
 import 'package:study_peaks/services/api_service.dart';
+import 'package:study_peaks/services/network_exception.dart';
 import 'package:study_peaks/providers/auth_provider.dart';
 import 'package:study_peaks/providers/session_provider.dart';
 import 'package:study_peaks/providers/timer_provider.dart';
@@ -150,8 +152,7 @@ void main() {
     expect(await session.sit('fuji', 1), true);
     t.start(sessionId: 'a');
     now = now.add(const Duration(seconds: 20));
-    expect(await session.leave(), false);
-    expect(session.error, 'historySaveFailed');
+    expect(await session.leave(), LeaveFailure.storageAfterRelease);
     expect(session.isSeated, true);
     t.start();
     expect(t.isRunning, false);
@@ -164,17 +165,86 @@ void main() {
     expect(await recovered.restoreSessionIfNeeded(), true);
     expect(recovered.currentDuration, 20);
     fail = false;
-    when(() => api.leave('fuji', 'a', any()))
-        .thenThrow(ApiException('Already left', 404));
-    expect(await recovered.leave(), true);
+    final result = await recovered.leave() as LeaveCompleted;
+    expect(result.record, same(records.single));
+    verify(() => api.leave('fuji', 'a', 20)).called(1);
     expect(recovered.error, isNull);
     expect(records.single.sessionId, 'a');
     expect(records.single.durationSeconds, 20);
     expect(records.single.intervals!.single.end,
         DateTime.utc(2027, 1, 1, 0, 0, 10));
-    expect(await recovered.leave(), false);
+    expect(await recovered.leave(), LeaveFailure.unavailable);
     expect((await SharedPreferences.getInstance()).getString('study_active_v2'),
         isNull);
+  });
+
+  test('retry after network and storage failures reuses the frozen record',
+      () async {
+    final api = MockApiService();
+    final history = History();
+    when(() => api.sit('fuji', 1))
+        .thenAnswer((_) async => createMockSitResponse(sessionId: 'a'));
+    final firstRequest = Completer<LeaveResponse>();
+    final requestStarted = Completer<void>();
+    when(() => api.leave('fuji', 'a', 12)).thenAnswer((_) {
+      requestStarted.complete();
+      return firstRequest.future;
+    });
+    when(() => history.saveSession(any())).thenThrow(StateError('disk full'));
+    final session = SessionProvider(
+      apiService: api,
+      historyRepository: history,
+      useMockFallback: true,
+    );
+    addTearDown(session.dispose);
+    expect(await session.sit('fuji', 1), true);
+    session.updateDuration(12);
+
+    final firstLeave = session.leave();
+    await requestStarted.future;
+    expect(await session.leave(), LeaveFailure.unavailable);
+    firstRequest.completeError(const NetworkException('Offline'));
+    expect(await firstLeave, LeaveFailure.storage);
+    expect(session.isSeated, true);
+    expect(session.isFinalizing, true);
+    session.updateDuration(100);
+    final failedSave = verify(() => history.saveSession(captureAny()));
+    failedSave.called(1);
+    final frozenRecord = failedSave.captured.single as StudySession;
+    when(() => history.saveSession(any())).thenAnswer((_) async {});
+
+    when(() => api.leave('fuji', 'a', 12))
+        .thenThrow(ApiException('Already left', 404));
+    final result = await session.leave() as LeaveCompleted;
+    expect(result.record, same(frozenRecord));
+    expect(result.record.durationSeconds, 12);
+    expect(result.serverFailure, isNull);
+    verify(() => history.saveSession(frozenRecord)).called(1);
+    expect(await session.leave(), LeaveFailure.unavailable);
+    expect(await session.sit('fuji', 1), true);
+  });
+
+  test('network failure still saves locally and returns a distinct warning',
+      () async {
+    final api = MockApiService();
+    final history = History();
+    when(() => api.sit('fuji', 1))
+        .thenAnswer((_) async => createMockSitResponse(sessionId: 'offline'));
+    when(() => api.leave('fuji', 'offline', 12))
+        .thenThrow(const NetworkException('Offline'));
+    when(() => history.saveSession(any())).thenAnswer((_) async {});
+    final session =
+        SessionProvider(apiService: api, historyRepository: history);
+    addTearDown(session.dispose);
+    expect(await session.sit('fuji', 1), true);
+    session.updateDuration(12);
+
+    final result = await session.leave() as LeaveCompleted;
+    expect(result.record.durationSeconds, 12);
+    expect(result.serverFailure, LeaveServerFailure.connection);
+    verify(() => history.saveSession(result.record)).called(1);
+    expect(await session.leave(), LeaveFailure.unavailable);
+    expect(session.state, SessionState.idle);
   });
 
   test('sign-in does not transfer guest record and other owners cannot restore',
@@ -202,7 +272,7 @@ void main() {
     addTearDown(other.dispose);
     expect(await other.restoreSessionIfNeeded(), false);
     expect(await other.sit('fuji', 1), false);
-    expect(await session.leave(), true);
+    expect(await session.leave(), isA<LeaveCompleted>());
     expect(saved!.ownerId, StudySession.guestOwner);
   });
   test(
@@ -238,7 +308,7 @@ void main() {
     expect(await session.restoreSessionIfNeeded(), true);
     expect(await t.restoreState(sessionId: 'old-session'), true);
     expect(t.totalStudySeconds, 20);
-    expect(await session.leave(), true);
+    expect(await session.leave(), isA<LeaveCompleted>());
     expect(saved!.ownerId, StudySession.legacyOwner);
     expect(saved!.intervals, isNull);
     expect(saved!.durationSeconds, 20);
