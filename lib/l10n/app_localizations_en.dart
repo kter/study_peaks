@@ -215,7 +215,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get historyStorageNotice =>
-      'History is stored only on this device, separately for guests and each account. It does not transfer to other devices.';
+      'Study history and goals are stored on this device, separately for guests and each account. They do not transfer to other devices.';
 
   @override
   String get historyLegacy => 'View older history with unknown owner';
@@ -362,4 +362,84 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get historySignInNotice =>
       'Signing in keeps a separate history for this account on this device. History is not synced across devices.';
+
+  @override
+  String get weeklyGoal => 'Weekly study goal';
+
+  @override
+  String get weeklyGoalNotSet => 'No goal set';
+
+  @override
+  String get weeklyGoalSet => 'Set goal';
+
+  @override
+  String get weeklyGoalEdit => 'Edit goal';
+
+  @override
+  String get weeklyGoalClear => 'Clear goal';
+
+  @override
+  String get weeklyGoalSave => 'Save goal';
+
+  @override
+  String get weeklyGoalMinutes => 'Goal (minutes per week)';
+
+  @override
+  String weeklyGoalInputHelp(int min, int max, int step) {
+    final intl.NumberFormat maxNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String maxString = maxNumberFormat.format(max);
+
+    return '$min–$maxString minutes, in $step-minute steps';
+  }
+
+  @override
+  String get weeklyGoalInvalidMinutes =>
+      'Enter minutes within the range and step shown.';
+
+  @override
+  String weeklyGoalTarget(String duration) {
+    return 'Target: $duration';
+  }
+
+  @override
+  String weeklyGoalActual(String duration) {
+    return 'Studied: $duration';
+  }
+
+  @override
+  String weeklyGoalRemaining(String duration) {
+    return 'Remaining: $duration';
+  }
+
+  @override
+  String weeklyGoalAchievement(String percent) {
+    return 'Progress: $percent';
+  }
+
+  @override
+  String get weeklyGoalLoadFailed => 'Could not load weekly goals.';
+
+  @override
+  String get weeklyGoalSaveFailed =>
+      'Could not save the weekly goal. Try again.';
+
+  @override
+  String get weeklyGoalOwnerChanged =>
+      'Your account changed. Open the goal editor again.';
+
+  @override
+  String get weeklyGoalWeekChanged =>
+      'The week has changed. Open this week’s goal to edit it.';
+
+  @override
+  String get weeklyGoalDateEarlier =>
+      'The device date is before the latest saved week. Editing is available from that week onward.';
+
+  @override
+  String get weeklyGoalCorrectDate => 'Use corrected date';
+
+  @override
+  String get weeklyGoalCorrectDateConfirm =>
+      'Confirm that your device date is correct. This clears goal settings for later weeks on this device.';
 }
