@@ -434,11 +434,95 @@ abstract class AppLocalizations {
   /// **'The owner and focus intervals of older history are unknown. Time is shown on the start date. Signing in does not transfer these records.'**
   String get historyLegacyNotice;
 
-  /// No description provided for @historyLastSevenDays.
+  /// No description provided for @historyToday.
   ///
   /// In en, this message translates to:
-  /// **'Last 7 Days'**
-  String get historyLastSevenDays;
+  /// **'Today'**
+  String get historyToday;
+
+  /// No description provided for @historyThisWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'This week'**
+  String get historyThisWeek;
+
+  /// No description provided for @historyWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'Week'**
+  String get historyWeek;
+
+  /// No description provided for @historyMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Month'**
+  String get historyMonth;
+
+  /// No description provided for @historyPreviousPeriod.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous period'**
+  String get historyPreviousPeriod;
+
+  /// No description provided for @historyNextPeriod.
+  ///
+  /// In en, this message translates to:
+  /// **'Next period'**
+  String get historyNextPeriod;
+
+  /// No description provided for @historyPreviousDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous day'**
+  String get historyPreviousDay;
+
+  /// No description provided for @historyNextDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Next day'**
+  String get historyNextDay;
+
+  /// No description provided for @historyPeriodEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No study time in this period'**
+  String get historyPeriodEmpty;
+
+  /// No description provided for @historyDateRange.
+  ///
+  /// In en, this message translates to:
+  /// **'{start} – {end}'**
+  String historyDateRange(String start, String end);
+
+  /// No description provided for @historyDurationHours.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours}h {minutes}m {seconds}s'**
+  String historyDurationHours(int hours, int minutes, int seconds);
+
+  /// No description provided for @historyDurationMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes}m {seconds}s'**
+  String historyDurationMinutes(int minutes, int seconds);
+
+  /// No description provided for @historyHours.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours}h'**
+  String historyHours(int hours);
+
+  /// No description provided for @historyMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes}m'**
+  String historyMinutes(int minutes);
+
+  /// No description provided for @historySeconds.
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds}s'**
+  String historySeconds(int seconds);
 
   /// No description provided for @historyTotal.
   ///
@@ -455,7 +539,7 @@ abstract class AppLocalizations {
   /// No description provided for @historyLoadFailed.
   ///
   /// In en, this message translates to:
-  /// **'Could not load history. Tap to retry'**
+  /// **'Could not load history'**
   String get historyLoadFailed;
 
   /// No description provided for @historySaveFailed.
