@@ -48,7 +48,8 @@ class StudyPeaksApp extends StatelessWidget {
           ),
         ),
         ChangeNotifierProxyProvider2<AuthProvider, UserSettingsProvider, SessionProvider>(
-          create: (_) => SessionProvider(),
+          create: (context) => SessionProvider(useMockFallback: kUseMockData)
+            ..setTimerProvider(context.read<TimerProvider>()),
           update: (_, auth, userSettings, session) {
             session?.setAuthProvider(auth);
             session?.setUserSettingsProvider(userSettings);

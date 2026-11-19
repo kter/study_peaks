@@ -66,7 +66,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       if (mounted) {
         final session = context.read<SessionProvider>();
         final timer = context.read<TimerProvider>();
-        if (session.isSeated && timer.sessionId != session.sessionId) {
+        if (session.isSeated && !session.isFinalizing && timer.sessionId != session.sessionId) {
           if (!timer.isRunning && session.currentDuration > 0) {
             timer.setInitialDuration(Duration(seconds: session.currentDuration));
           }
@@ -91,8 +91,8 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     final authProvider = context.read<AuthProvider>();
     final roomProvider = context.read<RoomProvider>();
     
-    // Only attempt restore if not already seated and user is signed in
-    if (sessionProvider.isSeated || !authProvider.isSignedIn) return;
+    // Local recovery applies to guests as well as signed-in users.
+    if (sessionProvider.isSeated) return;
     
     final seats = roomProvider.getSeats(widget.room.roomId);
     final userId = authProvider.userId;
@@ -112,7 +112,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
         sessionId: sessionProvider.sessionId,
       );
       if (!mounted) return;
-      if (!timerRestored) {
+      if (!timerRestored && !sessionProvider.isFinalizing) {
         if (sessionProvider.currentDuration > 0) {
           timer.setInitialDuration(
               Duration(seconds: sessionProvider.currentDuration));
@@ -137,6 +137,8 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       final l10n = AppLocalizations.of(context)!;
       final errorMessage = session.error == NetworkErrorKey.networkError
           ? l10n.networkError
+          : session.error == 'historySaveFailed' ? l10n.historySaveFailed
+          : session.error == 'historyOtherOwnerActive' ? l10n.historyOtherOwnerActive
           : session.error!;
 
       ScaffoldMessenger.of(context).showSnackBar(

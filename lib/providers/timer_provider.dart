@@ -3,23 +3,80 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
+import '../models/study_session.dart';
+import '../services/study_persistence_keys.dart';
 import '../services/lock_task_service.dart';
 import '../services/notification_service.dart';
 
 import '../models/timer_mode.dart';
 export '../models/timer_mode.dart'; // Export for other files using TimerProvider
 
-
 /// Provider for managing timer state.
 ///
 /// Uses timestamp-based calculation to ensure accurate time tracking
 /// even when the app is in background or the screen is off.
 class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
+  final DateTime Function() _now;
+  final List<FocusInterval> _focusIntervals = [];
+  DateTime? _focusOpenedAt;
+  DateTime? _focusDeadline;
+  Duration _focusClockShift = Duration.zero;
+  int _focusOffset = 0;
+  int _unallocatedSeconds = 0;
+  Object? _persistenceError;
+  bool _recoveryBlocked = false;
+
+  /// A different owner's recoverable session must not be replaced by a free timer.
+  void setRecoveryBlocked(bool blocked) {
+    _recoveryBlocked = blocked;
+  }
+
+  bool _finalizing = false;
+  void freezeForFinalization() {
+    pause();
+    _finalizing = true;
+    _persistState();
+  }
+
+  List<FocusInterval> get focusIntervals {
+    final result = List<FocusInterval>.of(_focusIntervals);
+    if (_focusOpenedAt != null) {
+      var end = _now().toUtc().add(_focusClockShift);
+      if (_focusDeadline != null && end.isAfter(_focusDeadline!)) {
+        end = _focusDeadline!;
+      }
+      if (end.isBefore(_focusOpenedAt!)) end = _focusOpenedAt!;
+      result.add(FocusInterval(
+          start: _focusOpenedAt!, end: end, offsetMinutes: _focusOffset));
+    }
+    return result;
+  }
+
+  bool get hasExactIntervals => _unallocatedSeconds == 0;
+  void _closeFocus() {
+    final snapshot = focusIntervals;
+    _focusIntervals
+      ..clear()
+      ..addAll(snapshot);
+    _focusOpenedAt = null;
+    _focusDeadline = null;
+    _focusClockShift = Duration.zero;
+  }
+
+  /// Wait for ordered writes and expose storage failure to the leave flow.
+  Future<void> ensurePersisted() async {
+    _persistState();
+    await _pendingPersistence;
+    if (_persistenceError != null) {
+      throw StateError('Timer storage failed: $_persistenceError');
+    }
+  }
+
   TimerMode _mode = TimerMode.normal;
   bool _isRunning = false;
   Timer? _timer;
   bool _disposed = false;
-  static const _keyTimerState = 'persisted_timer_state';
+  static const _keyTimerState = StudyPersistenceKeys.timerState;
 
   // Seat session the running timer belongs to. Saved with the timer state so
   // a stale timer from an ended session is never restored onto another one.
@@ -53,9 +110,11 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   VoidCallback? onLockTaskExited;
 
   TimerProvider({
+    DateTime Function()? now,
     NotificationService? notificationService,
     LockTaskService? lockTaskService,
-  })  : _notificationService = notificationService ?? NotificationService(),
+  })  : _now = now ?? DateTime.now,
+        _notificationService = notificationService ?? NotificationService(),
         _lockTaskService = lockTaskService ?? LockTaskService() {
     WidgetsBinding.instance.addObserver(this);
     _lockTaskExitedSubscription =
@@ -100,8 +159,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_startedAt == null) {
       return _pausedDuration.inSeconds;
     }
-    return _pausedDuration.inSeconds +
-        DateTime.now().difference(_startedAt!).inSeconds;
+    return _pausedDuration.inSeconds + _now().difference(_startedAt!).inSeconds;
   }
 
   /// Get remaining seconds for pomodoro mode.
@@ -115,7 +173,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
       elapsed = _pomodoroElapsedBeforePause;
     } else {
       elapsed = _pomodoroElapsedBeforePause +
-          DateTime.now().difference(_pomodoroPhaseStartedAt!).inSeconds;
+          _now().difference(_pomodoroPhaseStartedAt!).inSeconds;
     }
 
     final remaining = phaseDuration - elapsed;
@@ -176,23 +234,39 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   ///
   /// [sessionId] ties the saved timer state to the current seat session.
   void start({String? sessionId}) {
-    if (_isRunning) {
-      // Already running (e.g. started before sitting down): bind it to the
-      // new session so it can be restored.
-      if (sessionId != null && sessionId != _sessionId) {
-        _sessionId = sessionId;
-        _persistState();
-      }
-      return;
+    if (_finalizing || _recoveryBlocked) return;
+    if (sessionId != null && sessionId != _sessionId) {
+      // A newly seated session starts with its own journal. Unseated focus and
+      // a previous seat's focus must never be adopted by this seat's owner.
+      _resetFields();
+      _focusIntervals.clear();
+      _unallocatedSeconds = 0;
+      _pomodoroCompletedCycles = 0;
+      _sessionId = sessionId;
+    }
+    if (_isRunning) return;
+    _isRunning = true;
+    if (_mode == TimerMode.normal || _pomodoroPhase == PomodoroPhase.focus) {
+      final now = _now();
+      final wallStart = now.toUtc();
+      final previousEnd =
+          _focusIntervals.isEmpty ? null : _focusIntervals.last.end;
+      _focusOpenedAt = previousEnd != null && previousEnd.isAfter(wallStart)
+          ? previousEnd
+          : wallStart;
+      // A device-clock rollback must not create overlapping intervals or make
+      // completion impossible. Keep their order while retaining elapsed time.
+      _focusClockShift = _focusOpenedAt!.difference(wallStart);
+      _focusOffset = now.timeZoneOffset.inMinutes;
+      _focusDeadline = _mode == TimerMode.pomodoro
+          ? _focusOpenedAt!.add(Duration(seconds: pomodoroRemainingSeconds))
+          : null;
     }
 
-    if (sessionId != null) _sessionId = sessionId;
-    _isRunning = true;
-
     if (_mode == TimerMode.normal) {
-      _startedAt = DateTime.now();
+      _startedAt = _now();
     } else {
-      _pomodoroPhaseStartedAt = DateTime.now();
+      _pomodoroPhaseStartedAt = _now();
     }
 
     _updateNotification();
@@ -226,20 +300,21 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   void pause() {
     if (!_isRunning) return;
 
+    _closeFocus();
     _timer?.cancel();
     _isRunning = false;
 
     if (_mode == TimerMode.normal) {
       // Save elapsed time when pausing
       if (_startedAt != null) {
-        _pausedDuration += DateTime.now().difference(_startedAt!);
+        _pausedDuration += _now().difference(_startedAt!);
         _startedAt = null;
       }
     } else {
       // Save pomodoro elapsed time when pausing
       if (_pomodoroPhaseStartedAt != null) {
         _pomodoroElapsedBeforePause +=
-            DateTime.now().difference(_pomodoroPhaseStartedAt!).inSeconds;
+            _now().difference(_pomodoroPhaseStartedAt!).inSeconds;
         _pomodoroPhaseStartedAt = null;
       }
     }
@@ -264,11 +339,15 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   void endSession() {
     _sessionId = null;
     _resetFields();
+    _finalizing = false;
+    _focusIntervals.clear();
+    _unallocatedSeconds = 0;
     _queuePersistence(null);
     notifyListeners();
   }
 
   void _resetFields() {
+    _closeFocus();
     _timer?.cancel();
     _isRunning = false;
 
@@ -291,6 +370,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   void setInitialDuration(Duration duration) {
     if (_isRunning) return;
     _pausedDuration = duration;
+    _unallocatedSeconds = duration.inSeconds;
     _persistState();
     notifyListeners();
   }
@@ -299,13 +379,14 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   void _switchPomodoroPhase() {
     // Notify about the finished phase BEFORE switching
     // Determine the title/body based on what JUST finished
+    _closeFocus();
     final finishedPhase = _pomodoroPhase;
-    
+
     // Use localized strings if available, otherwise fall back to English defaults
-    final title = finishedPhase == PomodoroPhase.focus 
-        ? (_focusFinishedTitle ?? 'Focus Finished!') 
+    final title = finishedPhase == PomodoroPhase.focus
+        ? (_focusFinishedTitle ?? 'Focus Finished!')
         : (_breakFinishedTitle ?? 'Break Finished!');
-        
+
     final body = finishedPhase == PomodoroPhase.focus
         ? (_focusFinishedBody ?? 'Time for a break.')
         : (_breakFinishedBody ?? 'Time to focus.');
@@ -340,9 +421,8 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // Only update if service is running
     if (!await _notificationService.isRunning()) return;
 
-    final seconds = _mode == TimerMode.normal 
-        ? elapsedSeconds 
-        : pomodoroRemainingSeconds;
+    final seconds =
+        _mode == TimerMode.normal ? elapsedSeconds : pomodoroRemainingSeconds;
 
     await _notificationService.updateTimerState(
       mode: _mode,
@@ -403,6 +483,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
           : DateTime.fromMillisecondsSinceEpoch(phaseStartedAtMs);
 
       _timer?.cancel();
+      _finalizing = state['finalizing'] as bool? ?? false;
       _mode = mode;
       _isRunning = isRunning;
       _startedAt = isRunning ? startedAt : null;
@@ -412,6 +493,39 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _pomodoroPhaseStartedAt = isRunning ? phaseStartedAt : null;
       _pomodoroElapsedBeforePause = elapsedBeforePause;
       _sessionId = sessionId;
+      _focusIntervals
+        ..clear()
+        ..addAll((state['focusIntervals'] as List? ?? []).map(
+            (i) => FocusInterval.fromMap(Map<String, dynamic>.from(i as Map))));
+      _unallocatedSeconds = state['unallocatedSeconds'] as int? ??
+          (state.containsKey('focusIntervals')
+              ? 0
+              : (_mode == TimerMode.normal
+                  ? elapsedSeconds
+                  : cycles * pomodoroFocusDuration +
+                      (_pomodoroPhase == PomodoroPhase.focus
+                          ? pomodoroFocusDuration - pomodoroRemainingSeconds
+                          : 0)));
+      _focusOpenedAt = state['focusOpenedAt'] == null
+          ? null
+          : DateTime.parse(state['focusOpenedAt'] as String);
+      _focusDeadline = state['focusDeadline'] == null
+          ? null
+          : DateTime.parse(state['focusDeadline'] as String);
+      _focusOffset = state['focusOffset'] as int? ?? 0;
+      _focusClockShift =
+          Duration(milliseconds: state['focusClockShiftMs'] as int? ?? 0);
+      if (_isRunning && !state.containsKey('focusIntervals')) {
+        // Old snapshots have no timing evidence; retain their total as estimated.
+        if (_mode == TimerMode.normal ||
+            _pomodoroPhase == PomodoroPhase.focus) {
+          _focusOpenedAt = _now().toUtc();
+          _focusOffset = _now().timeZoneOffset.inMinutes;
+          _focusDeadline = _mode == TimerMode.pomodoro
+              ? _now().toUtc().add(Duration(seconds: pomodoroRemainingSeconds))
+              : null;
+        }
+      }
       if (_isRunning) {
         // Match the periodic tick: an expired phase advances to the next
         // phase and stops, waiting for the user to start it.
@@ -429,8 +543,16 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _persistState() {
+    if (_recoveryBlocked) return;
     // Snapshot before awaiting so subsequent changes cannot alter this write.
     _queuePersistence(jsonEncode({
+      'finalizing': _finalizing,
+      'focusIntervals': _focusIntervals.map((i) => i.toMap()).toList(),
+      'focusOpenedAt': _focusOpenedAt?.toIso8601String(),
+      'focusDeadline': _focusDeadline?.toIso8601String(),
+      'focusOffset': _focusOffset,
+      'focusClockShiftMs': _focusClockShift.inMilliseconds,
+      'unallocatedSeconds': _unallocatedSeconds,
       'sessionId': _sessionId,
       'mode': _mode.index,
       'isRunning': _isRunning,
@@ -448,12 +570,33 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _pendingPersistence = _pendingPersistence.then((_) async {
       try {
         final prefs = await SharedPreferences.getInstance();
-        if (state == null) {
-          await prefs.remove(_keyTimerState);
-        } else {
-          await prefs.setString(_keyTimerState, state);
+        final active = prefs.getString(StudyPersistenceKeys.activeSession);
+        final activeId = active == null
+            ? prefs.getString(StudyPersistenceKeys.legacySessionId)
+            : (jsonDecode(active) as Map<String, dynamic>)['sessionId']
+                as String?;
+        if (activeId != null) {
+          // Also protect the window before owner-aware recovery has run, and
+          // never let a stale queued removal erase an active session's journal.
+          if (state == null) return;
+          final timerId =
+              (jsonDecode(state) as Map<String, dynamic>)['sessionId'];
+          if (timerId != activeId) {
+            throw StateError('Another active session owns the timer journal');
+          }
         }
+        if (state == null) {
+          if (!await prefs.remove(_keyTimerState)) {
+            throw StateError('Timer removal failed');
+          }
+        } else {
+          if (!await prefs.setString(_keyTimerState, state)) {
+            throw StateError('Timer write failed');
+          }
+        }
+        _persistenceError = null;
       } catch (e) {
+        _persistenceError = e;
         debugPrint('Failed to persist timer state: $e');
       }
     });
@@ -461,11 +604,9 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Remove any saved timer state (e.g. when the seat session is cleared).
   static Future<void> clearPersistedState() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_keyTimerState);
-    } catch (e) {
-      debugPrint('Failed to clear timer state: $e');
+    final prefs = await SharedPreferences.getInstance();
+    if (!await prefs.remove(_keyTimerState)) {
+      throw StateError('Timer cleanup failed');
     }
   }
 
@@ -479,19 +620,9 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// Get total study time (for both modes).
-  int get totalStudySeconds {
-    if (_mode == TimerMode.normal) {
-      return elapsedSeconds;
-    } else {
-      // Calculate total focus time in Pomodoro mode
-      final completedFocusTime =
-          _pomodoroCompletedCycles * pomodoroFocusDuration;
-      final currentFocusTime = _pomodoroPhase == PomodoroPhase.focus
-          ? pomodoroFocusDuration - pomodoroRemainingSeconds
-          : 0;
-      return completedFocusTime + currentFocusTime;
-    }
-  }
+  int get totalStudySeconds =>
+      _unallocatedSeconds +
+      focusIntervals.fold<int>(0, (sum, i) => sum + i.milliseconds) ~/ 1000;
 
   @override
   void dispose() {

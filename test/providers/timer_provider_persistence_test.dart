@@ -111,7 +111,8 @@ void main() {
       expect(restored.pomodoroCompletedCycles, 1);
     });
 
-    test('restoring expired focus moves to a stopped break and counts the cycle',
+    test(
+        'restoring expired focus moves to a stopped break and counts the cycle',
         () async {
       provider.setMode(TimerMode.pomodoro);
       provider.start();
@@ -121,8 +122,7 @@ void main() {
       final state = jsonDecode(prefs.getString('persisted_timer_state')!)
           as Map<String, dynamic>;
       state['pomodoroPhaseStartedAt'] = DateTime.now()
-          .subtract(
-              Duration(seconds: provider.pomodoroFocusDuration + 5))
+          .subtract(Duration(seconds: provider.pomodoroFocusDuration + 5))
           .millisecondsSinceEpoch;
       await prefs.setString('persisted_timer_state', jsonEncode(state));
       final restored = await restoreNewProvider();
@@ -141,8 +141,7 @@ void main() {
       final restored = await restoreNewProvider();
       expect(restored.mode, TimerMode.pomodoro);
       expect(restored.isRunning, false);
-      expect(restored.pomodoroRemainingSeconds,
-          provider.pomodoroFocusDuration);
+      expect(restored.pomodoroRemainingSeconds, provider.pomodoroFocusDuration);
     });
 
     test('invalid saved data does not throw or change the timer', () async {
@@ -154,8 +153,7 @@ void main() {
       expect(provider.isRunning, false);
     });
 
-    test('endSession clears saved state even with pending writes',
-        () async {
+    test('endSession clears saved state even with pending writes', () async {
       provider.setMode(TimerMode.pomodoro);
       provider.start();
       provider.pause();
@@ -179,15 +177,16 @@ void main() {
       expect(await provider.restoreState(sessionId: 'session-A'), true);
       expect(provider.isRunning, false);
       expect(provider.mode, TimerMode.pomodoro);
-      expect(provider.pomodoroRemainingSeconds,
-          provider.pomodoroFocusDuration);
+      expect(provider.pomodoroRemainingSeconds, provider.pomodoroFocusDuration);
     });
 
-    test('a timer started before sitting is bound to the new session',
+    test(
+        'a timer started before sitting starts fresh when bound to the new session',
         () async {
       provider.start();
       await Future<void>.delayed(const Duration(milliseconds: 1100));
       provider.start(sessionId: 'session-A');
+      expect(provider.totalStudySeconds, 0);
       await Future<void>.delayed(const Duration(milliseconds: 200));
       final elapsed = provider.elapsedSeconds;
       provider.dispose();

@@ -49,6 +49,7 @@ void main() {
       when(() => session.restoreSessionIfNeeded()).thenAnswer((_) async => true);
       when(() => session.currentRoomId).thenReturn(null);
       when(() => session.currentDuration).thenReturn(0);
+      when(() => session.isFinalizing).thenReturn(false);
       final timer = _MockTimerProvider();
       stubLocalization(timer);
       when(() => timer.restoreState()).thenAnswer((_) async => timerRestored);
