@@ -26,12 +26,10 @@ enum _HistoryView {
 class StudyHistoryScreen extends StatefulWidget {
   const StudyHistoryScreen({
     super.key,
-    this.repository,
     this.now,
     this.showLegacyHistory = false,
   });
 
-  final StudyHistoryRepository? repository;
   final DateTime Function()? now;
   final bool showLegacyHistory;
 
@@ -50,7 +48,7 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
   late final Timer _dateTimer;
 
   StudyHistoryRepository get _repository =>
-      widget.repository ?? StudyHistoryRepository();
+      context.read<StudyHistoryRepository>();
 
   @override
   void initState() {

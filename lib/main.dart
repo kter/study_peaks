@@ -10,6 +10,7 @@ import 'providers/session_provider.dart';
 import 'providers/timer_provider.dart';
 import 'providers/user_settings_provider.dart';
 import 'repositories/mock_data_repository.dart';
+import 'repositories/study_history_repository.dart';
 import 'screens/room_list_screen.dart';
 import 'services/notification_service.dart';
 
@@ -44,21 +45,22 @@ class StudyPeaksApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: userSettingsProvider),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => TimerProvider()),
+        Provider<StudyHistoryRepository>(
+          create: (_) => StudyHistoryRepository(),
+        ),
         ChangeNotifierProvider(
           create: (_) => RoomProvider(
             mockDataRepository: kUseMockData ? DevMockDataRepository() : null,
           ),
         ),
         ChangeNotifierProxyProvider2<AuthProvider, UserSettingsProvider, SessionProvider>(
-          create: (context) => SessionProvider(useMockFallback: kUseMockData)
-            ..setTimerProvider(context.read<TimerProvider>()),
-          update: (_, auth, userSettings, session) {
-            session?.setAuthProvider(auth);
-            session?.setUserSettingsProvider(userSettings);
-            return session ?? SessionProvider()
-              ..setAuthProvider(auth)
-              ..setUserSettingsProvider(userSettings);
-          },
+          create: (context) => SessionProvider(
+            historyRepository: context.read<StudyHistoryRepository>(),
+            useMockFallback: kUseMockData,
+          )..setTimerProvider(context.read<TimerProvider>()),
+          update: (_, auth, userSettings, session) => session!
+            ..setAuthProvider(auth)
+            ..setUserSettingsProvider(userSettings),
         ),
       ],
       child: Consumer<UserSettingsProvider>(

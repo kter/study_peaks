@@ -26,13 +26,14 @@ void main() {
   });
   late MockApiService mockApiService;
   late MockAuthProvider mockAuthProvider;
+  late MockHistory history;
   late SessionProvider provider;
 
   setUp(() async {
     await setupMockSharedPreferences();
     mockApiService = MockApiService();
     mockAuthProvider = MockAuthProvider();
-    final history = MockHistory();
+    history = MockHistory();
     when(() => history.saveSession(any())).thenAnswer((_) async {});
     provider = SessionProvider(
       historyRepository: history,
@@ -256,7 +257,7 @@ void main() {
     expect(provider.sessionId, 'test-session-id');
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.containsKey(StudyPersistenceKeys.activeSession), isTrue);
-    verifyNever(() => provider.historyRepository.saveSession(any()));
+    verifyNever(() => history.saveSession(any()));
     verifyNever(() => mockApiService.leave(any(), any(), any()));
   });
 }

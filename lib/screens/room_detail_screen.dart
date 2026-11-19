@@ -9,6 +9,7 @@ import '../providers/room_provider.dart';
 import '../providers/session_provider.dart';
 import '../providers/timer_provider.dart';
 import '../providers/user_settings_provider.dart';
+import '../repositories/study_history_repository.dart';
 import '../utils/error_localization.dart';
 import '../widgets/dialogs/leave_confirmation_dialog.dart';
 import '../widgets/dialogs/leave_summary_dialog.dart';
@@ -487,7 +488,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       return;
     }
 
-    final repository = session.historyRepository;
+    final repository = context.read<StudyHistoryRepository>();
     final openHistory = await showDialog<bool>(
       context: context,
       builder: (_) => LeaveSummaryDialog(
@@ -501,7 +502,6 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
         record.isVisibleTo(session.historyOwnerId)) {
       unawaited(navigator.push(MaterialPageRoute<void>(
         builder: (_) => StudyHistoryScreen(
-          repository: repository,
           showLegacyHistory: record.ownerId == StudySession.legacyOwner,
         ),
       )));
