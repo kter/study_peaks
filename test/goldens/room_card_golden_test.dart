@@ -64,5 +64,30 @@ void main() {
 
       await screenMatchesGolden(tester, 'room_card_high_occupancy');
     });
+
+    testGoldens('all occupancy levels', (tester) async {
+      final builder = GoldenBuilder.column(
+        wrap: (widget) => SizedBox(width: 200, height: 220, child: widget),
+      )
+        ..addScenario(
+          'Low (30%)',
+          RoomCard(room: lowOccupancyRoom, onTap: () {}),
+        )
+        ..addScenario(
+          'Medium (65%)',
+          RoomCard(room: mediumOccupancyRoom, onTap: () {}),
+        )
+        ..addScenario(
+          'High (90%)',
+          RoomCard(room: highOccupancyRoom, onTap: () {}),
+        );
+
+      await tester.pumpWidgetBuilder(
+        builder.build(),
+        surfaceSize: const Size(250, 840),
+      );
+
+      await screenMatchesGolden(tester, 'room_card_all_occupancy_levels');
+    });
   });
 }

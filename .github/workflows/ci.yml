@@ -9,44 +9,65 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    outputs:
+      build-android: ${{ steps.android-build.outputs.enabled }}
     steps:
+      - name: Check Android build configuration
+        id: android-build
+        env:
+          ANDROID_BUILD_ENABLED: ${{ secrets.GOOGLE_SERVICES_PRD_JSON != '' }}
+        run: printf 'enabled=%s\n' "$ANDROID_BUILD_ENABLED" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
-      
+
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
+          flutter-version: '3.35.7'
           channel: 'stable'
           cache: true
-      
+
       - name: Install dependencies
         run: flutter pub get
-      
+
       - name: Run analyzer
-        run: flutter analyze
-      
+        run: flutter analyze --no-pub
+
+      - name: Install SQLite for FFI tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsqlite3-dev
+
       - name: Run tests
-        run: flutter test
+        run: flutter test --no-pub
 
   build-android:
-    runs-on: ubuntu-latest
     needs: test
+    if: ${{ needs.test.outputs.build-android == 'true' }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
+          flutter-version: '3.35.7'
           channel: 'stable'
           cache: true
-      
+
       - name: Install dependencies
         run: flutter pub get
-      
+
+      - name: Write Firebase configuration
+        env:
+          GOOGLE_SERVICES_PRD_JSON: ${{ secrets.GOOGLE_SERVICES_PRD_JSON }}
+        run: |
+          mkdir -p android/app/src/prd
+          printf '%s\n' "$GOOGLE_SERVICES_PRD_JSON" > android/app/src/prd/google-services.json
+
       - name: Build APK
-        run: flutter build apk --release --flavor prd
-      
+        run: flutter build apk --debug --flavor prd --no-pub
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: release-apk
-          path: build/app/outputs/flutter-apk/app-prd-release.apk
+          name: prd-debug-apk
+          path: build/app/outputs/flutter-apk/app-prd-debug.apk
