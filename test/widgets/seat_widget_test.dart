@@ -91,6 +91,46 @@ void main() {
       expect(find.text('1h0m'), findsOneWidget);
     });
 
+    testWidgets('refreshes only the duration badge at each elapsed minute',
+        (tester) async {
+      final now = tester.binding.clock.now;
+      final seat = Seat(
+        seatId: 'seat-timed',
+        seatNumber: 1,
+        isOccupied: true,
+        user: mockUser,
+        sessionStartedAt: now().subtract(const Duration(minutes: 4, seconds: 58)),
+      );
+      var parentBuilds = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (_) {
+                parentBuilds++;
+                return SeatWidget(seat: seat, now: now);
+              },
+            ),
+          ),
+        ),
+      );
+      final username = find.text(mockUser.displayName);
+      final usernameWidget = tester.widget(username);
+      final initialParentBuilds = parentBuilds;
+      expect(find.text('4m'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('4m'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('5m'), findsOneWidget);
+
+      await tester.pump(const Duration(minutes: 1));
+      expect(find.text('6m'), findsOneWidget);
+      expect(parentBuilds, initialParentBuilds);
+      expect(tester.widget(username), same(usernameWidget));
+    });
+
     testWidgets('duration displays minutes only when under an hour', (tester) async {
       final shortSessionSeat = Seat(
         seatId: 'seat-short',

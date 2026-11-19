@@ -168,7 +168,6 @@ class SessionProvider extends ChangeNotifier {
   String? get error => _error;
   bool get isFinalizing => _pendingRecord != null;
   bool get hasReleasedSeat => _remoteLeaveCompleted;
-  StudyHistoryRepository get historyRepository => _historyRepository;
   bool get isSeated => _state == SessionState.seated;
 
   /// Clear the current error state.

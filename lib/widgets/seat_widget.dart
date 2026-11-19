@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:jdenticon_dart/jdenticon_dart.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -13,6 +15,7 @@ class SeatWidget extends StatelessWidget {
   final VoidCallback? onTap;
   final double size;
   final bool isCurrentUser;
+  final DateTime Function() now;
 
   const SeatWidget({
     super.key,
@@ -20,6 +23,7 @@ class SeatWidget extends StatelessWidget {
     this.onTap,
     this.size = 80,
     this.isCurrentUser = false,
+    this.now = DateTime.now,
   });
 
   @override
@@ -97,7 +101,7 @@ class SeatWidget extends StatelessWidget {
         ),
         // Session duration
         Flexible(
-          child: _buildDurationBadge(theme),
+          child: _DurationBadge(seat: seat, now: now),
         ),
       ],
     );
@@ -208,19 +212,71 @@ class SeatWidget extends StatelessWidget {
       height: size,
     );
   }
+}
 
-  Widget _buildDurationBadge(ThemeData theme) {
-    final duration = seat.elapsedAt(DateTime.now());
+class _DurationBadge extends StatefulWidget {
+  const _DurationBadge({required this.seat, required this.now});
+
+  final Seat seat;
+  final DateTime Function() now;
+
+  @override
+  State<_DurationBadge> createState() => _DurationBadgeState();
+}
+
+class _DurationBadgeState extends State<_DurationBadge> {
+  Timer? _refreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleRefresh();
+  }
+
+  @override
+  void didUpdateWidget(_DurationBadge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.seat.sessionStartedAt != widget.seat.sessionStartedAt ||
+        oldWidget.now != widget.now) {
+      _refreshTimer?.cancel();
+      _scheduleRefresh();
+    }
+  }
+
+  void _scheduleRefresh() {
+    if (widget.seat.sessionStartedAt == null) return;
+
+    final elapsed = widget.seat.elapsedAt(widget.now());
+    const minute = Duration.millisecondsPerMinute;
+    final remainder = elapsed.inMilliseconds.remainder(minute);
+    // Negative elapsed minutes truncate toward zero just after the boundary.
+    final delay = elapsed.inMinutes < 0 ? 1 - remainder : minute - remainder;
+    _refreshTimer = Timer(Duration(milliseconds: delay), () {
+      setState(() {});
+      _scheduleRefresh();
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final duration = widget.seat.elapsedAt(widget.now());
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
-    
+
     String durationText;
     if (hours > 0) {
       durationText = '${hours}h${minutes}m';
     } else {
       durationText = '${minutes}m';
     }
-    
+
     return FittedBox(
       fit: BoxFit.scaleDown,
       child: Container(

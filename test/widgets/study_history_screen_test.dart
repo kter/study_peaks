@@ -71,14 +71,17 @@ void main() {
     Brightness brightness = Brightness.light,
   }) {
     return tester.pumpWidget(
-      ChangeNotifierProvider<AuthProvider>.value(
-        value: auth,
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AuthProvider>.value(value: auth),
+          Provider<StudyHistoryRepository>.value(value: repository),
+        ],
         child: MaterialApp(
           locale: Locale(language),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           theme: ThemeData(brightness: brightness, useMaterial3: true),
-          home: StudyHistoryScreen(repository: repository, now: () => today),
+          home: StudyHistoryScreen(now: () => today),
         ),
       ),
     );
