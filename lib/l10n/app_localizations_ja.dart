@@ -209,7 +209,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get historyStorageNotice =>
-      '履歴はこの端末だけに保存されます。ゲストと各アカウントの履歴は別々です。端末変更時の引き継ぎには対応していません。';
+      '学習履歴と目標はこの端末に保存し、ゲストと各アカウントで分けています。端末変更時の引き継ぎには対応していません。';
 
   @override
   String get historyLegacy => '所有者不明の旧履歴を見る';
@@ -349,4 +349,80 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get historySignInNotice =>
       'サインインすると、この端末でアカウントごとに履歴を保存します。端末間では同期されません。';
+
+  @override
+  String get weeklyGoal => '週間学習目標';
+
+  @override
+  String get weeklyGoalNotSet => '目標は未設定です';
+
+  @override
+  String get weeklyGoalSet => '目標を設定';
+
+  @override
+  String get weeklyGoalEdit => '目標を変更';
+
+  @override
+  String get weeklyGoalClear => '目標を解除';
+
+  @override
+  String get weeklyGoalSave => '目標を保存';
+
+  @override
+  String get weeklyGoalMinutes => '1週間の目標（分）';
+
+  @override
+  String weeklyGoalInputHelp(int min, int max, int step) {
+    final intl.NumberFormat maxNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String maxString = maxNumberFormat.format(max);
+
+    return '$min〜$maxString分の範囲で$step分刻み';
+  }
+
+  @override
+  String get weeklyGoalInvalidMinutes => '表示された範囲と刻みに従って分数を入力してください。';
+
+  @override
+  String weeklyGoalTarget(String duration) {
+    return '目標 $duration';
+  }
+
+  @override
+  String weeklyGoalActual(String duration) {
+    return '実績 $duration';
+  }
+
+  @override
+  String weeklyGoalRemaining(String duration) {
+    return '残り $duration';
+  }
+
+  @override
+  String weeklyGoalAchievement(String percent) {
+    return '達成率 $percent';
+  }
+
+  @override
+  String get weeklyGoalLoadFailed => '週間学習目標を読み込めませんでした。';
+
+  @override
+  String get weeklyGoalSaveFailed => '週間学習目標を保存できませんでした。もう一度お試しください。';
+
+  @override
+  String get weeklyGoalOwnerChanged => 'ログイン状態が変わりました。目標の編集画面を開き直してください。';
+
+  @override
+  String get weeklyGoalWeekChanged => '週が変わりました。今週の目標を開いて編集してください。';
+
+  @override
+  String get weeklyGoalDateEarlier =>
+      '端末の日付が、最後に保存した週より前になっています。その週以降の日付で目標を編集できます。';
+
+  @override
+  String get weeklyGoalCorrectDate => '修正した日付を使う';
+
+  @override
+  String get weeklyGoalCorrectDateConfirm =>
+      '端末の日付が正しいことを確認してください。この端末にある翌週以降の目標設定を解除します。';
 }

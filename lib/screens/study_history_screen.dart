@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -10,6 +12,7 @@ import '../repositories/study_history_repository.dart';
 import '../utils/formatters.dart';
 import '../widgets/study_history_calendar.dart';
 import '../widgets/study_history_chart.dart';
+import '../widgets/study_weekly_goal_section.dart';
 
 enum _HistoryView {
   weekGraph(StudyHistoryPeriod.week),
@@ -44,6 +47,10 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
   late Future<StudyHistory?> _history;
   late DateTime _today;
   late final AppLifecycleListener _lifecycle;
+  late final Timer _dateTimer;
+
+  StudyHistoryRepository get _repository =>
+      widget.repository ?? StudyHistoryRepository();
 
   @override
   void initState() {
@@ -51,6 +58,8 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
     _legacy = widget.showLegacyHistory;
     _today = _currentDate;
     _lifecycle = AppLifecycleListener(onResume: _refreshDate);
+    _dateTimer =
+        Timer.periodic(const Duration(minutes: 1), (_) => _refreshDate());
   }
 
   @override
@@ -61,6 +70,7 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
 
   @override
   void dispose() {
+    _dateTimer.cancel();
     _lifecycle.dispose();
     super.dispose();
   }
@@ -76,9 +86,7 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
 
   Future<StudyHistory?> _fetchHistory(String owner) async {
     try {
-      return await (widget.repository ?? StudyHistoryRepository()).getHistory(
-        ownerId: owner,
-      );
+      return await _repository.getHistory(ownerId: owner);
     } catch (error, stack) {
       debugPrint('Could not load study history: ${error.runtimeType}');
       debugPrintStack(stackTrace: stack, maxFrames: 8);
@@ -86,7 +94,9 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
     }
   }
 
-  DateTime get _currentDate => civilDate(widget.now?.call() ?? DateTime.now());
+  DateTime _now() => widget.now?.call() ?? DateTime.now();
+
+  DateTime get _currentDate => civilDate(_now());
 
   void _refreshDate() {
     final date = _currentDate;
@@ -160,6 +170,18 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
                     if (history != null) _buildSummary(history, today, l10n),
                     const SizedBox(height: 16),
                     _buildPeriodControls(l10n, anchor, latest),
+                    if (history != null && !_legacy)
+                      StudyWeeklyGoalSection(
+                        key: ValueKey(_owner),
+                        repository: _repository,
+                        ownerId: _owner!,
+                        history: history,
+                        currentWeek: StudyHistoryPeriod.week.start(today),
+                        selectedWeek: _view == _HistoryView.weekGraph
+                            ? period.start(anchor)
+                            : null,
+                        now: _now,
+                      ),
                     if (!loaded)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 24),

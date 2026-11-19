@@ -52,6 +52,16 @@ A dot marks each studied date. The legend groups daily totals into four bands.
 
 Past and current dates with no records are selectable and show a zero total and an empty session list. On narrow displays the grid scrolls horizontally so each date keeps a 48 dp touch target. Future dates without recorded time are unshaded and unavailable. Dates that already have recorded time remain available even if the device's date or timezone moves backward. Date cells expose their full date, duration or future status, and selection state to screen readers.
 
+## Weekly study goals
+
+In Study History, use Week graph to set, change or clear the current week's goal. Enter a whole number of minutes from 15 to 10,080 (168 hours), in 15-minute steps. Goals are optional and stored on this device under the same guest or account owner as study records. The older history view for unknown owners has no goal.
+
+Each week runs from Monday through Sunday. Setting a goal midweek includes all completed study credited to the week, including days before the goal was set. The current goal carries forward until it is changed or cleared. Each change takes effect for its whole week and later weeks, so viewing an ended week shows its effective goal and actuals. Clearing a goal this week leaves earlier weeks intact. Weeks before the first setting or after a clear can be browsed normally, with their study records and calendar counts.
+
+The dashboard uses the same completed seconds for totals, the graph, and goal progress. Remaining time is floored at zero. The percentage is rounded down to a whole percent and can exceed 100%. The bar fills at 100%. For example, 6 hours and 30 minutes toward a 10-hour goal yields 65% and leaves 3 hours and 30 minutes.
+
+The device's civil date determines the current week. When a new week is seen in the dashboard, its inherited goal is saved under the owner and the Monday date label. A null value represents an unset goal. Weeks between stored Mondays keep the last applicable goal. If the device date moves back and the latest observed week starts within the next 26 hours, editing waits until that week. This covers timezone shifts between UTC−12 and UTC+14. For larger clock corrections, **Use corrected date** lets the owner discard goal settings for weeks after the corrected current week. The confirmation restores editing while preserving earlier goals and all study records. Allocated study dates keep their recorded offsets, as described above.
+
 ## Recovery and finalization
 
 The authoritative active metadata is a single `study_active_v2` SharedPreferences JSON value. It contains the stable seat session ID, owner, room, seat, start timestamp, and an optional frozen record pending completion. Timer state is an ordered journal containing closed focus intervals plus an open interval's timestamp, offset, and optional deadline. It is saved on transitions; wall time reconstructs running focus after process death without periodic counter writes.
@@ -64,7 +74,9 @@ Storage operations are asynchronous; a process killed before an initial transiti
 
 ## Migration
 
-SQLite opens at version 2. Upgrading from version 1 adds columns without deleting or recreating old rows. Each old row receives `legacy-<id>` and owner `legacy:unknown`. Its duration and original start string remain intact. Old timestamps lack timezone evidence and old durations lack pause/break intervals, so the entire old total stays on its original start date. It is not converted into fictitious exact focus intervals.
+SQLite opens at version 3. Upgrading from version 1 adds columns without deleting or recreating old rows. Each old row receives `legacy-<id>` and owner `legacy:unknown`. Its duration and original start string remain intact. Old timestamps lack timezone evidence and old durations lack pause/break intervals, so the entire old total stays on its original start date. It is not converted into fictitious exact focus intervals.
+
+Version 3 adds the weekly goal table to both version 1 and version 2 databases. Every owner starts with an unset goal. Upgrading preserves all existing study records.
 
 The existing history screen offers an explicitly labeled older-history view with a warning about unknown ownership and start-date allocation, in Japanese and English. These records are excluded from guest/account totals. Signing in never migrates them. Pre-v2 active metadata is also retained under unknown ownership. Pre-v2 timer totals are retained as estimated totals; their original focus timing cannot be reconstructed and is shown with the same start-date limitation.
 

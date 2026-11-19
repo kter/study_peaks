@@ -473,7 +473,7 @@ abstract class AppLocalizations {
   /// No description provided for @historyStorageNotice.
   ///
   /// In en, this message translates to:
-  /// **'History is stored only on this device, separately for guests and each account. It does not transfer to other devices.'**
+  /// **'Study history and goals are stored on this device, separately for guests and each account. They do not transfer to other devices.'**
   String get historyStorageNotice;
 
   /// No description provided for @historyLegacy.
@@ -703,6 +703,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Signing in keeps a separate history for this account on this device. History is not synced across devices.'**
   String get historySignInNotice;
+
+  /// No description provided for @weeklyGoal.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly study goal'**
+  String get weeklyGoal;
+
+  /// No description provided for @weeklyGoalNotSet.
+  ///
+  /// In en, this message translates to:
+  /// **'No goal set'**
+  String get weeklyGoalNotSet;
+
+  /// No description provided for @weeklyGoalSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Set goal'**
+  String get weeklyGoalSet;
+
+  /// No description provided for @weeklyGoalEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit goal'**
+  String get weeklyGoalEdit;
+
+  /// No description provided for @weeklyGoalClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear goal'**
+  String get weeklyGoalClear;
+
+  /// No description provided for @weeklyGoalSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save goal'**
+  String get weeklyGoalSave;
+
+  /// No description provided for @weeklyGoalMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'Goal (minutes per week)'**
+  String get weeklyGoalMinutes;
+
+  /// No description provided for @weeklyGoalInputHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'{min}–{max} minutes, in {step}-minute steps'**
+  String weeklyGoalInputHelp(int min, int max, int step);
+
+  /// No description provided for @weeklyGoalInvalidMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter minutes within the range and step shown.'**
+  String get weeklyGoalInvalidMinutes;
+
+  /// No description provided for @weeklyGoalTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'Target: {duration}'**
+  String weeklyGoalTarget(String duration);
+
+  /// No description provided for @weeklyGoalActual.
+  ///
+  /// In en, this message translates to:
+  /// **'Studied: {duration}'**
+  String weeklyGoalActual(String duration);
+
+  /// No description provided for @weeklyGoalRemaining.
+  ///
+  /// In en, this message translates to:
+  /// **'Remaining: {duration}'**
+  String weeklyGoalRemaining(String duration);
+
+  /// No description provided for @weeklyGoalAchievement.
+  ///
+  /// In en, this message translates to:
+  /// **'Progress: {percent}'**
+  String weeklyGoalAchievement(String percent);
+
+  /// No description provided for @weeklyGoalLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load weekly goals.'**
+  String get weeklyGoalLoadFailed;
+
+  /// No description provided for @weeklyGoalSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the weekly goal. Try again.'**
+  String get weeklyGoalSaveFailed;
+
+  /// No description provided for @weeklyGoalOwnerChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account changed. Open the goal editor again.'**
+  String get weeklyGoalOwnerChanged;
+
+  /// No description provided for @weeklyGoalWeekChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'The week has changed. Open this week’s goal to edit it.'**
+  String get weeklyGoalWeekChanged;
+
+  /// No description provided for @weeklyGoalDateEarlier.
+  ///
+  /// In en, this message translates to:
+  /// **'The device date is before the latest saved week. Editing is available from that week onward.'**
+  String get weeklyGoalDateEarlier;
+
+  /// No description provided for @weeklyGoalCorrectDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Use corrected date'**
+  String get weeklyGoalCorrectDate;
+
+  /// No description provided for @weeklyGoalCorrectDateConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm that your device date is correct. This clears goal settings for later weeks on this device.'**
+  String get weeklyGoalCorrectDateConfirm;
 }
 
 class _AppLocalizationsDelegate

@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:study_peaks/l10n/app_localizations.dart';
 import 'package:study_peaks/models/study_history.dart';
 import 'package:study_peaks/models/study_session.dart';
+import 'package:study_peaks/models/weekly_study_goals.dart';
 import 'package:study_peaks/providers/auth_provider.dart';
 import 'package:study_peaks/repositories/study_history_repository.dart';
 import 'package:study_peaks/screens/study_history_screen.dart';
@@ -45,10 +46,15 @@ void main() {
   late _History repository;
   late DateTime today;
 
+  setUpAll(() => registerFallbackValue(DateTime.utc(2027)));
+
   setUp(() {
     auth = _Auth();
     repository = _History();
     today = DateTime(2027, 1, 1);
+    when(() => repository.observeWeeklyGoals(
+            today: any(named: 'today'), ownerId: any(named: 'ownerId')))
+        .thenAnswer((_) async => WeeklyStudyGoals({}));
   });
 
   tearDown(() => auth.dispose());
@@ -571,5 +577,187 @@ void main() {
     expect(find.text('学習日数 2日'), findsOneWidget);
     expect(find.text('この日の合計 1000時間0分21秒'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  for (final language in ['en', 'ja']) {
+    testWidgets('goals use the whole week and cap the progress bar ($language)',
+        (tester) async {
+      final ja = language == 'ja';
+      today = DateTime(2027, 1, 7);
+      final monday = DateTime.utc(2027, 1, 4);
+      query().thenAnswer((_) async => _history({monday: 23400}));
+      final changes = <DateTime, int?>{};
+      when(() => repository.observeWeeklyGoals(
+              today: any(named: 'today'), ownerId: StudySession.guestOwner))
+          .thenAnswer((_) async => WeeklyStudyGoals(Map.of(changes)));
+      when(() => repository.saveWeeklyGoal(
+            ownerId: StudySession.guestOwner,
+            today: today,
+            minutes: any(named: 'minutes'),
+          )).thenAnswer((call) async {
+        changes[monday] = call.namedArguments[#minutes] as int?;
+        return true;
+      });
+
+      await show(tester, language: language);
+      await tester.pumpAndSettle();
+      expect(find.text(ja ? '目標は未設定です' : 'No goal set'), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+
+      final field = find.byType(TextFormField);
+      final save = find.text(ja ? '目標を保存' : 'Save goal');
+      await tap(tester, find.text(ja ? '目標を設定' : 'Set goal'));
+      await tester.enterText(field, '16');
+      await tap(tester, save);
+      expect(field, findsOneWidget);
+      await tester.enterText(field, '600');
+      await tap(tester, save);
+
+      expect(
+          find.text(ja ? '目標 10時間0分0秒' : 'Target: 10h 0m 0s'), findsOneWidget);
+      expect(
+          find.text(ja ? '実績 6時間30分0秒' : 'Studied: 6h 30m 0s'), findsOneWidget);
+      expect(find.text(ja ? '残り 3時間30分0秒' : 'Remaining: 3h 30m 0s'),
+          findsOneWidget);
+      expect(find.text(ja ? '達成率 65%' : 'Progress: 65%'), findsOneWidget);
+      expect(
+        find.textContaining(ja ? '保存できませんでした' : 'Could not save'),
+        findsNothing,
+      );
+      final bar = find.byType(LinearProgressIndicator);
+      expect(tester.widget<LinearProgressIndicator>(bar).value, 0.65);
+
+      final edit = find.text(ja ? '目標を変更' : 'Edit goal');
+      await tap(tester, edit);
+      expect(tester.widget<TextFormField>(field).controller!.text, '600');
+      await tester.enterText(field, '300');
+      await tap(tester, save);
+      expect(find.text(ja ? '達成率 130%' : 'Progress: 130%'), findsOneWidget);
+      expect(find.text(ja ? '残り 0秒' : 'Remaining: 0s'), findsOneWidget);
+      expect(tester.widget<LinearProgressIndicator>(bar).value, 1.0);
+
+      await tap(tester, edit);
+      await tap(tester, find.text(ja ? '目標を解除' : 'Clear goal'));
+      expect(find.text(ja ? '目標は未設定です' : 'No goal set'), findsOneWidget);
+      expect(bar, findsNothing);
+      await tap(tester, find.text(ja ? 'カレンダー' : 'Calendar'));
+      expect(find.text(ja ? '学習日数 1日' : '1 study day'), findsOneWidget);
+    });
+  }
+
+  testWidgets('the new week inherits its goal and the prior week is read only',
+      (tester) async {
+    final earlierWeek = DateTime.utc(2026, 12, 28);
+    query().thenAnswer((_) async => _history({earlierWeek: 23400}));
+    when(() => repository.observeWeeklyGoals(
+            today: any(named: 'today'), ownerId: StudySession.guestOwner))
+        .thenAnswer((_) async => WeeklyStudyGoals({earlierWeek: 600}));
+    today = DateTime(2027, 1, 3, 23, 59);
+    await show(tester);
+    await tester.pumpAndSettle();
+    expect(find.text('Progress: 65%'), findsOneWidget);
+    await tap(tester, find.text('Edit goal'));
+
+    today = DateTime(2027, 1, 4);
+    await tester.pump(const Duration(minutes: 1));
+    await tester.enterText(find.byType(TextFormField), '300');
+    await tap(tester, find.text('Save goal'));
+    expect(find.textContaining('The week has changed'), findsOneWidget);
+    expect(find.text('Progress: 0%'), findsOneWidget);
+    verifyNever(() => repository.saveWeeklyGoal(
+          ownerId: any(named: 'ownerId'),
+          today: any(named: 'today'),
+          minutes: any(named: 'minutes'),
+        ));
+
+    await tap(tester, find.byTooltip('Previous period'));
+    expect(find.text('Progress: 65%'), findsOneWidget);
+    expect(find.text('Edit goal'), findsNothing);
+
+    when(() => repository.observeWeeklyGoals(
+          today: any(named: 'today'),
+          ownerId: StudySession.guestOwner,
+        )).thenAnswer((_) async => WeeklyStudyGoals({
+          DateTime.utc(2027, 1, 4): 600,
+          earlierWeek: 600,
+        }));
+    today = DateTime(2027, 1, 3);
+    await tester.pump(const Duration(minutes: 1));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('The device date is before'), findsOneWidget);
+    expect(find.text('Progress: 65%'), findsOneWidget);
+    expect(find.text('Edit goal'), findsNothing);
+  });
+
+  testWidgets('switching owners hides the previous goal and its open editor',
+      (tester) async {
+    final guestGoals = Completer<WeeklyStudyGoals>();
+    query().thenAnswer((_) async => _history());
+    when(() => repository.observeWeeklyGoals(
+        today: any(named: 'today'),
+        ownerId: StudySession.guestOwner)).thenAnswer((_) => guestGoals.future);
+    when(() => repository.observeWeeklyGoals(
+            today: any(named: 'today'), ownerId: 'user:account'))
+        .thenAnswer(
+            (_) async => WeeklyStudyGoals({DateTime.utc(2026, 12, 28): 120}));
+    await show(tester);
+    await tester.pump();
+    verify(() => repository.observeWeeklyGoals(
+          ownerId: StudySession.guestOwner,
+          today: DateTime.utc(2026, 12, 28),
+        )).called(1);
+    auth.changeUser('account');
+    await tester.pumpAndSettle();
+    expect(find.text('Target: 2h 0m 0s'), findsOneWidget);
+    guestGoals.complete(WeeklyStudyGoals({DateTime.utc(2026, 12, 28): 600}));
+    await tester.pumpAndSettle();
+    expect(find.text('Target: 10h 0m 0s'), findsNothing);
+
+    await tap(tester, find.text('Edit goal'));
+    expect(find.byType(TextFormField), findsOneWidget);
+    auth.changeUser('different-account');
+    await tester.pumpAndSettle();
+    expect(find.byType(TextFormField), findsNothing);
+    expect(find.textContaining('Your account changed'), findsOneWidget);
+    await tap(tester, find.text('Close'));
+    expect(find.text('No goal set'), findsOneWidget);
+    expect(find.text('Target: 2h 0m 0s'), findsNothing);
+  });
+
+  testWidgets('a multi-week clock correction requires confirmation',
+      (tester) async {
+    final current = DateTime.utc(2026, 12, 28);
+    final future = DateTime.utc(2030, 1, 7);
+    final goals = {current: 600, future: 900};
+    query().thenAnswer((_) async => _history());
+    when(() => repository.observeWeeklyGoals(
+          ownerId: StudySession.guestOwner,
+          today: current,
+        )).thenAnswer((_) async => WeeklyStudyGoals(goals));
+    when(() => repository.correctWeeklyGoalDate(
+          ownerId: StudySession.guestOwner,
+          today: today,
+          expectedLatestWeek: future,
+        )).thenAnswer((_) async {
+      goals.remove(future);
+      return true;
+    });
+
+    await show(tester);
+    await tester.pumpAndSettle();
+    final correction = find.text('Use corrected date');
+    await tap(tester, correction);
+    await tap(tester, find.text('Close'));
+    expect(find.text('Edit goal'), findsNothing);
+
+    await tap(tester, correction);
+    final confirm = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(FilledButton),
+    );
+    await tap(tester, confirm);
+    expect(find.text('Edit goal'), findsOneWidget);
+    expect(find.text('Target: 10h 0m 0s'), findsOneWidget);
+    expect(correction, findsNothing);
   });
 }

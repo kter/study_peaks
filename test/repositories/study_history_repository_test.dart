@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:study_peaks/models/study_history.dart';
 import 'package:study_peaks/models/study_session.dart';
+import 'package:study_peaks/models/weekly_study_goals.dart';
 import 'package:study_peaks/repositories/study_history_repository.dart';
 
 void main() {
@@ -155,6 +156,186 @@ void main() {
     expect(await repository.getTotalStudyTime(ownerId: owner), 0);
   });
 
+  Future<WeeklyStudyGoals> loadGoals(DateTime today, [String user = owner]) =>
+      repository.observeWeeklyGoals(ownerId: user, today: today);
+
+  test('weekly goals carry forward, preserve earlier weeks and isolate owners',
+      () async {
+    final firstMonday = DateTime(2026, 12, 28);
+    final thursday = DateTime(2026, 12, 31);
+    final sunday = DateTime(2027, 1, 3);
+    final nextMonday = DateTime(2027, 1, 4);
+    final thirdMonday = DateTime(2027, 1, 11);
+    final fourthMonday = DateTime(2027, 1, 18);
+    final fifthMonday = DateTime(2027, 1, 25);
+    final earlierSunday = DateTime(2026, 12, 27);
+
+    expect((await loadGoals(thursday)).minutesInWeek(thursday), isNull);
+    await repository.saveWeeklyGoal(
+        ownerId: owner, today: thursday, minutes: 600);
+    expect((await loadGoals(thursday)).minutesInWeek(firstMonday), 600);
+    await repository.saveWeeklyGoal(
+        ownerId: owner, today: sunday, minutes: 615);
+    final goals = await loadGoals(nextMonday);
+    expect(goals.minutesInWeek(earlierSunday), isNull);
+    expect(goals.minutesInWeek(firstMonday), 615);
+    expect(goals.minutesInWeek(nextMonday), 615);
+
+    await repository.saveWeeklyGoal(
+        ownerId: owner, today: thirdMonday, minutes: 300);
+    await repository.saveWeeklyGoal(
+        ownerId: owner, today: fourthMonday, minutes: null);
+    await repository.saveWeeklyGoal(
+        ownerId: 'user:A', today: thirdMonday, minutes: 60);
+    await repository.saveWeeklyGoal(
+        ownerId: 'user:B', today: thirdMonday, minutes: 120);
+    final updated = await loadGoals(fourthMonday);
+    expect(updated.minutesInWeek(sunday), 615);
+    expect(updated.minutesInWeek(nextMonday), 615);
+    expect(updated.minutesInWeek(thirdMonday), 300);
+    expect(updated.minutesInWeek(fourthMonday), isNull);
+    expect(updated.minutesInWeek(fifthMonday), isNull);
+    expect((await loadGoals(thirdMonday, 'user:A')).minutesInWeek(thirdMonday),
+        60);
+    expect((await loadGoals(thirdMonday, 'user:B')).minutesInWeek(thirdMonday),
+        120);
+  });
+
+  test('rejects invalid weekly goals without overwriting the saved goal',
+      () async {
+    final today = DateTime(2027, 1, 1);
+    await repository.saveWeeklyGoal(
+        ownerId: owner, today: today, minutes: 10080);
+    for (final invalid in [-15, 0, 14, 16, 10095]) {
+      await expectLater(
+        repository.saveWeeklyGoal(
+            ownerId: owner, today: today, minutes: invalid),
+        throwsArgumentError,
+      );
+    }
+    await expectLater(
+      repository.saveWeeklyGoal(
+          ownerId: StudySession.legacyOwner, today: today, minutes: 15),
+      throwsArgumentError,
+    );
+    expect((await loadGoals(today)).minutesInWeek(today), 10080);
+  });
+
+  test('a week stays read-only after the device date moves backward', () async {
+    final sunday = DateTime(2027, 1, 3);
+    final monday = DateTime(2027, 1, 4);
+    await repository.saveWeeklyGoal(
+        ownerId: owner, today: sunday, minutes: 600);
+    final nextWeek = await loadGoals(monday);
+    expect(nextWeek.latestObservedWeek, civilDate(monday));
+    expect(nextWeek.minutesInWeek(monday), 600);
+
+    for (final minutes in [300, null]) {
+      expect(
+          await repository.saveWeeklyGoal(
+              ownerId: owner, today: sunday, minutes: minutes),
+          isFalse);
+    }
+    final rollback = await loadGoals(sunday);
+    expect(rollback.latestObservedWeek, civilDate(monday));
+    expect(rollback.minutesInWeek(sunday), 600);
+    expect(rollback.minutesInWeek(monday), 600);
+    expect(
+        await repository.saveWeeklyGoal(
+            ownerId: 'user:A', today: sunday, minutes: 300),
+        isTrue);
+    expect(
+        await repository.saveWeeklyGoal(
+            ownerId: owner, today: monday, minutes: null),
+        isTrue);
+    final corrected = await loadGoals(monday);
+    expect(corrected.minutesInWeek(sunday), 600);
+    expect(corrected.minutesInWeek(monday), isNull);
+    expect(
+        await repository.correctWeeklyGoalDate(
+          ownerId: owner,
+          today: sunday,
+          expectedLatestWeek: civilDate(monday),
+        ),
+        isFalse);
+  });
+
+  test('clock correction removes only future goal settings for that owner',
+      () async {
+    final past = DateTime.utc(2026, 12, 21);
+    final realToday = DateTime.utc(2026, 12, 30);
+    final wrongDate = DateTime.utc(2027, 1, 4);
+    await repository.saveWeeklyGoal(ownerId: owner, today: past, minutes: 600);
+    await loadGoals(wrongDate);
+    await repository.saveWeeklyGoal(
+        ownerId: owner, today: wrongDate, minutes: 900);
+    await repository.saveWeeklyGoal(
+        ownerId: 'user:A', today: wrongDate, minutes: 300);
+    expect(
+        await repository.correctWeeklyGoalDate(
+          ownerId: owner,
+          today: realToday,
+          expectedLatestWeek: DateTime.utc(2027, 1, 11),
+        ),
+        isFalse);
+    expect(
+        await repository.correctWeeklyGoalDate(
+          ownerId: owner,
+          today: realToday,
+          expectedLatestWeek: wrongDate,
+        ),
+        isTrue);
+    final corrected = await loadGoals(realToday);
+    expect(corrected.latestObservedWeek, DateTime.utc(2026, 12, 28));
+    expect(corrected.minutesInWeek(realToday), 600);
+    expect(
+        await repository.saveWeeklyGoal(
+            ownerId: owner, today: realToday, minutes: 120),
+        isTrue);
+    final goals = await loadGoals(wrongDate);
+    expect(goals.minutesInWeek(past), 600);
+    expect(goals.minutesInWeek(wrongDate), 120);
+    expect(
+        (await loadGoals(wrongDate, 'user:A')).minutesInWeek(wrongDate), 300);
+  });
+
+  test('v2 upgrade preserves study records and goals survive reopening',
+      () async {
+    final path = '${await getDatabasesPath()}/weekly-goal-migration.db';
+    await deleteDatabase(path);
+    addTearDown(() => deleteDatabase(path));
+    final old = await openDatabase(path, version: 2, onCreate: (d, _) async {
+      await d.execute('''CREATE TABLE study_sessions(
+        id INTEGER PRIMARY KEY AUTOINCREMENT, room_id TEXT NOT NULL,
+        start_time TEXT NOT NULL, duration_seconds INTEGER NOT NULL,
+        session_id TEXT NOT NULL, owner_id TEXT NOT NULL, focus_intervals TEXT,
+        UNIQUE(owner_id, session_id))''');
+    });
+    await old.insert(
+        'study_sessions',
+        record('existing', '2026-12-28T10:00:00Z', '2026-12-28T16:30:00Z')
+            .toMap());
+    await old.close();
+    await db.close();
+
+    db = await StudyHistoryRepository.open(path);
+    repository = StudyHistoryRepository.withDatabase(db);
+    final today = DateTime(2026, 12, 31);
+    expect(await repository.getTotalStudyTime(ownerId: owner), 23400);
+    expect((await loadGoals(today)).minutesInWeek(today), isNull);
+    await repository.saveWeeklyGoal(ownerId: owner, today: today, minutes: 600);
+    await repository.saveWeeklyGoal(
+        ownerId: owner, today: DateTime(2027, 1, 4), minutes: null);
+    await db.close();
+
+    db = await StudyHistoryRepository.open(path);
+    repository = StudyHistoryRepository.withDatabase(db);
+    final goals = await loadGoals(DateTime(2027, 1, 4));
+    expect(goals.minutesInWeek(today), 600);
+    expect(goals.minutesInWeek(DateTime(2027, 1, 4)), isNull);
+    expect(await repository.getTotalStudyTime(ownerId: owner), 23400);
+  });
+
   test('v1 migration retains rows, unknown ownership and start-day allocation',
       () async {
     await db.close();
@@ -183,6 +364,13 @@ void main() {
     expect(
         await repository.getTotalStudyTime(ownerId: StudySession.legacyOwner),
         1800);
+    final today = DateTime(2027, 1, 1);
+    expect((await loadGoals(today)).minutesInWeek(today), isNull);
+    expect(
+        await repository.saveWeeklyGoal(
+            ownerId: owner, today: today, minutes: 15),
+        isTrue);
+    expect((await loadGoals(today)).minutesInWeek(today), 15);
     addTearDown(() => deleteDatabase(path));
   });
 }
