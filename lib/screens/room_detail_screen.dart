@@ -59,15 +59,18 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       // Try to restore session from seat map if user is found
       await _restoreSessionFromSeatMapIfNeeded();
       
-      // If already seated (or just restored), ensure timer is running and synced
+      // If seated but the timer is not bound to this session yet (no saved
+      // timer state was restored), start it from the server-side duration.
+      // A timer already bound to the session is left as is, so a stopped or
+      // finished-phase timer is not restarted behind the user's back.
       if (mounted) {
         final session = context.read<SessionProvider>();
         final timer = context.read<TimerProvider>();
-        if (session.isSeated && !timer.isRunning) {
-          if (session.currentDuration > 0) {
+        if (session.isSeated && timer.sessionId != session.sessionId) {
+          if (!timer.isRunning && session.currentDuration > 0) {
             timer.setInitialDuration(Duration(seconds: session.currentDuration));
           }
-          timer.start();
+          timer.start(sessionId: session.sessionId);
         }
       }
       
@@ -102,13 +105,20 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     );
     
     if (restored && mounted) {
-      // Start timer if session was restored
+      // Restore the saved timer for this session; otherwise start it from
+      // the server-side session duration.
       final timer = context.read<TimerProvider>();
-      final session = context.read<SessionProvider>();
-      if (session.currentDuration > 0) {
-        timer.setInitialDuration(Duration(seconds: session.currentDuration));
+      final timerRestored = await timer.restoreState(
+        sessionId: sessionProvider.sessionId,
+      );
+      if (!mounted) return;
+      if (!timerRestored) {
+        if (sessionProvider.currentDuration > 0) {
+          timer.setInitialDuration(
+              Duration(seconds: sessionProvider.currentDuration));
+        }
+        timer.start(sessionId: sessionProvider.sessionId);
       }
-      timer.start();
       
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -275,7 +285,11 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       actions: [
         IconButton(
           icon: Icon(Icons.info_outline, color: Theme.of(context).appBarTheme.foregroundColor),
-          onPressed: () => showRoomInfoDialog(context: context, room: widget.room),
+          onPressed: () => showRoomInfoDialog(
+            context: context,
+            room: context.read<RoomProvider>().getRoom(widget.room.roomId) ??
+                widget.room,
+          ),
         ),
       ],
     );
@@ -430,7 +444,9 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
         ),
       );
       // Start timer when sitting down
-      context.read<TimerProvider>().start();
+      context.read<TimerProvider>().start(
+        sessionId: context.read<SessionProvider>().sessionId,
+      );
       final userSettings = context.read<UserSettingsProvider>();
       context.read<RoomProvider>().updateSeatOccupancy(
             roomId: widget.room.roomId,
@@ -465,8 +481,8 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('You have left your seat.')),
       );
-      // Reset timer when leaving (this also releases lock task if active)
-      context.read<TimerProvider>().reset();
+      // End the timer's session when leaving (also releases lock task)
+      context.read<TimerProvider>().endSession();
       if (seatNumber != null) {
         context.read<RoomProvider>().clearSeatOccupancy(
               widget.room.roomId,

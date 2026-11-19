@@ -23,6 +23,34 @@ void main() {
       expect(provider.error, isNull);
     });
 
+    test('fetchSeats failure does not set roomsError', () async {
+      when(() => mockApiService.getRoomSeats('fuji'))
+          .thenThrow(Exception('seat refresh failed'));
+
+      await provider.fetchSeats('fuji');
+
+      expect(provider.error, contains('seat refresh failed'));
+      expect(provider.roomsError, isNull);
+    });
+
+    test('only fetchRooms sets and clears roomsError', () async {
+      when(() => mockApiService.getRooms())
+          .thenThrow(Exception('room fetch failed'));
+      await provider.fetchRooms();
+      expect(provider.roomsError, contains('room fetch failed'));
+
+      when(() => mockApiService.getRoomSeats('fuji'))
+          .thenAnswer((_) async => []);
+      await provider.fetchSeats('fuji');
+      expect(provider.error, isNull);
+      expect(provider.roomsError, contains('room fetch failed'));
+
+      when(() => mockApiService.getRooms()).thenAnswer((_) async => mockRooms);
+      await provider.fetchRooms();
+      expect(provider.roomsError, isNull);
+      expect(provider.error, isNull);
+    });
+
     test('fetchRooms sets isLoading while fetching', () async {
       // Setup mock to delay response
       when(() => mockApiService.getRooms()).thenAnswer(
@@ -95,6 +123,43 @@ void main() {
       expect(room.name, 'Test Room');
       expect(room.capacity, 50);
       expect(room.currentOccupancy, 25);
+    });
+
+    group('occupancy sync', () {
+      setUp(() async {
+        when(() => mockApiService.getRooms())
+            .thenAnswer((_) async => mockRooms);
+        await provider.fetchRooms();
+      });
+
+      test('fetchSeats updates the room occupancy to the occupied seat count',
+          () async {
+        when(() => mockApiService.getRoomSeats('fuji')).thenAnswer(
+          (_) async => [mockOccupiedSeat, mockEmptySeat],
+        );
+
+        await provider.fetchSeats('fuji');
+
+        expect(provider.getRoom('fuji')!.currentOccupancy, 1);
+        expect(provider.getRoom('everest')!.currentOccupancy, 42);
+      });
+
+      test('clearSeatOccupancy decrements the room occupancy', () async {
+        when(() => mockApiService.getRoomSeats('fuji')).thenAnswer(
+          (_) async => [mockOccupiedSeat, mockEmptySeat],
+        );
+        await provider.fetchSeats('fuji');
+
+        provider.clearSeatOccupancy('fuji', mockOccupiedSeat.seatNumber);
+
+        expect(provider.getRoom('fuji')!.currentOccupancy, 0);
+        expect(provider.rooms.firstWhere((r) => r.roomId == 'fuji')
+            .currentOccupancy, 0);
+      });
+
+      test('getRoom returns null for unknown rooms', () {
+        expect(provider.getRoom('unknown'), isNull);
+      });
     });
   });
 }

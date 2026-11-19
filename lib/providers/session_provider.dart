@@ -8,6 +8,7 @@ import '../services/notification_service.dart';
 import '../models/study_session.dart';
 import '../repositories/study_history_repository.dart';
 import 'auth_provider.dart';
+import 'timer_provider.dart';
 import 'user_settings_provider.dart';
 
 /// Session state.
@@ -71,11 +72,11 @@ class SessionProvider extends ChangeNotifier {
 
   /// Ensure API has valid auth token
   Future<void> _ensureAuthToken() async {
-    if (_authProvider != null) {
-      final token = await _authProvider!.getIdToken();
-      if (token != null) {
-        _apiService.setAuthToken(token);
-      }
+    final token = await _authProvider?.getIdToken();
+    if (token != null) {
+      _apiService.setAuthToken(token);
+    } else {
+      _apiService.clearAuthToken();
     }
   }
 
@@ -459,6 +460,7 @@ class SessionProvider extends ChangeNotifier {
       await prefs.remove(_keyRoomName);
       await prefs.remove(_keySeatNumber);
       await prefs.remove(_keySessionStartedAt);
+      await TimerProvider.clearPersistedState();
       debugPrint('📦 Persisted session cleared');
     } catch (e) {
       debugPrint('📦 Failed to clear persisted session: $e');

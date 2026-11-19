@@ -270,9 +270,7 @@ func getSeatsHandler(w http.ResponseWriter, r *http.Request) {
 			IsOccupied: data["isOccupied"].(bool),
 		}
 
-		if val, ok := data["sessionStartedAt"]; ok {
-			seat.SessionStartedAt = val.(time.Time)
-		}
+		seat.SessionStartedAt = getTime(data, "sessionStartedAt")
 
 		if seat.IsOccupied {
 			seat.User = &UserInfo{
@@ -493,14 +491,8 @@ func getSessionHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var sessionStartedAt time.Time
-	if val, ok := data["sessionStartedAt"]; ok {
-		sessionStartedAt = val.(time.Time)
-	}
-	var lastSyncAt time.Time
-	if val, ok := data["lastSyncAt"]; ok {
-		lastSyncAt = val.(time.Time)
-	}
+	sessionStartedAt := getTime(data, "sessionStartedAt")
+	lastSyncAt := getTime(data, "lastSyncAt")
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -590,6 +582,17 @@ func getString(data map[string]interface{}, key string) string {
 		}
 	}
 	return ""
+}
+
+// getTime returns the time value for key, or the zero time when the field is
+// missing, null, or not a timestamp (e.g. seeded empty seats).
+func getTime(data map[string]interface{}, key string) time.Time {
+	if v, ok := data[key]; ok {
+		if t, ok := v.(time.Time); ok {
+			return t
+		}
+	}
+	return time.Time{}
 }
 
 func getInt(data map[string]interface{}, key string) int {

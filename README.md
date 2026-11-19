@@ -24,22 +24,47 @@ make api-tidy
 ### 2. ローカル開発
 
 ```bash
-# Flutterアプリを実行
+# Flutterアプリ（開発版）を実行
 make flutter-run
 
 # APIをローカルで実行
 make api-run
 ```
 
+### 3. Androidの開発・本番環境の切り替え
+
+`dev` は開発用APIとFirebaseプロジェクト `studypeaks-dev`、`prd` は本番用APIとFirebaseプロジェクト `studypeaks-prd` に接続します。各FirebaseプロジェクトのAndroid設定ファイルを次の場所に配置してください（Git管理対象外）。
+
+| flavor | applicationId | Firebase設定ファイル |
+| --- | --- | --- |
+| `dev` | `com.studypeaks.app.dev` | `android/app/src/dev/google-services.json` |
+| `prd` | `com.studypeaks.app` | `android/app/src/prd/google-services.json` |
+
+設定ファイルは各applicationIdに対応するものを使ってください。開発版は「Study Peaks Dev」と表示され、本番版と同時にインストールできます。
+
+```bash
+make flutter-run           # 開発版（flutter-run-devの別名）
+make flutter-run-dev       # flutter run --flavor dev
+make flutter-run-prd       # flutter run --flavor prd
+make flutter-build-apk-dev # 開発版のdebug APK
+make flutter-build-apk     # 本番版のrelease APK
+make flutter-build-aab     # 本番版のrelease App Bundle
+```
+
+Flutterコマンドを直接実行する場合も、`--flavor dev` または `--flavor prd` を指定してください。
+
 ## デプロイ
 
 ### ⚠️ 重要: APIデプロイについて
 
-APIのデプロイは**必ず `make api-deploy` を使用**してください。
+APIのデプロイは**必ず `make api-deploy`（本番）または `make api-deploy-dev`（開発）を使用**してください。
 
 ```bash
 # 本番環境へデプロイ（ビルド + プッシュ + Terraform適用）
 make api-deploy
+
+# 開発環境へデプロイ（ビルド + プッシュ + Terraform適用）
+make api-deploy-dev
 ```
 
 **注意**: `terraform apply` を単独で実行しないでください。APIイメージのタグは `Makefile` で一元管理されています。

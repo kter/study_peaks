@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -7,8 +9,10 @@ import '../config/app_config.dart';
 
 /// Provider for Firebase Authentication state management.
 class AuthProvider extends ChangeNotifier {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final FirebaseAuth _auth;
+  final GoogleSignIn _googleSignIn;
+  Future<void>? _googleSignInInitialization;
+  late final StreamSubscription<User?> _authSubscription;
 
   User? _user;
   bool _isLoading = false;
@@ -23,9 +27,11 @@ class AuthProvider extends ChangeNotifier {
   String? get photoUrl => _user?.photoURL;
   String get userId => _user?.uid ?? '';
 
-  AuthProvider() {
+  AuthProvider({FirebaseAuth? auth, GoogleSignIn? googleSignIn})
+      : _auth = auth ?? FirebaseAuth.instance,
+        _googleSignIn = googleSignIn ?? GoogleSignIn.instance {
     // Listen to auth state changes
-    _auth.authStateChanges().listen((User? user) {
+    _authSubscription = _auth.authStateChanges().listen((User? user) {
       _user = user;
       notifyListeners();
     });
@@ -36,41 +42,63 @@ class AuthProvider extends ChangeNotifier {
     try {
       _setLoading(true);
 
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) {
-        _setLoading(false);
-        return false; // User cancelled
-      }
-
-      final GoogleSignInAuthentication googleAuth = 
-          await googleUser.authentication;
-
+      await _initializeGoogleSignIn();
+      final googleUser = await _googleSignIn.authenticate();
+      final googleAuth = googleUser.authentication;
       final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      await _auth.signInWithCredential(credential);
-      
+      await _auth
+          .signInWithCredential(credential)
+          .timeout(AppConfig.signInTimeout);
       _setLoading(false);
       return true;
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) {
+        _setLoading(false);
+        return false;
+      }
+      _handleError(e);
+      return false;
     } catch (e) {
       _handleError(e);
       return false;
     }
   }
 
+  /// Initialize GoogleSignIn once. A failed initialization is not cached, so
+  /// the next sign-in attempt can retry it.
+  Future<void> _initializeGoogleSignIn() =>
+      _googleSignInInitialization ??= _googleSignIn.initialize().catchError(
+        (Object e) {
+          _googleSignInInitialization = null;
+          throw e;
+        },
+      );
+
+  @override
+  void dispose() {
+    _authSubscription.cancel();
+    super.dispose();
+  }
+
   /// Sign out
   Future<void> signOut() async {
+    _setLoading(true);
     try {
-      _setLoading(true);
+      try {
+        await _initializeGoogleSignIn();
+        await _googleSignIn.signOut();
+      } catch (e) {
+        debugPrint('Google sign-out failed: $e');
+      }
 
-      await _googleSignIn.signOut();
       await _auth.signOut();
-
-      _setLoading(false);
     } catch (e) {
       _handleError(e);
+    } finally {
+      _setLoading(false);
     }
   }
 
@@ -91,7 +119,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   /// Get ID token for API calls with automatic retry on network errors.
-  /// 
+  ///
   /// Uses [RetryHelper] to handle transient network issues.
   Future<String?> getIdToken({bool forceRefresh = false}) async {
     if (_user == null) return null;

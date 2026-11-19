@@ -52,6 +52,19 @@ android {
         multiDexEnabled = true
     }
 
+    flavorDimensions += "env"
+    productFlavors {
+        create("dev") {
+            dimension = "env"
+            applicationIdSuffix = ".dev"
+            resValue("string", "app_name", "Study Peaks Dev")
+        }
+        create("prd") {
+            dimension = "env"
+            resValue("string", "app_name", "Study Peaks")
+        }
+    }
+
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")

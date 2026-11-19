@@ -12,13 +12,19 @@ class ApiService {
   String? _authToken;
 
   ApiService({
-    this.baseUrl = AppConfig.apiBaseUrl,
+    String? baseUrl,
     http.Client? client,
-  }) : _client = client ?? http.Client();
+  }) : baseUrl = baseUrl ?? AppConfig.apiBaseUrl,
+       _client = client ?? http.Client();
 
   /// Set the authentication token for API requests.
   void setAuthToken(String token) {
     _authToken = token;
+  }
+
+  /// Clear the authentication token for guest API requests.
+  void clearAuthToken() {
+    _authToken = null;
   }
 
   Map<String, String> get _headers => {
@@ -26,29 +32,27 @@ class ApiService {
         if (_authToken != null) 'Authorization': 'Bearer $_authToken',
       };
 
-  /// Retry configuration
-  /// Extended delays to handle network recovery after device sleep
-  static const int _maxRetries = 5;
-  static const List<Duration> _retryDelays = [
-    Duration(seconds: 1),
-    Duration(seconds: 2),
-    Duration(seconds: 4),
-    Duration(seconds: 8),
-    Duration(seconds: 16),
-  ];
-
   /// Execute a request with automatic retry on network errors.
-  /// 
-  /// Will retry up to [_maxRetries] times with exponential backoff.
+  ///
+  /// By default, makes up to 3 attempts, each limited to 8 seconds, with
+  /// 1 and 2 second delays between attempts (27 seconds for hung requests).
   /// Only retries on network-related errors (DNS, timeout, connection issues).
-  Future<T> _withRetry<T>(Future<T> Function() request) async {
+  Future<T> _withRetry<T>(
+    Future<T> Function() request, {
+    bool retryOnTimeout = true,
+    Duration? timeout,
+  }) async {
     Object? lastError;
     
-    for (var attempt = 0; attempt < _maxRetries; attempt++) {
+    for (var attempt = 0; attempt < AppConfig.apiMaxAttempts; attempt++) {
       try {
-        return await request();
+        return await request().timeout(timeout ?? AppConfig.apiRequestTimeout);
       } catch (e) {
         lastError = e;
+        // A timed-out mutation may still complete on the server.
+        if (e is TimeoutException && !retryOnTimeout) {
+          throw NetworkException('Request timed out', e);
+        }
         
         // Only retry on network errors
         if (!isNetworkError(e)) {
@@ -56,15 +60,15 @@ class ApiService {
         }
         
         // Don't delay after the last attempt
-        if (attempt < _maxRetries - 1) {
-          await Future.delayed(_retryDelays[attempt]);
+        if (attempt < AppConfig.apiMaxAttempts - 1) {
+          await Future.delayed(AppConfig.apiRetryDelays[attempt]);
         }
       }
     }
     
     // All retries exhausted, throw NetworkException
     throw NetworkException(
-      'Connection failed after $_maxRetries attempts',
+      'Connection failed after ${AppConfig.apiMaxAttempts} attempts',
       lastError,
     );
   }
@@ -136,7 +140,7 @@ class ApiService {
         return SitResponse.fromJson(data);
       }
       throw ApiException('Failed to sit', response.statusCode);
-    });
+    }, retryOnTimeout: false, timeout: AppConfig.apiMutationTimeout);
   }
 
   /// Sync session (called every 5 minutes).
@@ -187,26 +191,29 @@ class ApiService {
         return LeaveResponse.fromJson(data);
       }
       throw ApiException('Failed to leave', response.statusCode);
-    });
+    }, retryOnTimeout: false, timeout: AppConfig.apiMutationTimeout);
   }
 
   /// Get session info to validate if a session is still active.
   /// Returns null if the session is not found or expired.
   Future<SessionInfo?> getSession(String roomId, String sessionId) async {
     try {
-      final response = await _client.get(
-        Uri.parse('$baseUrl/rooms/$roomId/sessions/$sessionId'),
-        headers: _headers,
-      );
+      return await _withRetry(() async {
+        final response = await _client.get(
+          Uri.parse('$baseUrl/rooms/$roomId/sessions/$sessionId'),
+          headers: _headers,
+        );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        return SessionInfo.fromJson(data);
-      }
-      // Session not found or expired
-      return null;
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          return SessionInfo.fromJson(data);
+        }
+        // Session not found or expired
+        return null;
+      });
     } catch (e) {
-      // Network error or other issues - treat as session not found
+      // Network error (after retries/timeouts) or other issues - treat as
+      // session not found, as callers expect.
       return null;
     }
   }

@@ -91,6 +91,12 @@ class AppLocalizationsEn extends AppLocalizations {
       'Unable to connect to the internet. Please check your connection.';
 
   @override
+  String get retry => 'Retry';
+
+  @override
+  String get loadRoomsFailed => 'Couldn\'t load rooms.';
+
+  @override
   String get connectionRestored => 'Connection restored';
 
   @override

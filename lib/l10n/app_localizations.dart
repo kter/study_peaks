@@ -254,6 +254,18 @@ abstract class AppLocalizations {
   /// **'Unable to connect to the internet. Please check your connection.'**
   String get networkError;
 
+  /// Button to retry a failed request
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get retry;
+
+  /// Generic error message when the room list cannot be loaded
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load rooms.'**
+  String get loadRoomsFailed;
+
   /// No description provided for @connectionRestored.
   ///
   /// In en, this message translates to:

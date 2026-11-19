@@ -89,6 +89,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get networkError => 'インターネットに接続できません。接続状況をご確認ください。';
 
   @override
+  String get retry => '再試行';
+
+  @override
+  String get loadRoomsFailed => 'ルームを読み込めませんでした。';
+
+  @override
   String get connectionRestored => '接続が復元されました';
 
   @override

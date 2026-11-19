@@ -49,6 +49,18 @@ class _RoomListScreenState extends State<RoomListScreen> {
       // Try to restore session if foreground service is running
       final restored = await sessionProvider.restoreSessionIfNeeded();
       if (restored && mounted) {
+        final timerProvider = context.read<TimerProvider>();
+        final sessionId = sessionProvider.sessionId;
+        final timerRestored =
+            await timerProvider.restoreState(sessionId: sessionId);
+        if (!mounted) return;
+        if (!timerRestored) {
+          if (sessionProvider.currentDuration > 0) {
+            timerProvider.setInitialDuration(
+                Duration(seconds: sessionProvider.currentDuration));
+          }
+          timerProvider.start(sessionId: sessionId);
+        }
         // Find the room the user was in and navigate to it
         final roomId = sessionProvider.currentRoomId;
         if (roomId != null) {
@@ -148,7 +160,37 @@ class _RoomListScreenState extends State<RoomListScreen> {
             onRefresh: provider.fetchRooms,
             color: Theme.of(context).colorScheme.primary,
             child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
+                if (provider.roomsError != null)
+                  SliverToBoxAdapter(
+                    child: Card(
+                      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              provider.roomsError == NetworkErrorKey.networkError
+                                  ? AppLocalizations.of(context)!.networkError
+                                  : AppLocalizations.of(context)!.loadRoomsFailed,
+                              style: TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme.onErrorContainer,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            TextButton(
+                              onPressed: provider.fetchRooms,
+                              child: Text(AppLocalizations.of(context)!.retry),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 // Header
                 SliverToBoxAdapter(
                   child: Padding(
