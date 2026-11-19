@@ -53,6 +53,7 @@
   },
   "connectionRestored": "Connection restored",
   "seatTaken": "This seat was just taken. Please select another.",
+  "sessionRestoredFromSeatMap": "Session restored from seat map",
   "notificationStudyingAt": "Studying at {roomName}",
   "@notificationStudyingAt": {
     "placeholders": {

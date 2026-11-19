@@ -207,6 +207,7 @@ class _StudyHistoryChartState extends State<StudyHistoryChart> {
 
   // Fit three evenly spaced ticks. Keep their units exact at every scale.
   static int _axisStep(int maxSeconds) {
+    if (maxSeconds == 0) return 1200;
     const steps = [
       5,
       10,

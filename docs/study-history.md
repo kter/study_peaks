@@ -25,7 +25,6 @@ Every query requires an explicit `ownerId`; no unfiltered history query is expos
 | Method | Result |
 | --- | --- |
 | `getDailyTotals(ownerId, start, end)` | Daily seconds, inclusive start and exclusive end |
-| `getDailyStudyTime(ownerId, days, now)` | Trailing days including today, default seven |
 | `getTodayStudyTime(ownerId, now)` | Today's completed seconds |
 | `getWeek(ownerId, containing)` | Monday through Sunday containing the date |
 | `getMonth(ownerId, containing)` | All dates of the specified month |
@@ -60,7 +59,7 @@ Each week runs from Monday through Sunday. Setting a goal midweek includes all c
 
 The dashboard uses the same completed seconds for totals, the graph, and goal progress. Remaining time is floored at zero. The percentage is rounded down to a whole percent and can exceed 100%. The bar fills at 100%. For example, 6 hours and 30 minutes toward a 10-hour goal yields 65% and leaves 3 hours and 30 minutes.
 
-The device's civil date determines the current week. When a new week is seen in the dashboard, its inherited goal is saved under the owner and the Monday date label. A null value represents an unset goal. Weeks between stored Mondays keep the last applicable goal. If the device date moves back and the latest observed week starts within the next 26 hours, editing waits until that week. This covers timezone shifts between UTC−12 and UTC+14. For larger clock corrections, **Use corrected date** lets the owner discard goal settings for weeks after the corrected current week. The confirmation restores editing while preserving earlier goals and all study records. Allocated study dates keep their recorded offsets, as described above.
+The device's civil date determines the current week. When the Week graph is shown in a new current week, its inherited goal is saved under the owner and the Monday date label. A null value represents an unset goal. Weeks between stored Mondays keep the last applicable goal. If the device date moves back and the latest observed week starts within the next 26 hours, editing waits until that week. This covers timezone shifts between UTC−12 and UTC+14. For larger clock corrections, **Use corrected date** lets the owner discard goal settings for weeks after the corrected current week. The confirmation restores editing while preserving earlier goals and all study records. Allocated study dates keep their recorded offsets, as described above.
 
 ## Recovery and finalization
 

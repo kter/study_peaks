@@ -112,7 +112,7 @@ class _StudyHistoryCalendarState extends State<StudyHistoryCalendar> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          l10n.historyStudyDays(days.values.where((s) => s > 0).length),
+          l10n.historyStudyDays(widget.history.studyDaysIn(widget.month)),
           style: theme.textTheme.titleMedium,
           textAlign: TextAlign.center,
         ),

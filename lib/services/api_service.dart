@@ -3,7 +3,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/app_config.dart';
 import '../models/models.dart';
+import 'api_exception.dart';
 import 'network_exception.dart';
+
+export 'api_exception.dart';
 
 /// API service for communicating with the Study Peaks backend.
 class ApiService {
@@ -221,16 +224,6 @@ class ApiService {
   void dispose() {
     _client.close();
   }
-}
-
-class ApiException implements Exception {
-  final String message;
-  final int statusCode;
-
-  ApiException(this.message, this.statusCode);
-
-  @override
-  String toString() => 'ApiException: $message (status: $statusCode)';
 }
 
 class SitResponse {

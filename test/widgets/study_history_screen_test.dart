@@ -19,6 +19,9 @@ class _Auth extends ChangeNotifier implements AuthProvider {
   @override
   String userId = '';
 
+  @override
+  String get historyOwnerId => StudySession.ownerFor(userId);
+
   void changeUser(String uid) {
     userId = uid;
     notifyListeners();
@@ -489,6 +492,25 @@ void main() {
     );
   });
 
+  testWidgets('empty graphs label the vertical axis in minutes', (tester) async {
+    query().thenAnswer((_) async => _history());
+    await show(tester);
+    await tester.pumpAndSettle();
+
+    void expectMinuteTicks() {
+      for (final label in ['0m', '20m', '40m', '60m']) {
+        expect(
+          find.descendant(of: find.byType(BarChart), matching: find.text(label)),
+          findsOneWidget,
+        );
+      }
+    }
+
+    expectMinuteTicks();
+    await tap(tester, find.text('Month graph'));
+    expectMinuteTicks();
+  });
+
   testWidgets('a late owner response cannot replace current or older history', (
     tester,
   ) async {
@@ -644,6 +666,59 @@ void main() {
       expect(find.text(ja ? '学習日数 1日' : '1 study day'), findsOneWidget);
     });
   }
+
+  testWidgets('observes the current week only when the week graph is shown',
+      (tester) async {
+    today = DateTime(2027, 1, 3);
+    final load = Completer<StudyHistory>();
+    query().thenAnswer((_) => load.future);
+    final firstWeek = DateTime.utc(2026, 12, 28);
+    final nextWeek = DateTime.utc(2027, 1, 4);
+    when(() => repository.observeWeeklyGoals(
+          ownerId: StudySession.guestOwner,
+          today: any(named: 'today'),
+        )).thenAnswer((_) async => WeeklyStudyGoals({firstWeek: 600}));
+
+    await show(tester);
+    await tester.tap(find.text('Month graph'));
+    await tester.pump();
+    load.complete(_history());
+    await tester.pumpAndSettle();
+    verifyNever(() => repository.observeWeeklyGoals(
+          ownerId: any(named: 'ownerId'),
+          today: any(named: 'today'),
+        ));
+
+    await tap(tester, find.text('Week graph'));
+    verify(() => repository.observeWeeklyGoals(
+          ownerId: StudySession.guestOwner,
+          today: firstWeek,
+        )).called(1);
+    expect(find.text('Target: 10h 0m 0s'), findsOneWidget);
+
+    await tap(tester, find.text('Month graph'));
+    await tap(tester, find.text('Week graph'));
+    verifyNever(() => repository.observeWeeklyGoals(
+          ownerId: any(named: 'ownerId'),
+          today: any(named: 'today'),
+        ));
+
+    await tap(tester, find.text('Calendar'));
+    today = DateTime(2027, 1, 4);
+    await tester.pump(const Duration(minutes: 1));
+    await tester.pumpAndSettle();
+    verifyNever(() => repository.observeWeeklyGoals(
+          ownerId: any(named: 'ownerId'),
+          today: any(named: 'today'),
+        ));
+
+    await tap(tester, find.text('Week graph'));
+    verify(() => repository.observeWeeklyGoals(
+          ownerId: StudySession.guestOwner,
+          today: nextWeek,
+        )).called(1);
+    expect(find.text('Target: 10h 0m 0s'), findsOneWidget);
+  });
 
   testWidgets('the new week inherits its goal and the prior week is read only',
       (tester) async {

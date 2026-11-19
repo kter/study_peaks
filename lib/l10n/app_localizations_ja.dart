@@ -133,6 +133,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get seatTaken => 'この席は他の人に取られました。別の席を選んでください。';
 
   @override
+  String get sessionRestoredFromSeatMap => '座席表からセッションを復元しました';
+
+  @override
   String notificationStudyingAt(String roomName) {
     return '$roomNameで勉強中';
   }

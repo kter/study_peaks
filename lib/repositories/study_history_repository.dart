@@ -191,16 +191,6 @@ class StudyHistoryRepository {
           required DateTime end}) async =>
       (await getHistory(ownerId: ownerId)).daysBetween(start, end);
 
-  Future<Map<DateTime, int>> getDailyStudyTime(
-      {required String ownerId, int days = 7, DateTime? now}) {
-    if (days < 1) throw ArgumentError('days must be positive');
-    final today = civilDate(now ?? DateTime.now());
-    return getDailyTotals(
-        ownerId: ownerId,
-        start: today.subtract(Duration(days: days - 1)),
-        end: today.add(const Duration(days: 1)));
-  }
-
   Future<int> getTodayStudyTime(
       {required String ownerId, DateTime? now}) async {
     final today = now ?? DateTime.now();

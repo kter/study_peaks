@@ -26,7 +26,6 @@ class SeatWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     
-    // Define colors based on whether this is the current user
     final isDark = theme.brightness == Brightness.dark;
     
     // Define colors based on whether this is the current user
@@ -131,7 +130,7 @@ class SeatWidget extends StatelessWidget {
           child: Text(
             '#${seat.seatNumber}',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.brightness == Brightness.dark ? Colors.grey.shade500 : Colors.grey.shade500,
+              color: Colors.grey.shade500,
               fontSize: 10,
             ),
           ),
@@ -158,25 +157,16 @@ class SeatWidget extends StatelessWidget {
               ),
             ),
             child: ClipOval(
-                child: user.photoUrl != null
-                    ? Image.network(
-                        user.photoUrl!,
-                        width: size,
-                        height: size,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => SvgPicture.string(
-                          Jdenticon.toSvg(user.iconSeed ?? user.userId,
-                              size: size.toInt()),
-                          width: size,
-                          height: size,
-                        ),
-                      )
-                    : SvgPicture.string(
-                        Jdenticon.toSvg(user.iconSeed ?? user.userId,
-                            size: size.toInt()),
-                        width: size,
-                        height: size,
-                      )),
+              child: user.photoUrl != null
+                  ? Image.network(
+                      user.photoUrl!,
+                      width: size,
+                      height: size,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _buildJdenticon(user),
+                    )
+                  : _buildJdenticon(user),
+            ),
           ),
           // Country flag badge (bottom-right)
           Positioned(
@@ -211,11 +201,16 @@ class SeatWidget extends StatelessWidget {
     );
   }
 
+  Widget _buildJdenticon(SeatUser user) {
+    return SvgPicture.string(
+      Jdenticon.toSvg(user.iconSeed ?? user.userId, size: size.toInt()),
+      width: size,
+      height: size,
+    );
+  }
+
   Widget _buildDurationBadge(ThemeData theme) {
-    // Calculate duration from sessionStartedAt for accurate time tracking
-    final duration = seat.sessionStartedAt != null
-        ? DateTime.now().difference(seat.sessionStartedAt!)
-        : Duration.zero;
+    final duration = seat.elapsedAt(DateTime.now());
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
     

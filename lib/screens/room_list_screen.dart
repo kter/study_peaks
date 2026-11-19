@@ -8,7 +8,7 @@ import '../providers/room_provider.dart';
 import '../providers/session_provider.dart';
 import '../providers/timer_provider.dart';
 import '../providers/user_settings_provider.dart';
-import '../services/network_exception.dart';
+import '../utils/error_localization.dart';
 import '../widgets/room_card.dart';
 import 'room_detail_screen.dart';
 import 'study_history_screen.dart';
@@ -46,21 +46,9 @@ class _RoomListScreenState extends State<RoomListScreen> {
         );
       }
 
-      // Try to restore session if foreground service is running
+      // Recover the saved session before trying to navigate to its room.
       final restored = await sessionProvider.restoreSessionIfNeeded();
       if (restored && mounted) {
-        final timerProvider = context.read<TimerProvider>();
-        final sessionId = sessionProvider.sessionId;
-        final timerRestored =
-            await timerProvider.restoreState(sessionId: sessionId);
-        if (!mounted) return;
-        if (!timerRestored && !sessionProvider.isFinalizing) {
-          if (sessionProvider.currentDuration > 0) {
-            timerProvider.setInitialDuration(
-                Duration(seconds: sessionProvider.currentDuration));
-          }
-          timerProvider.start(sessionId: sessionId);
-        }
         // Find the room the user was in and navigate to it
         final roomId = sessionProvider.currentRoomId;
         if (roomId != null) {
@@ -92,7 +80,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
               color: Theme.of(context).appBarTheme.foregroundColor,
               size: 28,
             ),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             Text(
               'Global Study Peaks',
               style: TextStyle(
@@ -117,15 +105,13 @@ class _RoomListScreenState extends State<RoomListScreen> {
           ),
           Consumer2<AuthProvider, UserSettingsProvider>(
             builder: (context, auth, userSettings, _) {
-              final showGoogleAvatar = auth.isSignedIn && 
-                  auth.photoUrl != null && 
-                  userSettings.useGoogleAvatar;
+              final photoUrl = googleAvatarUrl(auth, userSettings);
               
               return IconButton(
-                icon: showGoogleAvatar
+                icon: photoUrl != null
                     ? CircleAvatar(
                         radius: 14,
-                        backgroundImage: NetworkImage(auth.photoUrl!),
+                        backgroundImage: NetworkImage(photoUrl),
                       )
                     : ClipOval(
                         child: SvgPicture.string(
@@ -156,13 +142,15 @@ class _RoomListScreenState extends State<RoomListScreen> {
             );
           }
 
+          final l10n = AppLocalizations.of(context)!;
+          final roomsError = provider.roomsError;
           return RefreshIndicator(
             onRefresh: provider.fetchRooms,
             color: Theme.of(context).colorScheme.primary,
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
-                if (provider.roomsError != null)
+                if (roomsError != null)
                   SliverToBoxAdapter(
                     child: Card(
                       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -173,9 +161,11 @@ class _RoomListScreenState extends State<RoomListScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              provider.roomsError == NetworkErrorKey.networkError
-                                  ? AppLocalizations.of(context)!.networkError
-                                  : AppLocalizations.of(context)!.loadRoomsFailed,
+                              localizeErrorKey(
+                                l10n,
+                                roomsError,
+                                fallback: l10n.loadRoomsFailed,
+                              ),
                               style: TextStyle(
                                 color: Theme.of(context)
                                     .colorScheme.onErrorContainer,
@@ -184,7 +174,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
                             const SizedBox(height: 8),
                             TextButton(
                               onPressed: provider.fetchRooms,
-                              child: Text(AppLocalizations.of(context)!.retry),
+                              child: Text(l10n.retry),
                             ),
                           ],
                         ),
@@ -255,192 +245,6 @@ class _RoomListScreenState extends State<RoomListScreen> {
             ),
           );
         },
-      ),
-    );
-  }
-
-  void _showProfileDialog(BuildContext context, AuthProvider auth) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(auth.isSignedIn ? 'Profile' : 'Sign In'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (auth.isSignedIn) ...[
-              if (auth.photoUrl != null)
-                CircleAvatar(
-                  radius: 40,
-                  backgroundImage: NetworkImage(auth.photoUrl!),
-                ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    auth.displayName,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.edit, size: 20),
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _showEditNameDialog(context, auth);
-                    },
-                    tooltip: 'Edit Name',
-                  ),
-                ],
-              ),
-              Text(
-                auth.email,
-                style: TextStyle(
-                  color: Theme.of(context).brightness == Brightness.dark 
-                      ? Colors.grey.shade400 
-                      : Colors.grey.shade600
-                ),
-              ),
-            ] else ...[
-              Icon(
-                Icons.account_circle,
-                size: 80,
-                color: Colors.grey.shade400,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Sign in to save your study progress and sync across devices.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Theme.of(context).brightness == Brightness.dark 
-                      ? Colors.grey.shade400 
-                      : Colors.black,
-                ),
-              ),
-            ],
-            if (auth.error != null) ...[
-              const SizedBox(height: 16),
-              Builder(
-                builder: (context) {
-                  final l10n = AppLocalizations.of(context)!;
-                  final errorMessage = auth.error == NetworkErrorKey.networkError
-                      ? l10n.networkError
-                      : auth.error!;
-                  return Text(
-                    errorMessage,
-                    style: const TextStyle(color: Colors.red, fontSize: 13),
-                    textAlign: TextAlign.center,
-                  );
-                },
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-          if (auth.isSignedIn)
-            TextButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                await auth.signOut();
-              },
-              child: const Text('Sign Out'),
-            )
-          else
-            FilledButton.icon(
-              onPressed: auth.isLoading
-                  ? null
-                  : () async {
-                      final success = await auth.signInWithGoogle();
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                        if (success) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Signed in successfully!')),
-                          );
-                        } else if (auth.error != null) {
-                          final l10n = AppLocalizations.of(context)!;
-                          final errorMessage = auth.error == NetworkErrorKey.networkError
-                              ? l10n.networkError
-                              : auth.error!;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(errorMessage),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                        }
-                      }
-                    },
-              icon: auth.isLoading
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.login),
-              label: Text(auth.isLoading ? 'Signing in...' : 'Sign in with Google'),
-            ),
-        ],
-      ),
-    );
-  }
-
-  void _showEditNameDialog(BuildContext context, AuthProvider auth) {
-    final controller = TextEditingController(text: auth.displayName);
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit Name'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Display Name',
-            border: OutlineInputBorder(),
-          ),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final newName = controller.text.trim();
-              if (newName.isNotEmpty) {
-                try {
-                  await auth.updateUserName(newName);
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Name updated successfully')),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    // Localize network error messages
-                    final l10n = AppLocalizations.of(context)!;
-                    final errorMessage = isNetworkError(e)
-                        ? l10n.networkError
-                        : e.toString();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(errorMessage),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                }
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
   }

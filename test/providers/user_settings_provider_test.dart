@@ -1,10 +1,39 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:study_peaks/providers/auth_provider.dart';
 import 'package:study_peaks/providers/user_settings_provider.dart';
 
 import '../helpers/test_helpers.dart';
 
+class _MockAuthProvider extends Mock implements AuthProvider {}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('googleAvatarUrl requires a signed-in user, a photo and the preference',
+      () async {
+    await setupMockSharedPreferences();
+    final settings = UserSettingsProvider();
+    addTearDown(settings.dispose);
+    await settings.init();
+    final auth = _MockAuthProvider();
+    const photoUrl = 'https://example.com/avatar.png';
+    when(() => auth.photoUrl).thenReturn(photoUrl);
+    when(() => auth.isSignedIn).thenReturn(false);
+
+    expect(googleAvatarUrl(null, settings), isNull);
+    expect(googleAvatarUrl(auth, settings), isNull);
+
+    when(() => auth.isSignedIn).thenReturn(true);
+    expect(googleAvatarUrl(auth, settings), photoUrl);
+
+    await settings.setUseGoogleAvatar(false);
+    expect(googleAvatarUrl(auth, settings), isNull);
+
+    await settings.setUseGoogleAvatar(true);
+    when(() => auth.photoUrl).thenReturn(null);
+    expect(googleAvatarUrl(auth, settings), isNull);
+  });
 
   group('UserSettingsProvider', () {
     group('Initial State', () {

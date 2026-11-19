@@ -5,7 +5,7 @@ import '../providers/timer_provider.dart';
 import 'dialogs/lock_task_dialog.dart';
 
 /// Timer widget with circular progress and controls.
-class TimerWidget extends StatefulWidget {
+class TimerWidget extends StatelessWidget {
   final bool isCollapsed;
   final VoidCallback? onToggleCollapsed;
 
@@ -16,15 +16,10 @@ class TimerWidget extends StatefulWidget {
   });
 
   @override
-  State<TimerWidget> createState() => _TimerWidgetState();
-}
-
-class _TimerWidgetState extends State<TimerWidget> {
-  @override
   Widget build(BuildContext context) {
     return Consumer<TimerProvider>(
       builder: (context, timer, child) {
-        if (widget.isCollapsed) {
+        if (isCollapsed) {
           return _buildCollapsedView(context, timer);
         }
         return _buildExpandedView(context, timer);
@@ -33,8 +28,7 @@ class _TimerWidgetState extends State<TimerWidget> {
   }
 
   Widget _buildCollapsedView(BuildContext context, TimerProvider timer) {
-    final isPomodoroBreak = timer.mode == TimerMode.pomodoro &&
-        timer.pomodoroPhase == PomodoroPhase.shortBreak;
+    final isPomodoroBreak = timer.isOnBreak;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
@@ -102,7 +96,7 @@ class _TimerWidgetState extends State<TimerWidget> {
           const SizedBox(width: 8),
           // Expand button
           IconButton(
-            onPressed: widget.onToggleCollapsed,
+            onPressed: onToggleCollapsed,
             icon: const Icon(Icons.expand_more),
             iconSize: 24,
             color: Colors.grey.shade600,
@@ -153,9 +147,7 @@ class _TimerWidgetState extends State<TimerWidget> {
     String tooltip,
   ) {
     final isSelected = timer.mode == mode;
-    final isPomodoroBreak = mode == TimerMode.pomodoro &&
-        timer.mode == TimerMode.pomodoro &&
-        timer.pomodoroPhase == PomodoroPhase.shortBreak;
+    final isPomodoroBreak = mode == TimerMode.pomodoro && timer.isOnBreak;
     
     final primaryColor = Theme.of(context).colorScheme.primary;
     
@@ -225,7 +217,7 @@ class _TimerWidgetState extends State<TimerWidget> {
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               IconButton(
-                onPressed: widget.onToggleCollapsed,
+                onPressed: onToggleCollapsed,
                 icon: const Icon(Icons.expand_less),
                 iconSize: 24,
                 color: Colors.grey.shade600,
@@ -408,8 +400,7 @@ class _TimerWidgetState extends State<TimerWidget> {
   }
 
   Widget _buildTimerDisplay(BuildContext context, TimerProvider timer) {
-    final isPomodoroBreak = timer.mode == TimerMode.pomodoro &&
-        timer.pomodoroPhase == PomodoroPhase.shortBreak;
+    final isPomodoroBreak = timer.isOnBreak;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = Theme.of(context).colorScheme.primary;
@@ -528,14 +519,7 @@ class _TimerWidgetState extends State<TimerWidget> {
       return;
     }
 
-    // Check if lock should be activated
-    final shouldShowDialog = timer.screenLockEnabled &&
-        !timer.isScreenLocked &&
-        (timer.mode == TimerMode.normal ||
-            (timer.mode == TimerMode.pomodoro &&
-                timer.pomodoroPhase == PomodoroPhase.focus));
-
-    if (shouldShowDialog) {
+    if (timer.shouldPromptForScreenLock) {
       final result = await showLockTaskDialog(context: context);
       if (!context.mounted) return;
 

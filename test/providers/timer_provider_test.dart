@@ -1,4 +1,5 @@
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:study_peaks/providers/timer_provider.dart';
@@ -41,6 +42,63 @@ void main() {
   
   tearDown(() {
     timerProvider.dispose();
+  });
+
+  test('isOnBreak is true only during the Pomodoro break phase', () {
+    var now = DateTime.utc(2026, 11, 19);
+    final timer = TimerProvider(
+      now: () => now,
+      notificationService: mockNotificationService,
+    );
+    addTearDown(timer.dispose);
+
+    expect(timer.isOnBreak, isFalse);
+    timer.setMode(TimerMode.pomodoro);
+    expect(timer.isOnBreak, isFalse);
+
+    timer.start();
+    now = now.add(Duration(seconds: timer.pomodoroFocusDuration));
+    timer.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    expect(timer.isRunning, isFalse);
+    expect(timer.isOnBreak, isTrue);
+
+    timer.start();
+    expect(timer.isOnBreak, isTrue);
+    now = now.add(Duration(seconds: timer.pomodoroBreakDuration));
+    timer.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    expect(timer.isOnBreak, isFalse);
+  });
+
+  group('shouldPromptForScreenLock', () {
+    test('prompts in normal mode', () {
+      timerProvider.setScreenLockEnabled(true);
+
+      expect(timerProvider.shouldPromptForScreenLock, isTrue);
+    });
+
+    test('prompts during Pomodoro focus', () {
+      timerProvider.setMode(TimerMode.pomodoro);
+      timerProvider.setScreenLockEnabled(true);
+
+      expect(timerProvider.shouldPromptForScreenLock, isTrue);
+    });
+
+    test('does not prompt during a Pomodoro short break', () {
+      var now = DateTime.utc(2026, 11, 19);
+      final timer = TimerProvider(
+        now: () => now,
+        notificationService: mockNotificationService,
+      );
+      addTearDown(timer.dispose);
+      timer.setMode(TimerMode.pomodoro);
+      timer.setScreenLockEnabled(true);
+      timer.start();
+      now = now.add(Duration(seconds: timer.pomodoroFocusDuration));
+      timer.didChangeAppLifecycleState(AppLifecycleState.resumed);
+
+      expect(timer.pomodoroPhase, PomodoroPhase.shortBreak);
+      expect(timer.shouldPromptForScreenLock, isFalse);
+    });
   });
 
   group('TimerProvider - Normal Mode', () {

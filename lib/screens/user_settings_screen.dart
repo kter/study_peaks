@@ -7,7 +7,7 @@ import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../providers/session_provider.dart';
 import '../providers/user_settings_provider.dart';
-import '../services/network_exception.dart';
+import '../utils/error_localization.dart';
 
 /// Screen for configuring user profile settings.
 /// Works whether user is signed in or not.
@@ -134,10 +134,7 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
     UserSettingsProvider userSettings,
     AuthProvider auth,
   ) {
-    // Determine if we should show Google avatar
-    final showGoogleAvatar = auth.isSignedIn && 
-        auth.photoUrl != null && 
-        userSettings.useGoogleAvatar;
+    final photoUrl = googleAvatarUrl(auth, userSettings);
     
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
@@ -173,9 +170,9 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                   ),
                 ),
                 child: ClipOval(
-                  child: showGoogleAvatar
+                  child: photoUrl != null
                       ? Image.network(
-                          auth.photoUrl!,
+                          photoUrl,
                           width: 94,
                           height: 94,
                           fit: BoxFit.cover,
@@ -273,7 +270,7 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                     onChanged: (value) async {
                       await userSettings.setUseGoogleAvatar(value);
                       // Sync immediately so other users see the change
-                      if (mounted) {
+                      if (context.mounted) {
                         await context.read<SessionProvider>().forceSync();
                       }
                     },
@@ -285,20 +282,20 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
             const SizedBox(height: 12),
           ],
           // Regenerate icon button (only when using auto-generated icon)
-          if (!showGoogleAvatar)
+          if (photoUrl == null)
             OutlinedButton.icon(
               onPressed: () async {
                 await userSettings.regenerateIcon();
                 // Sync immediately so other users see the new icon
-                if (mounted) {
-                  await context.read<SessionProvider>().forceSync();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Icon regenerated!'),
-                      duration: Duration(seconds: 1),
-                    ),
-                  );
-                }
+                if (!context.mounted) return;
+                await context.read<SessionProvider>().forceSync();
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Icon regenerated!'),
+                    duration: Duration(seconds: 1),
+                  ),
+                );
               },
               icon: const Icon(Icons.refresh),
               label: const Text('Regenerate Icon'),
@@ -360,7 +357,7 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
             icon: Icon(Icons.check, color: primaryColor),
             onPressed: () async {
               await userSettings.setDisplayName(_nameController.text);
-              if (mounted) {
+              if (context.mounted) {
                 FocusScope.of(context).unfocus();
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -374,7 +371,7 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
         ),
         onSubmitted: (value) async {
           await userSettings.setDisplayName(value);
-          if (mounted) {
+          if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Name saved!'),
@@ -558,7 +555,7 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                 TextButton(
                   onPressed: () async {
                     await auth.signOut();
-                    if (mounted) {
+                    if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Signed out successfully')),
                       );
@@ -584,7 +581,7 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                     ? null
                     : () async {
                         final success = await auth.signInWithGoogle();
-                        if (mounted) {
+                        if (context.mounted) {
                           if (success) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
@@ -593,11 +590,9 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                               ),
                             );
                           } else if (auth.error != null) {
-                            // Localize error message if it's a network error key
                             final l10n = AppLocalizations.of(context)!;
-                            final errorMessage = auth.error == NetworkErrorKey.networkError
-                                ? l10n.networkError
-                                : auth.error!;
+                            final errorMessage =
+                                localizeErrorKey(l10n, auth.error!);
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(errorMessage),

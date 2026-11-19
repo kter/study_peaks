@@ -139,6 +139,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get seatTaken => 'This seat was just taken. Please select another.';
 
   @override
+  String get sessionRestoredFromSeatMap => 'Session restored from seat map';
+
+  @override
   String notificationStudyingAt(String roomName) {
     return 'Studying at $roomName';
   }

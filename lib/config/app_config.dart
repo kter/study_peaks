@@ -4,7 +4,7 @@ import 'package:flutter/services.dart' show appFlavor;
 ///
 /// Contains all magic numbers and strings that were previously scattered
 /// throughout the codebase, making configuration changes easier.
-class AppConfig {
+abstract final class AppConfig {
   // Authentication Configuration
   static const Duration signInTimeout = Duration(seconds: 30);
 
@@ -50,13 +50,4 @@ class AppConfig {
     Duration(seconds: 8),
     Duration(seconds: 16),
   ];
-
-  // Private constructor to prevent instantiation
-  const AppConfig._();
-
-  /// Factory for future environment variable support.
-  ///
-  /// Currently returns default values, but can be extended to read from
-  /// environment variables or a configuration file.
-  factory AppConfig.fromEnvironment() => const AppConfig._();
 }

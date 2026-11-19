@@ -1,8 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:study_peaks/models/study_session.dart';
 import 'package:study_peaks/providers/auth_provider.dart';
 import 'package:study_peaks/providers/session_provider.dart';
+import 'package:study_peaks/services/api_service.dart';
+import 'package:study_peaks/services/network_exception.dart';
 
 import '../helpers/test_helpers.dart';
 
@@ -36,6 +39,8 @@ void main() {
             when(() => authProvider.getIdToken()).thenAnswer((_) async => null);
             when(() => authProvider.displayName).thenReturn('Anonymous');
             when(() => authProvider.userId).thenReturn('');
+            when(() => authProvider.historyOwnerId)
+                .thenReturn(StudySession.guestOwner);
             provider.setAuthProvider(authProvider);
           }
           when(() => mockApiService.sit(
@@ -96,23 +101,37 @@ void main() {
       provider.dispose();
     });
 
-    test('sit falls back to mock mode on API error (dev mode)', () async {
+    test('sit falls back to mock mode on a network error', () async {
       final provider = SessionProvider(
         apiService: mockApiService,
         useMockFallback: true, // Explicitly enable mock fallback
       );
       when(() => mockApiService.sit('room-1', 5)).thenThrow(
-        Exception('Server error'),
+        const NetworkException('Offline'),
       );
 
       final result = await provider.sit('room-1', 5);
 
-      // Mock mode: success even with API error
       expect(result, true);
       expect(provider.state, SessionState.seated);
       expect(provider.sessionId, isNotNull); // Mock session ID
       expect(provider.error, isNull); // No error in mock mode
       provider.dispose();
+    });
+
+    test('sit reports an occupied seat with mock fallback enabled', () async {
+      final provider = SessionProvider(
+        apiService: mockApiService,
+        useMockFallback: true,
+      );
+      addTearDown(provider.dispose);
+      when(() => mockApiService.sit('room-1', 5))
+          .thenThrow(ApiException('SEAT_OCCUPIED', 409));
+
+      expect(await provider.sit('room-1', 5), false);
+      expect(provider.sessionId, isNull);
+      expect(provider.state, SessionState.idle);
+      expect(provider.error, contains('SEAT_OCCUPIED'));
     });
 
     test('sit returns false and sets error in production mode', () async {
@@ -181,6 +200,23 @@ void main() {
       provider.dispose();
     });
 
+    test('leave reports a request failure with mock fallback enabled', () async {
+      final provider = SessionProvider(
+        apiService: mockApiService,
+        useMockFallback: true,
+      );
+      addTearDown(provider.dispose);
+      when(() => mockApiService.sit('room-1', 5))
+          .thenAnswer((_) async => createMockSitResponse());
+      expect(await provider.sit('room-1', 5), true);
+      when(() => mockApiService.leave('room-1', 'test-session-id', 0))
+          .thenThrow(ApiException('Forbidden', 403));
+
+      final result = await provider.leave() as LeaveCompleted;
+
+      expect(result.serverFailure, LeaveServerFailure.request);
+    });
+
     test('leave reports unavailable when not seated', () async {
       final provider = SessionProvider(apiService: mockApiService);
       final result = await provider.leave();
@@ -203,7 +239,7 @@ void main() {
       );
       addTearDown(provider.dispose);
       when(() => mockApiService.sit('room-1', 5))
-          .thenThrow(Exception('Offline'));
+          .thenThrow(const NetworkException('Offline'));
       expect(await provider.sit('room-1', 5), true);
       final result = await provider.leave() as LeaveCompleted;
 

@@ -12,10 +12,7 @@ void showUserInfoDialog({
   if (seat.user == null) return;
   final user = seat.user!;
   
-  // Calculate duration from sessionStartedAt for accurate time tracking
-  final duration = seat.sessionStartedAt != null
-      ? DateTime.now().difference(seat.sessionStartedAt!)
-      : Duration.zero;
+  final duration = seat.elapsedAt(DateTime.now());
 
   showModalBottomSheet(
     context: context,

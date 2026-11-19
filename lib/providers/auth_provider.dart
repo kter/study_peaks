@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../models/study_session.dart';
 import '../services/network_exception.dart';
 import '../utils/retry_helper.dart';
 import '../config/app_config.dart';
@@ -26,6 +27,7 @@ class AuthProvider extends ChangeNotifier {
   String get email => _user?.email ?? '';
   String? get photoUrl => _user?.photoURL;
   String get userId => _user?.uid ?? '';
+  String get historyOwnerId => StudySession.ownerFor(userId);
 
   AuthProvider({FirebaseAuth? auth, GoogleSignIn? googleSignIn})
       : _auth = auth ?? FirebaseAuth.instance,
@@ -105,22 +107,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Update user display name
-  Future<void> updateUserName(String name) async {
-    try {
-      _setLoading(true);
-
-      await _user?.updateDisplayName(name);
-      await _user?.reload();
-      _user = _auth.currentUser;
-
-      _setLoading(false);
-    } catch (e) {
-      _handleError(e);
-      rethrow;
-    }
-  }
-
   /// Get ID token for API calls with automatic retry on network errors.
   ///
   /// Uses [RetryHelper] to handle transient network issues.
@@ -143,11 +129,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   void _handleError(Object e) {
-    if (isNetworkError(e)) {
-      _error = NetworkErrorKey.networkError;
-    } else {
-      _error = e.toString();
-    }
+    _error = errorKeyFor(e, e.toString());
     _isLoading = false;
     notifyListeners();
   }

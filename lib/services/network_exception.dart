@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'api_exception.dart';
+
 /// Exception for network-related errors.
 /// 
 /// This is thrown when a network operation fails due to connectivity issues,
@@ -19,8 +21,14 @@ class NetworkException implements Exception {
 /// Use this key to look up the localized error message.
 class NetworkErrorKey {
   static const String networkError = 'networkError';
-  static const String connectionRestored = 'connectionRestored';
 }
+
+/// Classifies transport failures separately from server responses.
+bool isTransportError(Object error) =>
+    error is! ApiException && isNetworkError(error);
+
+String errorKeyFor(Object error, String fallbackKey) =>
+    isTransportError(error) ? NetworkErrorKey.networkError : fallbackKey;
 
 /// Check if an error is a network-related error.
 /// 

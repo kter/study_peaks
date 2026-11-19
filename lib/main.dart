@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -12,9 +13,10 @@ import 'repositories/mock_data_repository.dart';
 import 'screens/room_list_screen.dart';
 import 'services/notification_service.dart';
 
-/// Build-time constant for mock data usage.
-/// Set to false in production builds using: --dart-define=USE_MOCK_DATA=false
-const bool kUseMockData = bool.fromEnvironment('USE_MOCK_DATA', defaultValue: true);
+/// Mock data is enabled by default in debug builds and can be overridden with
+/// --dart-define=USE_MOCK_DATA=true or false.
+const bool kUseMockData =
+    bool.fromEnvironment('USE_MOCK_DATA', defaultValue: kDebugMode);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
