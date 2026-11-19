@@ -1,5 +1,6 @@
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
+import '../models/study_history.dart';
 import '../models/study_session.dart';
 
 class StudyHistoryRepository {
@@ -57,36 +58,20 @@ class StudyHistoryRepository {
         .toList();
   }
 
-  static DateTime date(DateTime value) =>
-      DateTime.utc(value.year, value.month, value.day);
+  Future<StudyHistory> getHistory({required String ownerId}) async =>
+      StudyHistory(await getSessions(ownerId: ownerId));
 
   /// Inclusive start, exclusive end. Includes zero days; only completed records.
   Future<Map<DateTime, int>> getDailyTotals(
-      {required String ownerId,
-      required DateTime start,
-      required DateTime end}) async {
-    final first = date(start), last = date(end);
-    if (last.isBefore(first)) throw ArgumentError('Invalid date range');
-    final totals = <DateTime, int>{};
-    for (var day = first;
-        day.isBefore(last);
-        day = day.add(const Duration(days: 1))) {
-      totals[day] = 0;
-    }
-    for (final session in await getSessions(ownerId: ownerId)) {
-      for (final entry in session.dailySeconds.entries) {
-        if (totals.containsKey(entry.key)) {
-          totals[entry.key] = totals[entry.key]! + entry.value;
-        }
-      }
-    }
-    return totals;
-  }
+          {required String ownerId,
+          required DateTime start,
+          required DateTime end}) async =>
+      (await getHistory(ownerId: ownerId)).daysBetween(start, end);
 
   Future<Map<DateTime, int>> getDailyStudyTime(
       {required String ownerId, int days = 7, DateTime? now}) {
     if (days < 1) throw ArgumentError('days must be positive');
-    final today = date(now ?? DateTime.now());
+    final today = civilDate(now ?? DateTime.now());
     return getDailyTotals(
         ownerId: ownerId,
         start: today.subtract(Duration(days: days - 1)),
@@ -94,27 +79,23 @@ class StudyHistoryRepository {
   }
 
   Future<int> getTodayStudyTime(
-          {required String ownerId, DateTime? now}) async =>
-      (await getDailyStudyTime(ownerId: ownerId, days: 1, now: now))
-          .values
-          .single;
-  Future<Map<DateTime, int>> getWeek(
-      {required String ownerId, required DateTime containing}) {
-    final monday =
-        date(containing).subtract(Duration(days: containing.weekday - 1));
-    return getDailyTotals(
-        ownerId: ownerId,
-        start: monday,
-        end: monday.add(const Duration(days: 7)));
+      {required String ownerId, DateTime? now}) async {
+    final today = now ?? DateTime.now();
+    return (await getHistory(ownerId: ownerId)).secondsOn(today);
   }
+
+  Future<Map<DateTime, int>> getWeek(
+          {required String ownerId, required DateTime containing}) =>
+      _getPeriod(ownerId, StudyHistoryPeriod.week, containing);
 
   Future<Map<DateTime, int>> getMonth(
           {required String ownerId, required DateTime containing}) =>
-      getDailyTotals(
-          ownerId: ownerId,
-          start: DateTime.utc(containing.year, containing.month),
-          end: DateTime.utc(containing.year, containing.month + 1));
+      _getPeriod(ownerId, StudyHistoryPeriod.month, containing);
+
+  Future<Map<DateTime, int>> _getPeriod(String ownerId,
+          StudyHistoryPeriod period, DateTime containing) async =>
+      (await getHistory(ownerId: ownerId)).daysIn(period, containing);
+
   Future<int> getTotalStudyTime({required String ownerId}) async =>
-      (await getSessions(ownerId: ownerId))
-          .fold<int>(0, (sum, session) => sum + session.durationSeconds);
+      (await getHistory(ownerId: ownerId)).totalSeconds;
 }

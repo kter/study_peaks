@@ -45,10 +45,7 @@ class SessionProvider extends ChangeNotifier {
   bool _disposed = false;
   Future<bool>? _restoreOperation;
   static const _keyActive = StudyPersistenceKeys.activeSession;
-  String get historyOwnerId {
-    final uid = _authProvider?.userId;
-    return uid == null || uid.isEmpty ? StudySession.guestOwner : 'user:$uid';
-  }
+  String get historyOwnerId => StudySession.ownerFor(_authProvider?.userId);
 
   void setTimerProvider(TimerProvider timer) {
     _timerProvider?.removeListener(_onTimerChanged);

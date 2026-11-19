@@ -192,7 +192,61 @@ class AppLocalizationsEn extends AppLocalizations {
       'The owner and focus intervals of older history are unknown. Time is shown on the start date. Signing in does not transfer these records.';
 
   @override
-  String get historyLastSevenDays => 'Last 7 Days';
+  String get historyToday => 'Today';
+
+  @override
+  String get historyThisWeek => 'This week';
+
+  @override
+  String get historyWeek => 'Week';
+
+  @override
+  String get historyMonth => 'Month';
+
+  @override
+  String get historyPreviousPeriod => 'Previous period';
+
+  @override
+  String get historyNextPeriod => 'Next period';
+
+  @override
+  String get historyPreviousDay => 'Previous day';
+
+  @override
+  String get historyNextDay => 'Next day';
+
+  @override
+  String get historyPeriodEmpty => 'No study time in this period';
+
+  @override
+  String historyDateRange(String start, String end) {
+    return '$start – $end';
+  }
+
+  @override
+  String historyDurationHours(int hours, int minutes, int seconds) {
+    return '${hours}h ${minutes}m ${seconds}s';
+  }
+
+  @override
+  String historyDurationMinutes(int minutes, int seconds) {
+    return '${minutes}m ${seconds}s';
+  }
+
+  @override
+  String historyHours(int hours) {
+    return '${hours}h';
+  }
+
+  @override
+  String historyMinutes(int minutes) {
+    return '${minutes}m';
+  }
+
+  @override
+  String historySeconds(int seconds) {
+    return '${seconds}s';
+  }
 
   @override
   String get historyTotal => 'Total Study Time';
@@ -201,7 +255,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get historyEmpty => 'No study records yet';
 
   @override
-  String get historyLoadFailed => 'Could not load history. Tap to retry';
+  String get historyLoadFailed => 'Could not load history';
 
   @override
   String get historySaveFailed =>

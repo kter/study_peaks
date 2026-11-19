@@ -190,7 +190,61 @@ class AppLocalizationsJa extends AppLocalizations {
       '旧履歴の所有者と集中区間は不明です。時間は開始日にまとめて表示します。サインインしても移行されません。';
 
   @override
-  String get historyLastSevenDays => '過去7日間';
+  String get historyToday => '今日';
+
+  @override
+  String get historyThisWeek => '今週';
+
+  @override
+  String get historyWeek => '週';
+
+  @override
+  String get historyMonth => '月';
+
+  @override
+  String get historyPreviousPeriod => '前の期間';
+
+  @override
+  String get historyNextPeriod => '次の期間';
+
+  @override
+  String get historyPreviousDay => '前の日';
+
+  @override
+  String get historyNextDay => '次の日';
+
+  @override
+  String get historyPeriodEmpty => 'この期間の学習時間はありません';
+
+  @override
+  String historyDateRange(String start, String end) {
+    return '$start ～ $end';
+  }
+
+  @override
+  String historyDurationHours(int hours, int minutes, int seconds) {
+    return '$hours時間$minutes分$seconds秒';
+  }
+
+  @override
+  String historyDurationMinutes(int minutes, int seconds) {
+    return '$minutes分$seconds秒';
+  }
+
+  @override
+  String historyHours(int hours) {
+    return '$hours時間';
+  }
+
+  @override
+  String historyMinutes(int minutes) {
+    return '$minutes分';
+  }
+
+  @override
+  String historySeconds(int seconds) {
+    return '$seconds秒';
+  }
 
   @override
   String get historyTotal => '累計学習時間';
@@ -199,7 +253,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get historyEmpty => '学習記録はありません';
 
   @override
-  String get historyLoadFailed => '履歴を読み込めませんでした。タップして再試行';
+  String get historyLoadFailed => '履歴を読み込めませんでした';
 
   @override
   String get historySaveFailed => '学習記録を保存できませんでした。退席を再試行してください。';

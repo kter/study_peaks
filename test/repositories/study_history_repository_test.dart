@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:study_peaks/models/study_history.dart';
 import 'package:study_peaks/models/study_session.dart';
 import 'package:study_peaks/repositories/study_history_repository.dart';
 
@@ -69,6 +70,39 @@ void main() {
             ownerId: owner, now: DateTime(2027, 1, 1)),
         1800);
     expect(await repository.getTotalStudyTime(ownerId: owner), 2400);
+  });
+
+  test('dashboard totals and graph match the shared queries', () async {
+    await repository.saveSession(
+        record('older', '2026-12-01T10:00:00Z', '2026-12-01T10:15:00Z'));
+    await repository.saveSession(
+        record('midnight', '2026-12-31T23:59:30Z', '2027-01-01T00:01:00Z'));
+    await repository.saveSession(record(
+        'other', '2027-01-01T00:00:00Z', '2027-01-01T01:00:00Z',
+        user: 'user:someone-else'));
+
+    final now = DateTime(2027, 1, 1);
+    final history = await repository.getHistory(ownerId: owner);
+    final currentWeek = history.daysIn(StudyHistoryPeriod.week, now);
+    final december =
+        history.daysIn(StudyHistoryPeriod.month, DateTime(2026, 12));
+
+    expect(
+        currentWeek, await repository.getWeek(ownerId: owner, containing: now));
+    expect(
+        december,
+        await repository.getMonth(
+            ownerId: owner, containing: DateTime(2026, 12)));
+    expect(december.values.last, 30);
+    expect(december.values.skip(1).first, 0);
+    expect(history.secondsOn(now),
+        await repository.getTodayStudyTime(ownerId: owner, now: now));
+    expect(history.secondsOn(now), 60);
+    expect(history.secondsIn(StudyHistoryPeriod.week, now), 90);
+    expect(history.totalSeconds,
+        await repository.getTotalStudyTime(ownerId: owner));
+    expect(history.totalSeconds, 990);
+    expect(history.hasRecords, isTrue);
   });
 
   test('pause crossing midnight and breaks contain no focus seconds', () async {

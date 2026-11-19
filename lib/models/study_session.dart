@@ -33,6 +33,10 @@ class FocusInterval {
 class StudySession {
   static const guestOwner = 'guest:device';
   static const legacyOwner = 'legacy:unknown';
+
+  static String ownerFor(String? uid) =>
+      uid == null || uid.isEmpty ? guestOwner : 'user:$uid';
+
   final int? id;
   final String sessionId;
   final String ownerId;
