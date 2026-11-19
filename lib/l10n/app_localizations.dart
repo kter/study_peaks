@@ -488,24 +488,6 @@ abstract class AppLocalizations {
   /// **'Study history and goals are stored on this device, separately for guests and each account. They do not transfer to other devices.'**
   String get historyStorageNotice;
 
-  /// No description provided for @historyLegacy.
-  ///
-  /// In en, this message translates to:
-  /// **'View older history with unknown owner'**
-  String get historyLegacy;
-
-  /// No description provided for @historyCurrentOwner.
-  ///
-  /// In en, this message translates to:
-  /// **'Back to current user history'**
-  String get historyCurrentOwner;
-
-  /// No description provided for @historyLegacyNotice.
-  ///
-  /// In en, this message translates to:
-  /// **'The owner and focus intervals of older history are unknown. Time is shown on the start date. Signing in does not transfer these records.'**
-  String get historyLegacyNotice;
-
   /// No description provided for @historyToday.
   ///
   /// In en, this message translates to:

@@ -514,17 +514,14 @@ void main() {
     expectMinuteTicks();
   });
 
-  testWidgets('a late owner response cannot replace current or older history', (
+  testWidgets('a late guest response cannot replace account history', (
     tester,
   ) async {
     final guestQuery = Completer<StudyHistory>();
-    query().thenAnswer((call) async {
-      final owner = call.namedArguments[#ownerId];
-      if (owner == StudySession.guestOwner) return guestQuery.future;
-      return _history({
-        DateTime.utc(2027, 1, 1): owner == StudySession.legacyOwner ? 26 : 11,
-      });
-    });
+    when(() => repository.getHistory(ownerId: StudySession.guestOwner))
+        .thenAnswer((_) => guestQuery.future);
+    when(() => repository.getHistory(ownerId: StudySession.ownerFor('account')))
+        .thenAnswer((_) async => _history({DateTime.utc(2027, 1, 1): 11}));
 
     await show(tester);
     auth.changeUser('account');
@@ -537,12 +534,7 @@ void main() {
     expect(find.text('35s'), findsNothing);
     expect(find.text('11s'), findsWidgets);
 
-    await tap(tester, find.text('View older history with unknown owner'));
-    expect(find.text('Total for this day: 26s'), findsOneWidget);
-    expect(find.text('11s'), findsNothing);
-    await tap(tester, find.text('Back to current user history'));
-    expect(find.text('Total for this day: 11s'), findsOneWidget);
-    expect(find.text('26s'), findsNothing);
+    verifyNever(() => repository.getHistory(ownerId: StudySession.legacyOwner));
   });
 
   testWidgets('resume preserves the selection and advances the calendar date', (

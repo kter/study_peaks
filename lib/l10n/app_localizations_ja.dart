@@ -218,16 +218,6 @@ class AppLocalizationsJa extends AppLocalizations {
       '学習履歴と目標はこの端末に保存し、ゲストと各アカウントで分けています。端末変更時の引き継ぎには対応していません。';
 
   @override
-  String get historyLegacy => '所有者不明の旧履歴を見る';
-
-  @override
-  String get historyCurrentOwner => '現在の利用者の履歴に戻る';
-
-  @override
-  String get historyLegacyNotice =>
-      '旧履歴の所有者と集中区間は不明です。時間は開始日にまとめて表示します。サインインしても移行されません。';
-
-  @override
   String get historyToday => '今日';
 
   @override

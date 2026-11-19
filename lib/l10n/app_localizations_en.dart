@@ -225,16 +225,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Study history and goals are stored on this device, separately for guests and each account. They do not transfer to other devices.';
 
   @override
-  String get historyLegacy => 'View older history with unknown owner';
-
-  @override
-  String get historyCurrentOwner => 'Back to current user history';
-
-  @override
-  String get historyLegacyNotice =>
-      'The owner and focus intervals of older history are unknown. Time is shown on the start date. Signing in does not transfer these records.';
-
-  @override
   String get historyToday => 'Today';
 
   @override

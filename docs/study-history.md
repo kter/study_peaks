@@ -53,7 +53,7 @@ Past and current dates with no records are selectable and show a zero total and 
 
 ## Weekly study goals
 
-In Study History, use Week graph to set, change or clear the current week's goal. Enter a whole number of minutes from 15 to 10,080 (168 hours), in 15-minute steps. Goals are optional and stored on this device under the same guest or account owner as study records. The older history view for unknown owners has no goal.
+In Study History, use Week graph to set, change or clear the current week's goal. Enter a whole number of minutes from 15 to 10,080 (168 hours), in 15-minute steps. Goals are optional and stored on this device under the same guest or account owner as study records.
 
 Each week runs from Monday through Sunday. Setting a goal midweek includes all completed study credited to the week, including days before the goal was set. The current goal carries forward until it is changed or cleared. Each change takes effect for its whole week and later weeks, so viewing an ended week shows its effective goal and actuals. Clearing a goal this week leaves earlier weeks intact. Weeks before the first setting or after a clear can be browsed normally, with their study records and calendar counts.
 
@@ -77,7 +77,7 @@ SQLite opens at version 3. Upgrading from version 1 adds columns without deletin
 
 Version 3 adds the weekly goal table to both version 1 and version 2 databases. Every owner starts with an unset goal. Upgrading preserves all existing study records.
 
-The existing history screen offers an explicitly labeled older-history view with a warning about unknown ownership and start-date allocation, in Japanese and English. These records are excluded from guest/account totals. Signing in never migrates them. Pre-v2 active metadata is also retained under unknown ownership. Pre-v2 timer totals are retained as estimated totals; their original focus timing cannot be reconstructed and is shown with the same start-date limitation.
+Legacy rows remain in the local database and are omitted from Study History and guest and account totals. Signing in leaves them under unknown ownership. Pre-v2 active metadata is also retained under unknown ownership. Pre-v2 timer totals are retained as estimates and allocated to the original start date.
 
 ## Verification
 

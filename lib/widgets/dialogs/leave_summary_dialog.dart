@@ -56,8 +56,6 @@ class _LeaveSummaryDialogState extends State<LeaveSummaryDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (warning != null) Text(warning),
-                    if (record.ownerId == StudySession.legacyOwner)
-                      Text(l10n.historyLegacyNotice),
                     StudyDurationRow(
                       label: l10n.leaveSummarySession,
                       seconds: record.durationSeconds,

@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/study_history.dart';
-import '../models/study_session.dart';
 import '../providers/auth_provider.dart';
 import '../repositories/study_history_repository.dart';
 import '../widgets/study_duration_row.dart';
@@ -27,11 +26,9 @@ class StudyHistoryScreen extends StatefulWidget {
   const StudyHistoryScreen({
     super.key,
     this.now,
-    this.showLegacyHistory = false,
   });
 
   final DateTime Function()? now;
-  final bool showLegacyHistory;
 
   @override
   State<StudyHistoryScreen> createState() => _StudyHistoryScreenState();
@@ -40,7 +37,6 @@ class StudyHistoryScreen extends StatefulWidget {
 class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
   _HistoryView _view = _HistoryView.weekGraph;
   DateTime? _periodDate;
-  late bool _legacy;
   String? _owner;
   late Future<StudyHistory?> _history;
   late DateTime _today;
@@ -53,7 +49,6 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
   @override
   void initState() {
     super.initState();
-    _legacy = widget.showLegacyHistory;
     _today = _currentDate;
     _lifecycle = AppLifecycleListener(onResume: _refreshDate);
     _dateTimer =
@@ -73,8 +68,7 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
     super.dispose();
   }
 
-  void _setOwner(String historyOwnerId) {
-    final owner = _legacy ? StudySession.legacyOwner : historyOwnerId;
+  void _setOwner(String owner) {
     if (owner != _owner) {
       _owner = owner;
       _history = _fetchHistory(owner);
@@ -109,14 +103,6 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
     });
   }
 
-  void _toggleOwner() {
-    final historyOwnerId = context.read<AuthProvider>().historyOwnerId;
-    setState(() {
-      _legacy = !_legacy;
-      _setOwner(historyOwnerId);
-    });
-  }
-
   void _showPeriod(_HistoryView view, DateTime date) {
     setState(() {
       _today = _currentDate;
@@ -139,16 +125,6 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             Text(l10n.historyStorageNotice),
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: TextButton(
-                onPressed: _toggleOwner,
-                child: Text(
-                  _legacy ? l10n.historyCurrentOwner : l10n.historyLegacy,
-                ),
-              ),
-            ),
-            if (_legacy) Text(l10n.historyLegacyNotice),
             FutureBuilder<StudyHistory?>(
               future: _history,
               builder: (context, snapshot) {
@@ -166,7 +142,7 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
                     if (history != null) _buildSummary(history, today, l10n),
                     const SizedBox(height: 16),
                     _buildPeriodControls(l10n, anchor, lastNavigableDay),
-                    if (history != null && !_legacy)
+                    if (history != null)
                       StudyWeeklyGoalSection(
                         key: ValueKey(_owner),
                         repository: _repository,
