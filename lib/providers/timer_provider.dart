@@ -1,21 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
+import '../services/lock_task_service.dart';
+import '../services/notification_service.dart';
 
-/// Timer mode for study sessions.
-enum TimerMode {
-  normal,
-  pomodoro,
-}
+import '../models/timer_mode.dart';
+export '../models/timer_mode.dart'; // Export for other files using TimerProvider
 
-/// Pomodoro phase.
-enum PomodoroPhase {
-  focus,
-  shortBreak,
-}
 
 /// Provider for managing timer state.
 ///
@@ -38,10 +31,8 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Duration _pausedDuration = Duration.zero;
 
   // Pomodoro settings
-  static final int pomodoroFocusDuration =
-      AppConfig.pomodoroFocusDurationMinutes * 60;
-  static final int pomodoroBreakDuration =
-      AppConfig.pomodoroBreakDurationMinutes * 60;
+  int pomodoroFocusDuration = AppConfig.pomodoroFocusDurationMinutes * 60;
+  int pomodoroBreakDuration = AppConfig.pomodoroBreakDurationMinutes * 60;
   PomodoroPhase _pomodoroPhase = PomodoroPhase.focus;
   int _pomodoroCompletedCycles = 0;
 
@@ -49,14 +40,59 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   DateTime? _pomodoroPhaseStartedAt;
   int _pomodoroElapsedBeforePause = 0;
 
-  TimerProvider() {
+  final NotificationService _notificationService;
+
+  // Lock task (screen pinning) state
+  final LockTaskService _lockTaskService;
+  bool _screenLockEnabled = false;
+  bool _isScreenLocked = false;
+  StreamSubscription<bool>? _lockTaskExitedSubscription;
+
+  /// Callback invoked when lock task mode is exited by the user.
+  /// The UI layer can set this to show a Toast/SnackBar.
+  VoidCallback? onLockTaskExited;
+
+  TimerProvider({
+    NotificationService? notificationService,
+    LockTaskService? lockTaskService,
+  })  : _notificationService = notificationService ?? NotificationService(),
+        _lockTaskService = lockTaskService ?? LockTaskService() {
     WidgetsBinding.instance.addObserver(this);
+    _lockTaskExitedSubscription =
+        _lockTaskService.onLockTaskModeExited.listen((_) {
+      _handleLockTaskExited();
+    });
+  }
+
+  // Localized strings for notifications
+  String? _focusFinishedTitle;
+  String? _breakFinishedTitle;
+  String? _focusFinishedBody;
+  String? _breakFinishedBody;
+
+  void updateLocalization({
+    required String focusFinishedTitle,
+    required String breakFinishedTitle,
+    required String focusFinishedBody,
+    required String breakFinishedBody,
+  }) {
+    _focusFinishedTitle = focusFinishedTitle;
+    _breakFinishedTitle = breakFinishedTitle;
+    _focusFinishedBody = focusFinishedBody;
+    _breakFinishedBody = breakFinishedBody;
   }
 
   TimerMode get mode => _mode;
+
+  /// Seat session the timer state belongs to (null when not bound).
+  String? get sessionId => _sessionId;
   bool get isRunning => _isRunning;
   PomodoroPhase get pomodoroPhase => _pomodoroPhase;
   int get pomodoroCompletedCycles => _pomodoroCompletedCycles;
+
+  // Lock task getters
+  bool get screenLockEnabled => _screenLockEnabled;
+  bool get isScreenLocked => _isScreenLocked;
 
   /// Get elapsed seconds using timestamp-based calculation.
   /// This ensures accurate time even when the app is in background.
@@ -130,6 +166,12 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// Toggle screen lock preference (opt-in).
+  void setScreenLockEnabled(bool enabled) {
+    _screenLockEnabled = enabled;
+    notifyListeners();
+  }
+
   /// Start the timer.
   ///
   /// [sessionId] ties the saved timer state to the current seat session.
@@ -153,6 +195,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _pomodoroPhaseStartedAt = DateTime.now();
     }
 
+    _updateNotification();
     _startUiTimer();
     _persistState();
     notifyListeners();
@@ -166,7 +209,17 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _switchPomodoroPhase();
       }
       notifyListeners();
+      // We don't need to update notification on every tick because background task handles it,
+      // EXCEPT when phase changes (handled in _switchPomodoroPhase).
     });
+  }
+
+  /// Start timer with screen lock (called from UI after dialog confirmation).
+  Future<void> startWithLock() async {
+    await _lockTaskService.startLockTask();
+    await _lockTaskService.setKeepScreenOn(true);
+    _isScreenLocked = true;
+    start();
   }
 
   /// Pause the timer.
@@ -192,6 +245,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     _persistState();
+    _updateNotification();
     notifyListeners();
   }
 
@@ -226,23 +280,85 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _pomodoroPhase = PomodoroPhase.focus;
     _pomodoroPhaseStartedAt = null;
     _pomodoroElapsedBeforePause = 0;
+
+    // Release lock task if active
+    _releaseLockTask();
+
+    _updateNotification();
+  }
+
+  /// Set the initial duration (e.g. when restoring a session).
+  void setInitialDuration(Duration duration) {
+    if (_isRunning) return;
+    _pausedDuration = duration;
+    _persistState();
+    notifyListeners();
   }
 
   /// Switch between focus and break phases in Pomodoro mode.
   void _switchPomodoroPhase() {
+    // Notify about the finished phase BEFORE switching
+    // Determine the title/body based on what JUST finished
+    final finishedPhase = _pomodoroPhase;
+    
+    // Use localized strings if available, otherwise fall back to English defaults
+    final title = finishedPhase == PomodoroPhase.focus 
+        ? (_focusFinishedTitle ?? 'Focus Finished!') 
+        : (_breakFinishedTitle ?? 'Break Finished!');
+        
+    final body = finishedPhase == PomodoroPhase.focus
+        ? (_focusFinishedBody ?? 'Time for a break.')
+        : (_breakFinishedBody ?? 'Time to focus.');
+
+    _notificationService.showPhaseFinishedNotification(
+      phase: finishedPhase,
+      title: title,
+      body: body,
+    );
+
     if (_pomodoroPhase == PomodoroPhase.focus) {
       _pomodoroPhase = PomodoroPhase.shortBreak;
       _pomodoroCompletedCycles++;
+      // Release lock task when switching to break
+      _releaseLockTask();
     } else {
       _pomodoroPhase = PomodoroPhase.focus;
     }
 
     // Reset phase timer
     _pomodoroElapsedBeforePause = 0;
-    if (_isRunning) {
-      _pomodoroPhaseStartedAt = DateTime.now();
-    }
+    _pomodoroPhaseStartedAt = null;
+    _isRunning = false;
+    _timer?.cancel();
+
     _persistState();
+    _updateNotification();
+    notifyListeners();
+  }
+
+  Future<void> _updateNotification() async {
+    // Only update if service is running
+    if (!await _notificationService.isRunning()) return;
+
+    final seconds = _mode == TimerMode.normal 
+        ? elapsedSeconds 
+        : pomodoroRemainingSeconds;
+
+    await _notificationService.updateTimerState(
+      mode: _mode,
+      isRunning: _isRunning,
+      pomodoroPhase: _mode == TimerMode.pomodoro ? _pomodoroPhase : null,
+      seconds: seconds,
+    );
+  }
+
+  /// Release lock task mode and keep-screen-on flag.
+  void _releaseLockTask() {
+    if (_isScreenLocked) {
+      _lockTaskService.stopLockTask();
+      _lockTaskService.setKeepScreenOn(false);
+      _isScreenLocked = false;
+    }
   }
 
   /// Restore saved timestamps and restart UI updates for a running timer.
@@ -297,11 +413,12 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _pomodoroElapsedBeforePause = elapsedBeforePause;
       _sessionId = sessionId;
       if (_isRunning) {
-        // Match the periodic tick: an expired phase advances once and starts now.
+        // Match the periodic tick: an expired phase advances to the next
+        // phase and stops, waiting for the user to start it.
         if (_mode == TimerMode.pomodoro && pomodoroRemainingSeconds <= 0) {
           _switchPomodoroPhase();
         }
-        _startUiTimer();
+        if (_isRunning) _startUiTimer();
       }
       notifyListeners();
       return true;
@@ -352,6 +469,15 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  /// Handle when the user manually exits lock task mode.
+  void _handleLockTaskExited() {
+    _isScreenLocked = false;
+    _lockTaskService.setKeepScreenOn(false);
+    // Notify UI to show a message, but DON'T stop the timer
+    onLockTaskExited?.call();
+    notifyListeners();
+  }
+
   /// Get total study time (for both modes).
   int get totalStudySeconds {
     if (_mode == TimerMode.normal) {
@@ -371,6 +497,9 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   void dispose() {
     _disposed = true;
     _timer?.cancel();
+    _releaseLockTask();
+    _lockTaskExitedSubscription?.cancel();
+    _lockTaskService.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

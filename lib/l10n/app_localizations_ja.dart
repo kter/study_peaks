@@ -117,11 +117,58 @@ class AppLocalizationsJa extends AppLocalizations {
   String get theme => 'テーマ';
 
   @override
-  String get themeSystem => 'システム';
+  String get themeSystem => 'システム設定';
 
   @override
   String get themeLight => 'ライト';
 
   @override
   String get themeDark => 'ダーク';
+
+  @override
+  String notificationFocusRemaining(String duration) {
+    return '集中: 残り$duration';
+  }
+
+  @override
+  String notificationBreakRemaining(String duration) {
+    return '休憩: 残り$duration';
+  }
+
+  @override
+  String get notificationFocusFinished => '集中時間終了！';
+
+  @override
+  String get notificationBreakFinished => '休憩時間終了！';
+
+  @override
+  String get notificationTimeForBreak => '休憩の時間です。';
+
+  @override
+  String get notificationTimeToFocus => '集中の時間です。';
+
+  @override
+  String get lockScreenDuringFocus => '集中時に画面を固定する';
+
+  @override
+  String get lockTaskDialogTitle => '画面固定を開始します';
+
+  @override
+  String get lockTaskDialogBody =>
+      '集中を助けるため、他のアプリを開けないようにします。解除するには「戻るボタンと履歴ボタンを同時に長押し」してください。\n\n※この後、Androidシステムから最終確認の許可を求められます。';
+
+  @override
+  String get lockTaskDialogPinAndStart => '固定して開始';
+
+  @override
+  String get lockTaskDialogStartWithoutLock => '固定せずに開始';
+
+  @override
+  String get lockTaskDialogCancel => 'キャンセル';
+
+  @override
+  String get lockTaskUnpinHint => '解除：戻る＋履歴ボタン長押し';
+
+  @override
+  String get lockTaskExitedMessage => '画面固定が解除されました';
 }

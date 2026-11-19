@@ -11,6 +11,7 @@ import '../providers/user_settings_provider.dart';
 import '../services/network_exception.dart';
 import '../widgets/room_card.dart';
 import 'room_detail_screen.dart';
+import 'study_history_screen.dart';
 import 'user_settings_screen.dart';
 
 /// Main screen displaying list of available study rooms.
@@ -33,6 +34,18 @@ class _RoomListScreenState extends State<RoomListScreen> {
       // Fetch rooms first
       await roomProvider.fetchRooms();
       
+      
+      // Update TimerProvider with localized strings
+      if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
+        context.read<TimerProvider>().updateLocalization(
+          focusFinishedTitle: l10n.notificationFocusFinished,
+          breakFinishedTitle: l10n.notificationBreakFinished,
+          focusFinishedBody: l10n.notificationTimeForBreak,
+          breakFinishedBody: l10n.notificationTimeToFocus,
+        );
+      }
+
       // Try to restore session if foreground service is running
       final restored = await sessionProvider.restoreSessionIfNeeded();
       if (restored && mounted) {
@@ -41,7 +54,13 @@ class _RoomListScreenState extends State<RoomListScreen> {
         final timerRestored =
             await timerProvider.restoreState(sessionId: sessionId);
         if (!mounted) return;
-        if (!timerRestored) timerProvider.start(sessionId: sessionId);
+        if (!timerRestored) {
+          if (sessionProvider.currentDuration > 0) {
+            timerProvider.setInitialDuration(
+                Duration(seconds: sessionProvider.currentDuration));
+          }
+          timerProvider.start(sessionId: sessionId);
+        }
         // Find the room the user was in and navigate to it
         final roomId = sessionProvider.currentRoomId;
         if (roomId != null) {
@@ -85,6 +104,17 @@ class _RoomListScreenState extends State<RoomListScreen> {
         ),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: 'Study History',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const StudyHistoryScreen(),
+                ),
+              );
+            },
+          ),
           Consumer2<AuthProvider, UserSettingsProvider>(
             builder: (context, auth, userSettings, _) {
               final showGoogleAvatar = auth.isSignedIn && 

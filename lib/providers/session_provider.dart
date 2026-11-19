@@ -5,6 +5,8 @@ import '../config/app_config.dart';
 import '../services/api_service.dart';
 import '../services/network_exception.dart';
 import '../services/notification_service.dart';
+import '../models/study_session.dart';
+import '../repositories/study_history_repository.dart';
 import 'auth_provider.dart';
 import 'timer_provider.dart';
 import 'user_settings_provider.dart';
@@ -33,6 +35,7 @@ class SessionProvider extends ChangeNotifier {
   Timer? _syncTimer;
   String? _error;
   final NotificationService _notificationService = NotificationService();
+  final StudyHistoryRepository _historyRepository = StudyHistoryRepository();
   
   // Stored localized notification strings
   String? _notificationTitle;
@@ -104,6 +107,10 @@ class SessionProvider extends ChangeNotifier {
     String? notificationTitle,
     String? notificationSessionStarted,
     String? notificationStudyingFormat,
+    String? notificationFocusRemaining,
+    String? notificationBreakRemaining,
+    String? notificationFocusFinished,
+    String? notificationBreakFinished,
   }) async {
     try {
       _error = null;
@@ -139,6 +146,19 @@ class SessionProvider extends ChangeNotifier {
         notificationText: notificationSessionStarted ?? 'Session started - 0m',
       );
       
+      // Update localization for Pomodoro mode if provided
+      if (notificationFocusRemaining != null && 
+          notificationBreakRemaining != null &&
+          notificationFocusFinished != null &&
+          notificationBreakFinished != null) {
+        await _notificationService.updatePomodoroLocalization(
+          focusRemainingFormat: notificationFocusRemaining,
+          breakRemainingFormat: notificationBreakRemaining,
+          focusFinishedText: notificationFocusFinished,
+          breakFinishedText: notificationBreakFinished,
+        );
+      }
+      
       // Persist session for recovery after app restart
       await _persistSession();
 
@@ -147,6 +167,7 @@ class SessionProvider extends ChangeNotifier {
 
     } catch (e) {
       // 401 Retry Logic
+
       if (e is ApiException && e.statusCode == 401) {
         try {
           // Force token refresh
@@ -229,21 +250,6 @@ class SessionProvider extends ChangeNotifier {
   void updateDuration(int durationSeconds) {
     _currentDuration = durationSeconds;
     
-    // Update foreground notification with current duration
-    if (isSeated) {
-      final hours = durationSeconds ~/ 3600;
-      final minutes = (durationSeconds % 3600) ~/ 60;
-      
-      String durationText;
-      if (hours > 0) {
-        durationText = '${hours}h ${minutes}m';
-      } else {
-        durationText = '${minutes}m';
-      }
-      
-      final notificationText = _studyingFormat.replaceAll('{duration}', durationText);
-      _notificationService.updateSessionDuration(notificationText);
-    }
     
     notifyListeners();
   }
@@ -299,6 +305,20 @@ class SessionProvider extends ChangeNotifier {
     
     // Clear persisted session
     await _clearPersistedSession();
+
+    // Save session to history
+    if (_currentDuration > 0 && _currentRoomId != null) {
+      try {
+        await _historyRepository.saveSession(StudySession(
+          roomId: _currentRoomId!,
+          startTime: _sessionStartedAt ?? DateTime.now().subtract(Duration(seconds: _currentDuration)),
+          durationSeconds: _currentDuration,
+        ));
+        debugPrint('📜 Session saved to history: $_currentDuration seconds');
+      } catch (e) {
+        debugPrint('📜 Failed to save session history: $e');
+      }
+    }
     
     _reset();
 

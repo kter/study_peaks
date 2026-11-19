@@ -1,0 +1,44 @@
+Running Gradle task 'assembleDebug'...                          
+Warning: The plugin google_sign_in_android requires Android SDK version 36 or higher.
+For more information about build configuration, see https://flutter.dev/to/review-gradle-config.
+Warning: The plugin path_provider_android requires Android SDK version 36 or higher.
+For more information about build configuration, see https://flutter.dev/to/review-gradle-config.
+Warning: The plugin shared_preferences_android requires Android SDK version 36 or higher.
+For more information about build configuration, see https://flutter.dev/to/review-gradle-config.
+Warning: The plugin sqflite_android requires Android SDK version 36 or higher.
+For more information about build configuration, see https://flutter.dev/to/review-gradle-config.
+Your project is configured to compile against Android SDK 34, but the following plugin(s) require to be compiled against a higher Android SDK version:
+- google_sign_in_android compiles against Android SDK 36
+- path_provider_android compiles against Android SDK 36
+- shared_preferences_android compiles against Android SDK 36
+- sqflite_android compiles against Android SDK 36
+Fix this issue by compiling against the highest Android SDK version (they are backward compatible).
+Add the following to /Users/ttakahashi/workspace/study_peaks/android/app/build.gradle.kts:
+
+    android {
+        compileSdk = 36
+        ...
+    }
+lib/providers/session_provider.dart:265:28: Error: The method 'updateSessionDuration' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:study_peaks/services/notification_service.dart' ('lib/services/notification_service.dart').
+Try correcting the name to the name of an existing method, or defining a method named 'updateSessionDuration'.
+      _notificationService.updateSessionDuration(notificationText);
+                           ^^^^^^^^^^^^^^^^^^^^^
+Target kernel_snapshot_program failed: Exception
+
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileFlutterBuildDebug'.
+> Process 'command '/Users/ttakahashi/flutter/bin/flutter'' finished with non-zero exit value 1
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 3s
+Running Gradle task 'assembleDebug'...                              3.5s
+Gradle task assembleDebug failed with exit code 1

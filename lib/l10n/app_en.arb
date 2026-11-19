@@ -58,5 +58,29 @@
   "theme": "Theme",
   "themeSystem": "System Default",
   "themeLight": "Light",
-  "themeDark": "Dark"
+  "themeDark": "Dark",
+  "notificationFocusRemaining": "Focus: {duration} remaining",
+  "@notificationFocusRemaining": {
+    "placeholders": {
+      "duration": {"type": "String"}
+    }
+  },
+  "notificationBreakRemaining": "Break: {duration} remaining",
+  "@notificationBreakRemaining": {
+    "placeholders": {
+      "duration": {"type": "String"}
+    }
+  },
+  "notificationFocusFinished": "Focus Finished!",
+  "notificationBreakFinished": "Break Finished!",
+  "notificationTimeForBreak": "Time for a break.",
+  "notificationTimeToFocus": "Time to focus.",
+  "lockScreenDuringFocus": "Lock screen during focus",
+  "lockTaskDialogTitle": "Start Screen Pinning",
+  "lockTaskDialogBody": "To help you stay focused, other apps will be blocked.\nTo unpin, long-press the Back and Recent buttons together.\n\nNote: Android will ask for confirmation after this.",
+  "lockTaskDialogPinAndStart": "Pin & Start",
+  "lockTaskDialogStartWithoutLock": "Start without Pinning",
+  "lockTaskDialogCancel": "Cancel",
+  "lockTaskUnpinHint": "Unpin: long-press Back + Recent",
+  "lockTaskExitedMessage": "Screen pinning was released"
 }

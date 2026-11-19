@@ -24,6 +24,15 @@ class _MockTimerProvider extends Mock implements TimerProvider {}
 
 class _MockUserSettingsProvider extends Mock implements UserSettingsProvider {}
 
+void stubLocalization(_MockTimerProvider timer) {
+  when(() => timer.updateLocalization(
+        focusFinishedTitle: any(named: 'focusFinishedTitle'),
+        breakFinishedTitle: any(named: 'breakFinishedTitle'),
+        focusFinishedBody: any(named: 'focusFinishedBody'),
+        breakFinishedBody: any(named: 'breakFinishedBody'),
+      )).thenReturn(null);
+}
+
 void main() {
   for (final timerRestored in [false, true]) {
     testWidgets('restored session: saved timer state is $timerRestored',
@@ -39,7 +48,9 @@ void main() {
       final session = _MockSessionProvider();
       when(() => session.restoreSessionIfNeeded()).thenAnswer((_) async => true);
       when(() => session.currentRoomId).thenReturn(null);
+      when(() => session.currentDuration).thenReturn(0);
       final timer = _MockTimerProvider();
+      stubLocalization(timer);
       when(() => timer.restoreState()).thenAnswer((_) async => timerRestored);
 
       await tester.pumpWidget(
@@ -93,6 +104,8 @@ void main() {
           final session = _MockSessionProvider();
           when(() => session.restoreSessionIfNeeded())
               .thenAnswer((_) async => false);
+          final timer = _MockTimerProvider();
+          stubLocalization(timer);
 
           await tester.pumpWidget(
             MultiProvider(
@@ -102,6 +115,7 @@ void main() {
                 ChangeNotifierProvider<UserSettingsProvider>.value(
                     value: settings),
                 ChangeNotifierProvider<SessionProvider>.value(value: session),
+                ChangeNotifierProvider<TimerProvider>.value(value: timer),
               ],
               child: const MaterialApp(
                 localizationsDelegates: AppLocalizations.localizationsDelegates,

@@ -319,6 +319,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dark'**
   String get themeDark;
+
+  /// No description provided for @notificationFocusRemaining.
+  ///
+  /// In en, this message translates to:
+  /// **'Focus: {duration} remaining'**
+  String notificationFocusRemaining(String duration);
+
+  /// No description provided for @notificationBreakRemaining.
+  ///
+  /// In en, this message translates to:
+  /// **'Break: {duration} remaining'**
+  String notificationBreakRemaining(String duration);
+
+  /// No description provided for @notificationFocusFinished.
+  ///
+  /// In en, this message translates to:
+  /// **'Focus Finished!'**
+  String get notificationFocusFinished;
+
+  /// No description provided for @notificationBreakFinished.
+  ///
+  /// In en, this message translates to:
+  /// **'Break Finished!'**
+  String get notificationBreakFinished;
+
+  /// No description provided for @notificationTimeForBreak.
+  ///
+  /// In en, this message translates to:
+  /// **'Time for a break.'**
+  String get notificationTimeForBreak;
+
+  /// No description provided for @notificationTimeToFocus.
+  ///
+  /// In en, this message translates to:
+  /// **'Time to focus.'**
+  String get notificationTimeToFocus;
+
+  /// No description provided for @lockScreenDuringFocus.
+  ///
+  /// In en, this message translates to:
+  /// **'Lock screen during focus'**
+  String get lockScreenDuringFocus;
+
+  /// No description provided for @lockTaskDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Start Screen Pinning'**
+  String get lockTaskDialogTitle;
+
+  /// No description provided for @lockTaskDialogBody.
+  ///
+  /// In en, this message translates to:
+  /// **'To help you stay focused, other apps will be blocked.\nTo unpin, long-press the Back and Recent buttons together.\n\nNote: Android will ask for confirmation after this.'**
+  String get lockTaskDialogBody;
+
+  /// No description provided for @lockTaskDialogPinAndStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin & Start'**
+  String get lockTaskDialogPinAndStart;
+
+  /// No description provided for @lockTaskDialogStartWithoutLock.
+  ///
+  /// In en, this message translates to:
+  /// **'Start without Pinning'**
+  String get lockTaskDialogStartWithoutLock;
+
+  /// No description provided for @lockTaskDialogCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get lockTaskDialogCancel;
+
+  /// No description provided for @lockTaskUnpinHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin: long-press Back + Recent'**
+  String get lockTaskUnpinHint;
+
+  /// No description provided for @lockTaskExitedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Screen pinning was released'**
+  String get lockTaskExitedMessage;
 }
 
 class _AppLocalizationsDelegate
