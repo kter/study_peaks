@@ -96,6 +96,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get leftSeat => 'You have left your seat.';
 
   @override
+  String get sessionSeatReleased =>
+      'Your seat was released because you sat down elsewhere or the session expired.';
+
+  @override
   String get leaveSummaryTitle => 'Study time recorded';
 
   @override

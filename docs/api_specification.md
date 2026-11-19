@@ -89,6 +89,8 @@ Occupies a seat in the specified room.
 
 The server uses the verified Firebase UID for signed-in users and generates an `anon_` ID with a full UUID for guests. The request may include `userId`, which the server ignores.
 
+For a signed-in user, taking a seat releases all previous seats held by that user across rooms in the same Firestore transaction. Taking the same seat starts a new session. If someone else occupies the requested seat, the server returns `409 SEAT_OCCUPIED` and keeps the user's existing seats. The lookup uses the `seats.userId` collection-group index.
+
 **Request Body**
 ```json
 {
@@ -114,7 +116,7 @@ New session IDs use a `sess_` prefix followed by a full UUID. Clients treat the 
 | 400 | `INVALID_SEAT` | Seat number is outside the range from 1 through the room capacity |
 | 401 | `INVALID_TOKEN` | Firebase ID token is invalid or expired |
 | 404 | `ROOM_NOT_FOUND` | Room does not exist |
-| 409 | `SEAT_OCCUPIED` | Seat is already occupied |
+| 409 | `SEAT_OCCUPIED` | The requested seat is occupied and cannot be taken by the caller |
 
 ---
 
@@ -125,6 +127,8 @@ New session IDs use a `sess_` prefix followed by a full UUID. Clients treat the 
 Updates the session's `lastSyncAt` timestamp and duration. Called every 5 minutes from the client.
 
 Signed-in sessions require a verified Firebase UID that matches the session owner. For guest sessions, the session ID is sufficient.
+
+Sync returns `404 SESSION_NOT_FOUND` after a seat move replaces the session or the 24-hour inactivity cleanup deletes it. The client finalizes the local study record and clears the active session.
 
 **Request Body**
 ```json

@@ -52,6 +52,49 @@ func TestValidSeatNumber(t *testing.T) {
 	}
 }
 
+func TestCanMoveSeat(t *testing.T) {
+	cases := []struct {
+		userId string
+		want   bool
+	}{
+		{"uid-1", true},
+		{"anon_guest", false},
+		{"", false},
+	}
+
+	for _, c := range cases {
+		if got := canMoveSeat(c.userId); got != c.want {
+			t.Errorf("canMoveSeat(%q) = %t, want %t", c.userId, got, c.want)
+		}
+	}
+}
+
+func TestCanTakeSeat(t *testing.T) {
+	cases := []struct {
+		name     string
+		occupied bool
+		ownerId  string
+		callerId string
+		want     bool
+	}{
+		{"guest takes empty seat", false, "", "anon_guest", true},
+		{"signed-in user takes empty seat", false, "", "uid-1", true},
+		{"signed-in user retakes own seat", true, "uid-1", "uid-1", true},
+		{"signed-in user cannot take another user's seat", true, "uid-2", "uid-1", false},
+		{"signed-in user cannot take a guest's seat", true, "anon_guest", "uid-1", false},
+		{"guest cannot retake an occupied seat", true, "anon_guest", "anon_guest", false},
+		{"missing user IDs do not grant access", true, "", "", false},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := canTakeSeat(c.occupied, c.ownerId, c.callerId); got != c.want {
+				t.Errorf("canTakeSeat(%t, %q, %q) = %t, want %t", c.occupied, c.ownerId, c.callerId, got, c.want)
+			}
+		})
+	}
+}
+
 func TestCanModifySession(t *testing.T) {
 	cases := []struct {
 		name     string

@@ -260,6 +260,12 @@ abstract class AppLocalizations {
   /// **'You have left your seat.'**
   String get leftSeat;
 
+  /// No description provided for @sessionSeatReleased.
+  ///
+  /// In en, this message translates to:
+  /// **'Your seat was released because you sat down elsewhere or the session expired.'**
+  String get sessionSeatReleased;
+
   /// No description provided for @leaveSummaryTitle.
   ///
   /// In en, this message translates to:

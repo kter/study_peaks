@@ -27,6 +27,7 @@
   "leaveConnectionFailed": "通信できなかったため、座席が空いたことを確認できませんでした。",
   "leaveRequestFailed": "座席が空いたことを確認できませんでした。",
   "leftSeat": "離席しました。",
+  "sessionSeatReleased": "別の場所で着席したか、セッションの期限が切れたため、席が解放されました。",
   "leaveSummaryTitle": "学習時間を記録しました",
   "leaveSummarySession": "今回",
   "leaveRetry": "離席を再試行",

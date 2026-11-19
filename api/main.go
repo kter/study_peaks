@@ -431,8 +431,26 @@ func sitHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil && status.Code(err) != codes.NotFound {
 			return err
 		}
-		if err == nil && getBool(doc.Data(), "isOccupied") {
+		if err == nil && !canTakeSeat(getBool(doc.Data(), "isOccupied"), getString(doc.Data(), "userId"), userId) {
 			return &AppError{Code: "SEAT_OCCUPIED", Message: "Seat is already occupied", Status: http.StatusConflict}
+		}
+
+		if canMoveSeat(userId) {
+			query := firestoreClient.CollectionGroup("seats").Where("userId", "==", userId)
+			previousSeats, err := tx.Documents(query).GetAll()
+			if err != nil {
+				return err
+			}
+			for _, seat := range previousSeats {
+				// The target seat is overwritten by tx.Set below; writing the same
+				// document twice in one transaction is not allowed.
+				if seat.Ref.Path == seatRef.Path {
+					continue
+				}
+				if err := tx.Delete(seat.Ref); err != nil {
+					return err
+				}
+			}
 		}
 
 		sessionId = "sess_" + uuid.New().String()
@@ -482,6 +500,14 @@ func validSeatNumber(seatNumber, capacity int) bool {
 func authenticatedUserId(ctx context.Context) string {
 	userId, _ := ctx.Value(userIdKey).(string)
 	return userId
+}
+
+func canMoveSeat(userId string) bool {
+	return userId != "" && !strings.HasPrefix(userId, anonymousPrefix)
+}
+
+func canTakeSeat(occupied bool, ownerId, callerId string) bool {
+	return !occupied || (canMoveSeat(callerId) && ownerId == callerId)
 }
 
 func canModifySession(ownerId, callerId string) bool {

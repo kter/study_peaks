@@ -1,10 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:study_peaks/providers/auth_provider.dart';
 import 'package:study_peaks/providers/session_provider.dart';
 import 'package:study_peaks/providers/user_settings_provider.dart';
 import 'package:study_peaks/services/api_service.dart';
 import 'package:study_peaks/services/network_exception.dart';
+import 'package:study_peaks/services/study_persistence_keys.dart';
 import 'package:study_peaks/models/study_session.dart';
 import 'package:study_peaks/repositories/study_history_repository.dart';
 
@@ -231,7 +233,7 @@ void main() {
     });
   });
 
-  test('sync distinguishes API responses from transport failures', () async {
+  test('sync API and transport errors keep the session active', () async {
     when(() => mockApiService.sit(
           'room-1',
           10,
@@ -244,10 +246,17 @@ void main() {
     when(() => mockApiService.sync(any(), any(), any())).thenThrow(apiError);
     await provider.forceSync();
     expect(provider.error, apiError.toString());
+    expect(provider.isSeated, isTrue);
 
     when(() => mockApiService.sync(any(), any(), any()))
         .thenThrow(const NetworkException('offline'));
     await provider.forceSync();
     expect(provider.error, NetworkErrorKey.networkError);
+    expect(provider.isSeated, isTrue);
+    expect(provider.sessionId, 'test-session-id');
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.containsKey(StudyPersistenceKeys.activeSession), isTrue);
+    verifyNever(() => provider.historyRepository.saveSession(any()));
+    verifyNever(() => mockApiService.leave(any(), any(), any()));
   });
 }

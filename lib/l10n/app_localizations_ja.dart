@@ -92,6 +92,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get leftSeat => '離席しました。';
 
   @override
+  String get sessionSeatReleased => '別の場所で着席したか、セッションの期限が切れたため、席が解放されました。';
+
+  @override
   String get leaveSummaryTitle => '学習時間を記録しました';
 
   @override

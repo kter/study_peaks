@@ -33,6 +33,7 @@
   "leaveConnectionFailed": "Could not confirm that your seat was released. Check your internet connection.",
   "leaveRequestFailed": "Could not confirm that your seat was released.",
   "leftSeat": "You have left your seat.",
+  "sessionSeatReleased": "Your seat was released because you sat down elsewhere or the session expired.",
   "leaveSummaryTitle": "Study time recorded",
   "leaveSummarySession": "This session",
   "leaveRetry": "Retry leaving",
