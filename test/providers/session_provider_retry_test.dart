@@ -3,27 +3,41 @@ import 'package:mocktail/mocktail.dart';
 import 'package:study_peaks/providers/auth_provider.dart';
 import 'package:study_peaks/providers/session_provider.dart';
 import 'package:study_peaks/services/api_service.dart';
+import 'package:study_peaks/models/study_session.dart';
+import 'package:study_peaks/repositories/study_history_repository.dart';
 
 import '../helpers/test_helpers.dart';
+
+class MockHistory extends Mock implements StudyHistoryRepository {}
 
 class MockAuthProvider extends Mock implements AuthProvider {}
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() {
+    registerFallbackValue(StudySession(
+        roomId: 'room', startTime: DateTime(2026), durationSeconds: 0));
+  });
   late MockApiService mockApiService;
   late MockAuthProvider mockAuthProvider;
   late SessionProvider provider;
 
-  setUp(() {
+  setUp(() async {
+    await setupMockSharedPreferences();
     mockApiService = MockApiService();
     mockAuthProvider = MockAuthProvider();
+    final history = MockHistory();
+    when(() => history.saveSession(any())).thenAnswer((_) async {});
     provider = SessionProvider(
+      historyRepository: history,
       apiService: mockApiService,
       useMockFallback: false, // Ensure we test production logic
     );
     provider.setAuthProvider(mockAuthProvider);
-    
+
     // Default stubs to prevent null pointer exceptions on Futures
-    when(() => mockAuthProvider.getIdToken(forceRefresh: any(named: 'forceRefresh')))
+    when(() => mockAuthProvider.getIdToken(
+            forceRefresh: any(named: 'forceRefresh')))
         .thenAnswer((_) async => 'token');
     when(() => mockAuthProvider.displayName).thenReturn('Test User');
     when(() => mockAuthProvider.userId).thenReturn('test-uid');
@@ -43,21 +57,23 @@ void main() {
       // First call throws 401
       // We need to order the answers for getIdToken to simulate refresh
       // var tokenCallCount = 0; // Removed unused variable
-      when(() => mockAuthProvider.getIdToken(forceRefresh: any(named: 'forceRefresh')))
+      when(() => mockAuthProvider.getIdToken(
+              forceRefresh: any(named: 'forceRefresh')))
           .thenAnswer((invocation) async {
-            final forceRefresh = invocation.namedArguments[#forceRefresh] as bool? ?? false;
-            if (forceRefresh) return 'new-token';
-            return 'old-token';
-          });
+        final forceRefresh =
+            invocation.namedArguments[#forceRefresh] as bool? ?? false;
+        if (forceRefresh) return 'new-token';
+        return 'old-token';
+      });
 
       var callCount = 0;
       when(() => mockApiService.sit(
-        'room-1',
-        10,
-        displayName: any(named: 'displayName'),
-        userId: any(named: 'userId'),
-        countryCode: any(named: 'countryCode'),
-      )).thenAnswer((_) async {
+            'room-1',
+            10,
+            displayName: any(named: 'displayName'),
+            userId: any(named: 'userId'),
+            countryCode: any(named: 'countryCode'),
+          )).thenAnswer((_) async {
         callCount++;
         if (callCount == 1) {
           throw ApiException('Unauthorized', 401);
@@ -72,66 +88,67 @@ void main() {
       expect(result, true);
       expect(provider.state, SessionState.seated);
       expect(provider.sessionId, 'session-retry');
-      
+
       // Verify token refresh was called
       verify(() => mockAuthProvider.getIdToken(forceRefresh: true)).called(1);
       // Verify setAuthToken was called with new token (we can't easily verify exact sequence without more complex mocks, but this is good enough)
       verify(() => mockApiService.setAuthToken('new-token')).called(1);
       // Verify sit was called twice
       verify(() => mockApiService.sit(
-        'room-1',
-        10,
-        displayName: any(named: 'displayName'),
-        userId: any(named: 'userId'),
-        countryCode: any(named: 'countryCode'),
-      )).called(2);
+            'room-1',
+            10,
+            displayName: any(named: 'displayName'),
+            userId: any(named: 'userId'),
+            countryCode: any(named: 'countryCode'),
+          )).called(2);
     });
 
     test('sit fails if retry also fails', () async {
       // Both calls throw 401 (or retry throws something else)
       when(() => mockApiService.sit(
-        'room-1',
-        10,
-        displayName: any(named: 'displayName'),
-        userId: any(named: 'userId'),
-        countryCode: any(named: 'countryCode'),
-      )).thenThrow(
+            'room-1',
+            10,
+            displayName: any(named: 'displayName'),
+            userId: any(named: 'userId'),
+            countryCode: any(named: 'countryCode'),
+          )).thenThrow(
         ApiException('Unauthorized', 401),
       );
 
       when(() => mockAuthProvider.getIdToken(forceRefresh: true))
           .thenAnswer((_) async => 'new-token');
-      
-       // Act
+
+      // Act
       final result = await provider.sit('room-1', 10);
 
       // Assert
       expect(result, false);
       expect(provider.state, SessionState.idle);
       expect(provider.error, isNotNull);
-      
+
       verify(() => mockAuthProvider.getIdToken(forceRefresh: true)).called(1);
       verify(() => mockApiService.sit(
-        'room-1',
-        10,
-        displayName: any(named: 'displayName'),
-        userId: any(named: 'userId'),
-        countryCode: any(named: 'countryCode'),
-      )).called(2); // Initial + Retry
+            'room-1',
+            10,
+            displayName: any(named: 'displayName'),
+            userId: any(named: 'userId'),
+            countryCode: any(named: 'countryCode'),
+          )).called(2); // Initial + Retry
     });
 
     test('leave retries on 401 error and succeeds', () async {
       // Setup: sit first
-      when(() => mockAuthProvider.getIdToken(forceRefresh: any(named: 'forceRefresh')))
+      when(() => mockAuthProvider.getIdToken(
+              forceRefresh: any(named: 'forceRefresh')))
           .thenAnswer((_) async => 'token');
-          
+
       when(() => mockApiService.sit(
-        'room-1',
-        10,
-        displayName: any(named: 'displayName'),
-        userId: any(named: 'userId'),
-        countryCode: any(named: 'countryCode'),
-      )).thenAnswer(
+            'room-1',
+            10,
+            displayName: any(named: 'displayName'),
+            userId: any(named: 'userId'),
+            countryCode: any(named: 'countryCode'),
+          )).thenAnswer(
         (_) async => createMockSitResponse(sessionId: 'session-123'),
       );
       final sitResult = await provider.sit('room-1', 10);
@@ -143,7 +160,8 @@ void main() {
 
       // Prepare leave failure then success
       var callCount = 0;
-      when(() => mockApiService.leave(any(), any(), any())).thenAnswer((_) async {
+      when(() => mockApiService.leave(any(), any(), any()))
+          .thenAnswer((_) async {
         callCount++;
         if (callCount == 1) {
           throw ApiException('Unauthorized', 401);

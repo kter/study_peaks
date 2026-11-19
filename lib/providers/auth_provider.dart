@@ -30,6 +30,9 @@ class AuthProvider extends ChangeNotifier {
   AuthProvider({FirebaseAuth? auth, GoogleSignIn? googleSignIn})
       : _auth = auth ?? FirebaseAuth.instance,
         _googleSignIn = googleSignIn ?? GoogleSignIn.instance {
+    // Firebase is initialized before providers are created. Seed the owner
+    // synchronously so local recovery need not wait for the first stream event.
+    _user = _auth.currentUser;
     // Listen to auth state changes
     _authSubscription = _auth.authStateChanges().listen((User? user) {
       _user = user;

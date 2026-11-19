@@ -570,7 +570,7 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
             ),
           ] else ...[
             Text(
-              'Sign in to sync your study progress across devices.',
+              AppLocalizations.of(context)!.historySignInNotice,
               style: TextStyle(
                 fontSize: 14,
                 color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,

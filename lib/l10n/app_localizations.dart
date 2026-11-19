@@ -403,6 +403,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Screen pinning was released'**
   String get lockTaskExitedMessage;
+
+  /// No description provided for @studyHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Study History'**
+  String get studyHistory;
+
+  /// No description provided for @historyStorageNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'History is stored only on this device, separately for guests and each account. It does not transfer to other devices.'**
+  String get historyStorageNotice;
+
+  /// No description provided for @historyLegacy.
+  ///
+  /// In en, this message translates to:
+  /// **'View older history with unknown owner'**
+  String get historyLegacy;
+
+  /// No description provided for @historyCurrentOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to current user history'**
+  String get historyCurrentOwner;
+
+  /// No description provided for @historyLegacyNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'The owner and focus intervals of older history are unknown. Time is shown on the start date. Signing in does not transfer these records.'**
+  String get historyLegacyNotice;
+
+  /// No description provided for @historyLastSevenDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 7 Days'**
+  String get historyLastSevenDays;
+
+  /// No description provided for @historyTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total Study Time'**
+  String get historyTotal;
+
+  /// No description provided for @historyEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No study records yet'**
+  String get historyEmpty;
+
+  /// No description provided for @historyLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load history. Tap to retry'**
+  String get historyLoadFailed;
+
+  /// No description provided for @historySaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save your study record. Please retry leaving your seat.'**
+  String get historySaveFailed;
+
+  /// No description provided for @historyOtherOwnerActive.
+  ///
+  /// In en, this message translates to:
+  /// **'A study session for another user remains on this device. Switch back to that user and leave the seat.'**
+  String get historyOtherOwnerActive;
+
+  /// No description provided for @historySignInNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Signing in keeps a separate history for this account on this device. History is not synced across devices.'**
+  String get historySignInNotice;
 }
 
 class _AppLocalizationsDelegate

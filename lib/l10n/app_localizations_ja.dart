@@ -171,4 +171,44 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get lockTaskExitedMessage => '画面固定が解除されました';
+
+  @override
+  String get studyHistory => '学習履歴';
+
+  @override
+  String get historyStorageNotice =>
+      '履歴はこの端末だけに保存されます。ゲストと各アカウントの履歴は別々です。端末変更時の引き継ぎには対応していません。';
+
+  @override
+  String get historyLegacy => '所有者不明の旧履歴を見る';
+
+  @override
+  String get historyCurrentOwner => '現在の利用者の履歴に戻る';
+
+  @override
+  String get historyLegacyNotice =>
+      '旧履歴の所有者と集中区間は不明です。時間は開始日にまとめて表示します。サインインしても移行されません。';
+
+  @override
+  String get historyLastSevenDays => '過去7日間';
+
+  @override
+  String get historyTotal => '累計学習時間';
+
+  @override
+  String get historyEmpty => '学習記録はありません';
+
+  @override
+  String get historyLoadFailed => '履歴を読み込めませんでした。タップして再試行';
+
+  @override
+  String get historySaveFailed => '学習記録を保存できませんでした。退席を再試行してください。';
+
+  @override
+  String get historyOtherOwnerActive =>
+      '別の利用者の学習が端末に残っています。元の利用者に切り替えて退席してください。';
+
+  @override
+  String get historySignInNotice =>
+      'サインインすると、この端末でアカウントごとに履歴を保存します。端末間では同期されません。';
 }

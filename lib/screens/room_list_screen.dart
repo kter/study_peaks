@@ -54,7 +54,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
         final timerRestored =
             await timerProvider.restoreState(sessionId: sessionId);
         if (!mounted) return;
-        if (!timerRestored) {
+        if (!timerRestored && !sessionProvider.isFinalizing) {
           if (sessionProvider.currentDuration > 0) {
             timerProvider.setInitialDuration(
                 Duration(seconds: sessionProvider.currentDuration));
@@ -106,7 +106,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.history),
-            tooltip: 'Study History',
+            tooltip: AppLocalizations.of(context)!.studyHistory,
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(

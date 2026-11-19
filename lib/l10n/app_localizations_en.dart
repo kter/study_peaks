@@ -173,4 +173,45 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get lockTaskExitedMessage => 'Screen pinning was released';
+
+  @override
+  String get studyHistory => 'Study History';
+
+  @override
+  String get historyStorageNotice =>
+      'History is stored only on this device, separately for guests and each account. It does not transfer to other devices.';
+
+  @override
+  String get historyLegacy => 'View older history with unknown owner';
+
+  @override
+  String get historyCurrentOwner => 'Back to current user history';
+
+  @override
+  String get historyLegacyNotice =>
+      'The owner and focus intervals of older history are unknown. Time is shown on the start date. Signing in does not transfer these records.';
+
+  @override
+  String get historyLastSevenDays => 'Last 7 Days';
+
+  @override
+  String get historyTotal => 'Total Study Time';
+
+  @override
+  String get historyEmpty => 'No study records yet';
+
+  @override
+  String get historyLoadFailed => 'Could not load history. Tap to retry';
+
+  @override
+  String get historySaveFailed =>
+      'Could not save your study record. Please retry leaving your seat.';
+
+  @override
+  String get historyOtherOwnerActive =>
+      'A study session for another user remains on this device. Switch back to that user and leave the seat.';
+
+  @override
+  String get historySignInNotice =>
+      'Signing in keeps a separate history for this account on this device. History is not synced across devices.';
 }

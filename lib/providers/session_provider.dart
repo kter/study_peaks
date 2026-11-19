@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
@@ -6,6 +7,7 @@ import '../services/api_service.dart';
 import '../services/network_exception.dart';
 import '../services/notification_service.dart';
 import '../models/study_session.dart';
+import '../services/study_persistence_keys.dart';
 import '../repositories/study_history_repository.dart';
 import 'auth_provider.dart';
 import 'timer_provider.dart';
@@ -35,8 +37,33 @@ class SessionProvider extends ChangeNotifier {
   Timer? _syncTimer;
   String? _error;
   final NotificationService _notificationService = NotificationService();
-  final StudyHistoryRepository _historyRepository = StudyHistoryRepository();
-  
+  final StudyHistoryRepository _historyRepository;
+  TimerProvider? _timerProvider;
+  String? _ownerId;
+  StudySession? _pendingRecord;
+  bool _leaving = false;
+  bool _disposed = false;
+  Future<bool>? _restoreOperation;
+  static const _keyActive = StudyPersistenceKeys.activeSession;
+  String get historyOwnerId {
+    final uid = _authProvider?.userId;
+    return uid == null || uid.isEmpty ? StudySession.guestOwner : 'user:$uid';
+  }
+
+  void setTimerProvider(TimerProvider timer) {
+    _timerProvider?.removeListener(_onTimerChanged);
+    _timerProvider = timer;
+    timer.addListener(_onTimerChanged);
+  }
+
+  void _onTimerChanged() {
+    if (_timerProvider?.sessionId == _sessionId &&
+        _sessionId != null &&
+        _pendingRecord == null) {
+      _currentDuration = _timerProvider!.totalStudySeconds;
+    }
+  }
+
   // Stored localized notification strings
   String? _notificationTitle;
   String _studyingFormat = 'Studying - {duration}'; // Default fallback
@@ -44,25 +71,36 @@ class SessionProvider extends ChangeNotifier {
   static const syncIntervalMinutes = AppConfig.sessionSyncIntervalMinutes;
 
   // SharedPreferences keys for session persistence
-  static const _keySessionId = 'persisted_session_id';
+  static const _keySessionId = StudyPersistenceKeys.legacySessionId;
   static const _keyRoomId = 'persisted_room_id';
   static const _keyRoomName = 'persisted_room_name';
   static const _keySeatNumber = 'persisted_seat_number';
   static const _keySessionStartedAt = 'persisted_session_started_at';
 
   /// Creates a SessionProvider.
-  /// 
+  ///
   /// [useMockFallback] controls whether API errors fall back to mock mode.
   /// Defaults to [kDebugMode], so production builds will show errors to users.
   SessionProvider({
     ApiService? apiService,
+    StudyHistoryRepository? historyRepository,
     bool? useMockFallback,
-  })  : _apiService = apiService ?? ApiService(),
+  })  : _historyRepository = historyRepository ?? StudyHistoryRepository(),
+        _apiService = apiService ?? ApiService(),
         useMockFallback = useMockFallback ?? kDebugMode;
 
   /// Set the auth provider for getting tokens
   void setAuthProvider(AuthProvider authProvider) {
+    if (identical(_authProvider, authProvider)) return;
+    _authProvider?.removeListener(_onAuthChanged);
     _authProvider = authProvider;
+    authProvider.addListener(_onAuthChanged);
+  }
+
+  void _onAuthChanged() {
+    if (!_disposed && _sessionId == null) {
+      unawaited(restoreSessionIfNeeded());
+    }
   }
 
   /// Set the user settings provider for syncing profile data
@@ -87,6 +125,7 @@ class SessionProvider extends ChangeNotifier {
   DateTime? get sessionStartedAt => _sessionStartedAt;
   int get currentDuration => _currentDuration;
   String? get error => _error;
+  bool get isFinalizing => _pendingRecord != null;
   bool get isSeated => _state == SessionState.seated;
 
   /// Clear the current error state.
@@ -112,6 +151,15 @@ class SessionProvider extends ChangeNotifier {
     String? notificationFocusFinished,
     String? notificationBreakFinished,
   }) async {
+    if (_sessionId != null || _leaving) return false;
+    final ownerAtStart = historyOwnerId;
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getString(_keyActive) != null) {
+      _timerProvider?.setRecoveryBlocked(true);
+      _error = 'historyOtherOwnerActive';
+      notifyListeners();
+      return false;
+    }
     try {
       _error = null;
       await _ensureAuthToken();
@@ -131,23 +179,26 @@ class SessionProvider extends ChangeNotifier {
       _seatNumber = response.seatNumber;
       _sessionStartedAt = response.sessionStartedAt;
       _currentDuration = 0;
+      _ownerId = ownerAtStart;
       _state = SessionState.seated;
-      
+      await _persistSession();
+
       // Store notification strings for later updates
-      _notificationTitle = notificationTitle ?? 'Studying at ${roomName ?? roomId}';
+      _notificationTitle =
+          notificationTitle ?? 'Studying at ${roomName ?? roomId}';
       _studyingFormat = notificationStudyingFormat ?? 'Studying - {duration}';
 
       // Start sync timer (every 5 minutes)
       _startSyncTimer();
-      
+
       // Start foreground notification
       await _notificationService.startStudySession(
         notificationTitle: _notificationTitle!,
         notificationText: notificationSessionStarted ?? 'Session started - 0m',
       );
-      
+
       // Update localization for Pomodoro mode if provided
-      if (notificationFocusRemaining != null && 
+      if (notificationFocusRemaining != null &&
           notificationBreakRemaining != null &&
           notificationFocusFinished != null &&
           notificationBreakFinished != null) {
@@ -158,13 +209,12 @@ class SessionProvider extends ChangeNotifier {
           breakFinishedText: notificationBreakFinished,
         );
       }
-      
+
       // Persist session for recovery after app restart
       await _persistSession();
 
       notifyListeners();
       return true;
-
     } catch (e) {
       // 401 Retry Logic
 
@@ -193,23 +243,28 @@ class SessionProvider extends ChangeNotifier {
               _seatNumber = response.seatNumber;
               _sessionStartedAt = response.sessionStartedAt;
               _currentDuration = 0;
+              _ownerId = ownerAtStart;
               _state = SessionState.seated;
-              
+              await _persistSession();
+
               // Store notification strings for later updates
-              _notificationTitle = notificationTitle ?? 'Studying at ${roomName ?? roomId}';
-              _studyingFormat = notificationStudyingFormat ?? 'Studying - {duration}';
-              
+              _notificationTitle =
+                  notificationTitle ?? 'Studying at ${roomName ?? roomId}';
+              _studyingFormat =
+                  notificationStudyingFormat ?? 'Studying - {duration}';
+
               _startSyncTimer();
-              
+
               // Start foreground notification
               await _notificationService.startStudySession(
                 notificationTitle: _notificationTitle!,
-                notificationText: notificationSessionStarted ?? 'Session started - 0m',
+                notificationText:
+                    notificationSessionStarted ?? 'Session started - 0m',
               );
-              
+
               // Persist session for recovery after app restart
               await _persistSession();
-              
+
               notifyListeners();
               return true;
             }
@@ -220,6 +275,11 @@ class SessionProvider extends ChangeNotifier {
         }
       }
 
+      if (_sessionId != null && _ownerId != null) {
+        _error = 'historySaveFailed';
+        notifyListeners();
+        return false;
+      }
       if (useMockFallback) {
         // Development mode: log and fall back to mock mode
         debugPrint('API error (mock fallback): $e');
@@ -229,6 +289,8 @@ class SessionProvider extends ChangeNotifier {
         _seatNumber = seatNumber;
         _sessionStartedAt = DateTime.now();
         _currentDuration = 0;
+        _ownerId = ownerAtStart;
+        await _persistSession();
         _state = SessionState.seated;
         notifyListeners();
         return true;
@@ -248,22 +310,52 @@ class SessionProvider extends ChangeNotifier {
 
   /// Update session duration (called from timer provider).
   void updateDuration(int durationSeconds) {
+    if (_pendingRecord != null) return;
     _currentDuration = durationSeconds;
-    
-    
+
     notifyListeners();
   }
 
   /// Leave the seat.
   Future<bool> leave() async {
-    if (_sessionId == null || _currentRoomId == null) return false;
+    if (_sessionId == null || _currentRoomId == null || _leaving) return false;
+    _leaving = true;
+    try {
+      if (_pendingRecord == null) {
+        final timer = _timerProvider;
+        if (timer != null && timer.sessionId == _sessionId) {
+          timer.freezeForFinalization();
+          await timer.ensurePersisted();
+          _currentDuration = timer.totalStudySeconds;
+        }
+        _pendingRecord = StudySession(
+          sessionId: _sessionId!,
+          ownerId: _ownerId ?? StudySession.legacyOwner,
+          roomId: _currentRoomId!,
+          startTime: _sessionStartedAt ?? DateTime.now(),
+          durationSeconds: _currentDuration,
+          intervals: timer != null &&
+                  timer.sessionId == _sessionId &&
+                  timer.hasExactIntervals
+              ? timer.focusIntervals
+              : null,
+        );
+      }
+      // Freeze finalization before the network request: kill/retry cannot add time.
+      await _persistSession();
+    } catch (e) {
+      _error = 'historySaveFailed';
+      _leaving = false;
+      notifyListeners();
+      return false;
+    }
 
     try {
       _error = null;
       await _ensureAuthToken();
       await _apiService.leave(_currentRoomId!, _sessionId!, _currentDuration);
     } catch (e) {
-      bool retrySuccess = false;
+      bool retrySuccess = e is ApiException && e.statusCode == 404;
       // 401 Retry Logic
       if (e is ApiException && e.statusCode == 401) {
         try {
@@ -278,7 +370,7 @@ class SessionProvider extends ChangeNotifier {
             }
           }
         } catch (retryError) {
-           debugPrint('Retry failed: $retryError');
+          debugPrint('Retry failed: $retryError');
         }
       }
 
@@ -298,30 +390,22 @@ class SessionProvider extends ChangeNotifier {
       }
     }
 
-    _cancelSyncTimer();
-    
-    // Stop foreground notification
-    await _notificationService.stopStudySession();
-    
-    // Clear persisted session
-    await _clearPersistedSession();
-
-    // Save session to history
-    if (_currentDuration > 0 && _currentRoomId != null) {
-      try {
-        await _historyRepository.saveSession(StudySession(
-          roomId: _currentRoomId!,
-          startTime: _sessionStartedAt ?? DateTime.now().subtract(Duration(seconds: _currentDuration)),
-          durationSeconds: _currentDuration,
-        ));
-        debugPrint('📜 Session saved to history: $_currentDuration seconds');
-      } catch (e) {
-        debugPrint('📜 Failed to save session history: $e');
+    try {
+      if (_pendingRecord != null && _pendingRecord!.durationSeconds > 0) {
+        await _historyRepository.saveSession(_pendingRecord!);
       }
+      await _clearPersistedSession();
+    } catch (e) {
+      _error = 'historySaveFailed';
+      _leaving = false;
+      notifyListeners();
+      return false;
     }
-    
+    _cancelSyncTimer();
+    await _notificationService.stopStudySession();
+    _timerProvider?.endSession();
     _reset();
-
+    _leaving = false;
     notifyListeners();
     return true;
   }
@@ -343,31 +427,38 @@ class SessionProvider extends ChangeNotifier {
   /// Force an immediate sync (e.g., when user changes their icon).
   /// This allows icon changes to be reflected immediately for other users.
   Future<void> forceSync() async {
-    if (!isSeated) return;
+    if (!isSeated || _pendingRecord != null) {
+      return;
+    }
     await _syncSession();
   }
 
   /// Sync session with server.
   Future<void> _syncSession() async {
-    if (_sessionId == null || _currentRoomId == null) return;
+    if (_sessionId == null ||
+        _currentRoomId == null ||
+        _pendingRecord != null ||
+        _ownerId != historyOwnerId) {
+      return;
+    }
 
     _state = SessionState.syncing;
     notifyListeners();
 
     try {
       await _ensureAuthToken();
-      
+
       // Get current user settings for sync
       String? displayName;
       String? countryCode;
       String? iconSeed;
       String? photoUrl;
-      
+
       if (_userSettingsProvider != null) {
         displayName = _userSettingsProvider!.displayName;
         countryCode = _userSettingsProvider!.countryCode;
         iconSeed = _userSettingsProvider!.iconSeed;
-        
+
         // Determine photoUrl based on settings and auth state
         if (_authProvider != null &&
             _authProvider!.isSignedIn &&
@@ -376,9 +467,10 @@ class SessionProvider extends ChangeNotifier {
           photoUrl = _authProvider!.photoUrl;
         }
       }
-      
-      debugPrint('🔄 Sync: iconSeed=$iconSeed, photoUrl=$photoUrl, displayName=$displayName');
-      
+
+      debugPrint(
+          '🔄 Sync: iconSeed=$iconSeed, photoUrl=$photoUrl, displayName=$displayName');
+
       await _apiService.sync(
         _currentRoomId!,
         _sessionId!,
@@ -390,7 +482,7 @@ class SessionProvider extends ChangeNotifier {
       );
     } catch (e) {
       bool retrySuccess = false;
-         // 401 Retry Logic
+      // 401 Retry Logic
       if (e is ApiException && e.statusCode == 401) {
         try {
           if (_authProvider != null) {
@@ -404,12 +496,12 @@ class SessionProvider extends ChangeNotifier {
             }
           }
         } catch (retryError) {
-           debugPrint('Retry failed: $retryError');
+          debugPrint('Retry failed: $retryError');
         }
       }
 
       if (!retrySuccess) {
-         // Use localization key for network errors
+        // Use localization key for network errors
         if (isNetworkError(e)) {
           _error = NetworkErrorKey.networkError;
         } else {
@@ -424,6 +516,8 @@ class SessionProvider extends ChangeNotifier {
 
   /// Reset session state.
   void _reset() {
+    _pendingRecord = null;
+    _ownerId = null;
     _state = SessionState.idle;
     _currentRoomId = null;
     _currentRoomName = null;
@@ -437,42 +531,47 @@ class SessionProvider extends ChangeNotifier {
   /// Called when a session is started to enable recovery after app restart.
   Future<void> _persistSession() async {
     if (_sessionId == null || _currentRoomId == null) return;
-    
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_keySessionId, _sessionId!);
-      await prefs.setString(_keyRoomId, _currentRoomId!);
-      await prefs.setString(_keyRoomName, _currentRoomName ?? '');
-      await prefs.setInt(_keySeatNumber, _seatNumber ?? 0);
-      await prefs.setString(_keySessionStartedAt, _sessionStartedAt?.toIso8601String() ?? '');
-      debugPrint('📦 Session persisted: $_sessionId');
-    } catch (e) {
-      debugPrint('📦 Failed to persist session: $e');
-    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final saved = await prefs.setString(
+        _keyActive,
+        jsonEncode({
+          'sessionId': _sessionId,
+          'roomId': _currentRoomId,
+          'roomName': _currentRoomName,
+          'seatNumber': _seatNumber,
+          'startedAt': _sessionStartedAt?.toIso8601String(),
+          'ownerId': _ownerId,
+          'pending': _pendingRecord?.toMap(),
+        }));
+    if (!saved) throw StateError('Session write failed');
+    // Compatibility keys for notifications and diagnostics.
+    await prefs.setString(_keySessionId, _sessionId!);
+    await prefs.setString(_keyRoomId, _currentRoomId!);
   }
 
-  /// Clear persisted session from local storage.
   Future<void> _clearPersistedSession() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_keySessionId);
-      await prefs.remove(_keyRoomId);
-      await prefs.remove(_keyRoomName);
-      await prefs.remove(_keySeatNumber);
-      await prefs.remove(_keySessionStartedAt);
-      await TimerProvider.clearPersistedState();
-      debugPrint('📦 Persisted session cleared');
-    } catch (e) {
-      debugPrint('📦 Failed to clear persisted session: $e');
+    final prefs = await SharedPreferences.getInstance();
+    // Authoritative recovery record is removed last.
+    await TimerProvider.clearPersistedState();
+    for (final key in [
+      _keySessionId,
+      _keyRoomId,
+      _keyRoomName,
+      _keySeatNumber,
+      _keySessionStartedAt,
+      _keyActive
+    ]) {
+      if (!await prefs.remove(key)) throw StateError('Session cleanup failed');
     }
   }
 
   /// Restore session from seat map data when user's ID is found on a seat.
   /// Returns true if session was restored, false otherwise.
-  /// 
+  ///
   /// This should be called when the seat map is opened to handle the case where
   /// the app was killed but the user's session still exists on the server.
-  /// 
+  ///
   /// [roomId] - The room ID to check
   /// [seats] - The list of seats from the room
   /// [userId] - The current user's ID to search for
@@ -482,139 +581,85 @@ class SessionProvider extends ChangeNotifier {
     required String userId,
     String? roomName,
   }) async {
-    // Already seated, no need to restore
     if (isSeated) return false;
-    
-    // Find seat occupied by this user
-    dynamic userSeat;
-    for (final seat in seats) {
-      if (seat.isOccupied && seat.user?.userId == userId) {
-        userSeat = seat;
-        break;
-      }
-    }
-    
-    if (userSeat == null) return false;
-    
-    debugPrint('🔄 Found user session on seat map, attempting restore...');
-    
-    try {
-      // Try to get session info from server
-      await _ensureAuthToken();
-      
-      // Load persisted session data if available
-      final prefs = await SharedPreferences.getInstance();
-      final sessionId = prefs.getString(_keySessionId);
-      
-      if (sessionId != null) {
-        // Validate session with server
-        final sessionInfo = await _apiService.getSession(roomId, sessionId);
-        
-        if (sessionInfo != null) {
-          // Restore from server data
-          _sessionId = sessionInfo.sessionId;
-          _currentRoomId = sessionInfo.roomId;
-          _currentRoomName = sessionInfo.roomName;
-          _seatNumber = sessionInfo.seatNumber;
-          _sessionStartedAt = sessionInfo.sessionStartedAt;
-          _currentDuration = sessionInfo.currentDuration;
-          _state = SessionState.seated;
-          
-          _startSyncTimer();
-          
-          debugPrint('🔄 Session restored from server: $_sessionId in room $_currentRoomName');
-          notifyListeners();
-          return true;
-        }
-      }
-      
-      // Fallback: restore minimal state from seat data
-      // This allows the UI to be consistent even if we can't get full session info
-      _currentRoomId = roomId;
-      _currentRoomName = roomName;
-      _seatNumber = userSeat.seatNumber;
-      _sessionStartedAt = userSeat.sessionStartedAt;
-      _currentDuration = userSeat.currentSessionDuration;
-      _state = SessionState.seated;
-      
-      // Try to get session ID from persisted data or generate placeholder
-      _sessionId = sessionId ?? 'restored-${DateTime.now().millisecondsSinceEpoch}';
-      
-      _startSyncTimer();
-      
-      debugPrint('🔄 Session restored from seat data: seat $_seatNumber in room $roomId');
-      notifyListeners();
-      return true;
-    } catch (e) {
-      debugPrint('🔄 Error during session restore from seat data: $e');
-      return false;
-    }
+    return restoreSessionIfNeeded();
   }
 
-  /// Restore session if there's an active foreground service and valid session.
-  /// Returns true if session was restored, false otherwise.
-  /// 
-  /// This should be called when the app starts to handle the case where
-  /// the app was killed but the foreground service continued running.
-  Future<bool> restoreSessionIfNeeded() async {
+  /// Local recovery does not depend on the foreground service or server TTL.
+  Future<bool> restoreSessionIfNeeded() {
+    return _restoreOperation ??= _restoreLocalSession().whenComplete(() {
+      _restoreOperation = null;
+    });
+  }
+
+  Future<bool> _restoreLocalSession() async {
+    if (_sessionId != null) return false;
     try {
-      // Check if foreground service is running
-      final isRunning = await _notificationService.isRunning();
-      if (!isRunning) {
-        debugPrint('🔄 No foreground service running, no restore needed');
-        return false;
-      }
-
-      debugPrint('🔄 Foreground service running, attempting session restore...');
-
-      // Load persisted session data
       final prefs = await SharedPreferences.getInstance();
-      final sessionId = prefs.getString(_keySessionId);
-      final roomId = prefs.getString(_keyRoomId);
-
-      if (sessionId == null || roomId == null) {
-        debugPrint('🔄 No persisted session data, stopping foreground service');
-        await _notificationService.stopStudySession();
+      var saved = prefs.getString(_keyActive);
+      if (saved == null) {
+        final oldId = prefs.getString(_keySessionId);
+        final oldRoom = prefs.getString(_keyRoomId);
+        if (oldId == null || oldRoom == null) return false;
+        // Pre-v2 active records have no owner. Preserve without guessing.
+        saved = jsonEncode({
+          'sessionId': oldId,
+          'roomId': oldRoom,
+          'roomName': prefs.getString(_keyRoomName),
+          'seatNumber': prefs.getInt(_keySeatNumber),
+          'startedAt': prefs.getString(_keySessionStartedAt),
+          'ownerId': StudySession.legacyOwner,
+        });
+        if (!await prefs.setString(_keyActive, saved)) {
+          throw StateError('Migration failed');
+        }
+      }
+      final data = jsonDecode(saved) as Map<String, dynamic>;
+      if (data['ownerId'] != historyOwnerId &&
+          data['ownerId'] != StudySession.legacyOwner) {
+        _timerProvider?.setRecoveryBlocked(true);
         return false;
       }
-
-      // Validate session with server
-      await _ensureAuthToken();
-      final sessionInfo = await _apiService.getSession(roomId, sessionId);
-
-      if (sessionInfo == null) {
-        debugPrint('🔄 Session no longer valid on server, stopping foreground service');
-        await _notificationService.stopStudySession();
-        await _clearPersistedSession();
-        return false;
+      _timerProvider?.setRecoveryBlocked(false);
+      _ownerId = data['ownerId'] as String;
+      _sessionId = data['sessionId'] as String;
+      _currentRoomId = data['roomId'] as String;
+      _currentRoomName = data['roomName'] as String?;
+      _seatNumber = data['seatNumber'] as int?;
+      _sessionStartedAt = data['startedAt'] == null
+          ? null
+          : DateTime.parse(data['startedAt'] as String);
+      _pendingRecord = data['pending'] == null
+          ? null
+          : StudySession.fromMap(
+              Map<String, dynamic>.from(data['pending'] as Map));
+      _currentDuration = _pendingRecord?.durationSeconds ?? 0;
+      // Restore the timer before announcing the session. This also supports
+      // owner changes without requiring a screen recreation or an app restart.
+      final timer = _timerProvider;
+      if (timer != null) {
+        final restored = await timer.restoreState(sessionId: _sessionId);
+        if (!restored && _pendingRecord == null) {
+          timer.start(sessionId: _sessionId);
+        }
       }
-
-      // Restore session state
-      _sessionId = sessionInfo.sessionId;
-      _currentRoomId = sessionInfo.roomId;
-      _currentRoomName = sessionInfo.roomName;
-      _seatNumber = sessionInfo.seatNumber;
-      _sessionStartedAt = sessionInfo.sessionStartedAt;
-      _currentDuration = sessionInfo.currentDuration;
+      if (_disposed) return false;
       _state = SessionState.seated;
-
-      // Restart sync timer
-      _startSyncTimer();
-
-      debugPrint('🔄 Session restored: $_sessionId in room $_currentRoomName');
+      if (_pendingRecord == null) _startSyncTimer();
       notifyListeners();
       return true;
     } catch (e) {
-      debugPrint('🔄 Error during session restore: $e');
-      // On error, stop the foreground service to avoid inconsistent state
-      await _notificationService.stopStudySession();
-      await _clearPersistedSession();
+      _error = 'historySaveFailed';
+      if (!_disposed) notifyListeners();
       return false;
     }
   }
 
   @override
   void dispose() {
+    _disposed = true;
+    _authProvider?.removeListener(_onAuthChanged);
+    _timerProvider?.removeListener(_onTimerChanged);
     _cancelSyncTimer();
     super.dispose();
   }

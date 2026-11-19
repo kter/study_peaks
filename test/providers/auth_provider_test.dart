@@ -45,6 +45,18 @@ void main() {
 
   group('AuthProvider', () {
     group('Initial State', () {
+      test('current Firebase user is available before the first auth event',
+          () {
+        provider.dispose();
+        final user = MockUser();
+        when(() => user.uid).thenReturn('restored-account');
+        when(() => mockFirebaseAuth.currentUser).thenReturn(user);
+        provider = AuthProvider(
+            auth: mockFirebaseAuth, googleSignIn: mockGoogleSignIn);
+        expect(provider.isSignedIn, true);
+        expect(provider.userId, 'restored-account');
+      });
+
       test('isSignedIn is false initially', () {
         expect(provider.isSignedIn, false);
       });
@@ -300,7 +312,8 @@ void main() {
 
       for (final failsInitialization in [true, false]) {
         final googleStep = failsInitialization ? 'initialize' : 'signOut';
-        test('still signs out Firebase when Google $googleStep fails', () async {
+        test('still signs out Firebase when Google $googleStep fails',
+            () async {
           when(() => mockFirebaseAuth.signOut()).thenAnswer((_) async {});
           if (failsInitialization) {
             when(() => mockGoogleSignIn.initialize())

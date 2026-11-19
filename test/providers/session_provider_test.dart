@@ -15,7 +15,8 @@ void main() {
     TestWidgetsFlutterBinding.ensureInitialized();
   });
 
-  setUp(() {
+  setUp(() async {
+    await setupMockSharedPreferences();
     mockApiService = MockApiService();
   });
 
@@ -42,8 +43,7 @@ void main() {
                 5,
                 displayName: hasAuthProvider ? 'Anonymous' : null,
                 userId: hasAuthProvider ? '' : null,
-              ))
-              .thenAnswer((_) async => createMockSitResponse(seatNumber: 5));
+              )).thenAnswer((_) async => createMockSitResponse(seatNumber: 5));
 
           expect(await provider.sit('room-1', 5), true);
 
@@ -223,7 +223,8 @@ void main() {
       provider.dispose();
     });
 
-    test('leave sets error but still resets state in production mode', () async {
+    test('leave sets error but still resets state in production mode',
+        () async {
       final provider = SessionProvider(
         apiService: mockApiService,
         useMockFallback: false, // Production mode
@@ -260,15 +261,14 @@ void main() {
       when(() => mockApiService.sit('room-1', 5)).thenThrow(
         Exception('Server error'),
       );
-      
+
       await prodProvider.sit('room-1', 5);
       expect(prodProvider.error, isNotNull);
-      
+
       prodProvider.clearError();
       expect(prodProvider.error, isNull);
-      
+
       prodProvider.dispose();
     });
   });
 }
-
