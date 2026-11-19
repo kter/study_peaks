@@ -53,6 +53,8 @@ make flutter-build-aab     # 本番版のrelease App Bundle
 
 Flutterコマンドを直接実行する場合も、`--flavor dev` または `--flavor prd` を指定してください。
 
+GitHub ActionsでAndroidのAPKを作るには、本番用の `google-services.json` の内容をリポジトリのシークレット `GOOGLE_SERVICES_PRD_JSON` に登録してください。設定されている場合のみ `prd` のdebug APKをビルドし、アーティファクトに保存します。
+
 ## デプロイ
 
 ### ⚠️ 重要: APIデプロイについて

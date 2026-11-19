@@ -274,7 +274,7 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                         await context.read<SessionProvider>().forceSync();
                       }
                     },
-                    activeColor: const Color(0xFF1A237E),
+                    activeThumbColor: const Color(0xFF1A237E),
                   ),
                 ],
               ),
@@ -401,7 +401,7 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
         ],
       ),
       child: DropdownButtonFormField<String>(
-        value: _selectedCountry,
+        initialValue: _selectedCountry,
         decoration: InputDecoration(
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),

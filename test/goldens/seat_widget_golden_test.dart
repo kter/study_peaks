@@ -6,6 +6,26 @@ import 'package:study_peaks/widgets/seat_widget.dart';
 
 import '../helpers/mock_data.dart';
 
+class _OccupiedSeat extends Seat {
+  const _OccupiedSeat({
+    required super.seatId,
+    required super.seatNumber,
+    required this.elapsed,
+  }) : super(isOccupied: true, user: mockUser);
+
+  final Duration elapsed;
+
+  // Fix the session duration displayed in the golden regardless of wall time.
+  @override
+  Duration elapsedAt(DateTime now) => elapsed;
+}
+
+const _occupiedSeat = _OccupiedSeat(
+  seatId: 'seat-001',
+  seatNumber: 1,
+  elapsed: Duration(hours: 1),
+);
+
 void main() {
   group('SeatWidget Golden Tests', () {
     setUpAll(() async {
@@ -38,7 +58,7 @@ void main() {
             width: 120,
             height: 180,
             child: SeatWidget(
-              seat: mockOccupiedSeat,
+              seat: _occupiedSeat,
               size: 50,
               onTap: () {},
             ),
@@ -51,13 +71,10 @@ void main() {
     });
 
     testGoldens('seat with short session duration', (tester) async {
-      final shortSessionSeat = Seat(
+      const shortSessionSeat = _OccupiedSeat(
         seatId: 'seat-short',
         seatNumber: 3,
-        isOccupied: true,
-        user: mockUser,
-        sessionStartedAt: DateTime.now().subtract(const Duration(minutes: 10)),
-        currentSessionDuration: 600, // legacy field
+        elapsed: Duration(minutes: 10),
       );
 
       await tester.pumpWidgetBuilder(
@@ -76,6 +93,36 @@ void main() {
       );
 
       await screenMatchesGolden(tester, 'seat_widget_short_session');
+    });
+
+    testGoldens('empty and occupied seats side by side', (tester) async {
+      final builder = GoldenBuilder.grid(
+        columns: 2,
+        widthToHeightRatio: 0.8,
+      )
+        ..addScenario(
+          'Empty',
+          SizedBox(
+            width: 110,
+            height: 160,
+            child: SeatWidget(seat: mockEmptySeat, size: 50),
+          ),
+        )
+        ..addScenario(
+          'Occupied',
+          const SizedBox(
+            width: 110,
+            height: 180,
+            child: SeatWidget(seat: _occupiedSeat, size: 50),
+          ),
+        );
+
+      await tester.pumpWidgetBuilder(
+        builder.build(),
+        surfaceSize: const Size(400, 300),
+      );
+
+      await screenMatchesGolden(tester, 'seat_widget_comparison');
     });
   });
 }

@@ -10,6 +10,8 @@ import 'package:study_peaks/widgets/timer_widget.dart';
 
 class MockNotificationService extends Mock implements NotificationService {}
 
+const _expandedSurface = Size(500, 550);
+
 void main() {
   group('TimerWidget Golden Tests', () {
     late TimerProvider timerProvider;
@@ -36,7 +38,11 @@ void main() {
             title: any(named: 'title'),
             body: any(named: 'body'),
           )).thenAnswer((_) async {});
-      timerProvider = TimerProvider(notificationService: notifications);
+      final testTime = DateTime.utc(2026);
+      timerProvider = TimerProvider(
+        notificationService: notifications,
+        now: () => testTime,
+      );
       addTearDown(timerProvider.dispose);
     });
 
@@ -75,7 +81,7 @@ void main() {
     testGoldens('initial state - expanded normal mode', (tester) async {
       await tester.pumpWidgetBuilder(
         buildTimerWidget(isCollapsed: false),
-        surfaceSize: const Size(400, 400),
+        surfaceSize: _expandedSurface,
       );
 
       await screenMatchesGolden(tester, 'timer_widget_expanded_normal');
@@ -86,7 +92,7 @@ void main() {
 
       await tester.pumpWidgetBuilder(
         buildTimerWidget(isCollapsed: false),
-        surfaceSize: const Size(500, 500),
+        surfaceSize: _expandedSurface,
       );
 
       await screenMatchesGolden(tester, 'timer_widget_pomodoro_focus');
@@ -98,7 +104,7 @@ void main() {
       try {
         await tester.pumpWidgetBuilder(
           buildTimerWidget(isCollapsed: false),
-          surfaceSize: const Size(400, 400),
+          surfaceSize: _expandedSurface,
         );
         await screenMatchesGolden(tester, 'timer_widget_running');
       } finally {
@@ -113,7 +119,7 @@ void main() {
       try {
         await tester.pumpWidgetBuilder(
           buildTimerWidget(isCollapsed: false),
-          surfaceSize: const Size(500, 500),
+          surfaceSize: _expandedSurface,
         );
         await screenMatchesGolden(tester, 'timer_widget_pomodoro_running');
       } finally {
