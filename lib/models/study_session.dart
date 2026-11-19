@@ -37,6 +37,10 @@ class StudySession {
   static String ownerFor(String? uid) =>
       uid == null || uid.isEmpty ? guestOwner : 'user:$uid';
 
+  /// The explicitly separated legacy history is visible to any current owner.
+  bool isVisibleTo(String currentOwnerId) =>
+      ownerId == currentOwnerId || ownerId == legacyOwner;
+
   final int? id;
   final String sessionId;
   final String ownerId;

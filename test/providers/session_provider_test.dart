@@ -153,7 +153,7 @@ void main() {
 
       final result = await provider.leave();
 
-      expect(result, true);
+      expect((result as LeaveCompleted).record.durationSeconds, 0);
       expect(provider.state, SessionState.idle);
       expect(provider.sessionId, isNull);
       expect(provider.seatNumber, isNull);
@@ -174,17 +174,17 @@ void main() {
       when(() => mockApiService.leave('room-1', 'session-123', any()))
           .thenAnswer((_) async => createMockLeaveResponse());
 
-      expect(await provider.leave(), true);
+      expect(await provider.leave(), isA<LeaveCompleted>());
 
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.containsKey('persisted_timer_state'), false);
       provider.dispose();
     });
 
-    test('leave returns false when not seated', () async {
+    test('leave reports unavailable when not seated', () async {
       final provider = SessionProvider(apiService: mockApiService);
       final result = await provider.leave();
-      expect(result, false);
+      expect(result, LeaveFailure.unavailable);
       provider.dispose();
     });
 
@@ -195,61 +195,22 @@ void main() {
       provider.dispose();
     });
 
-    test('leave succeeds even on API error in dev mode', () async {
-      final provider = SessionProvider(
-        apiService: mockApiService,
-        useMockFallback: true, // Development mode
-      );
-      // First sit down
-      final mockSitResponse = createMockSitResponse(
-        sessionId: 'session-123',
-        seatNumber: 5,
-      );
-      when(() => mockApiService.sit('room-1', 5)).thenAnswer(
-        (_) async => mockSitResponse,
-      );
-      await provider.sit('room-1', 5);
-
-      // Attempt to leave with API error
-      when(() => mockApiService.leave('room-1', 'session-123', any()))
-          .thenThrow(Exception('Network error'));
-
-      final result = await provider.leave();
-
-      // Dev mode: success even with API error
-      expect(result, true);
-      expect(provider.state, SessionState.idle); // State reset
-      expect(provider.error, isNull); // No error in dev mode
-      provider.dispose();
-    });
-
-    test('leave sets error but still resets state in production mode',
+    test('an offline mock seat can be left without contacting the server',
         () async {
       final provider = SessionProvider(
         apiService: mockApiService,
-        useMockFallback: false, // Production mode
+        useMockFallback: true,
       );
-      // First sit down
-      final mockSitResponse = createMockSitResponse(
-        sessionId: 'session-123',
-        seatNumber: 5,
-      );
-      when(() => mockApiService.sit('room-1', 5)).thenAnswer(
-        (_) async => mockSitResponse,
-      );
-      await provider.sit('room-1', 5);
+      addTearDown(provider.dispose);
+      when(() => mockApiService.sit('room-1', 5))
+          .thenThrow(Exception('Offline'));
+      expect(await provider.sit('room-1', 5), true);
+      final result = await provider.leave() as LeaveCompleted;
 
-      // Attempt to leave with API error
-      when(() => mockApiService.leave('room-1', 'session-123', any()))
-          .thenThrow(Exception('Network error'));
-
-      final result = await provider.leave();
-
-      // Production mode: success but with error set
-      expect(result, true);
-      expect(provider.state, SessionState.idle); // State still reset
-      expect(provider.error, contains('Failed to leave'));
-      provider.dispose();
+      expect(result.serverFailure, isNull);
+      expect(result.record.sessionId, startsWith('mock-session-'));
+      expect(provider.state, SessionState.idle);
+      verifyNever(() => mockApiService.leave(any(), any(), any()));
     });
 
     test('clearError clears the error state', () async {

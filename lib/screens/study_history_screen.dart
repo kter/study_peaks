@@ -21,10 +21,16 @@ enum _HistoryView {
 }
 
 class StudyHistoryScreen extends StatefulWidget {
-  const StudyHistoryScreen({super.key, this.repository, this.now});
+  const StudyHistoryScreen({
+    super.key,
+    this.repository,
+    this.now,
+    this.showLegacyHistory = false,
+  });
 
   final StudyHistoryRepository? repository;
   final DateTime Function()? now;
+  final bool showLegacyHistory;
 
   @override
   State<StudyHistoryScreen> createState() => _StudyHistoryScreenState();
@@ -33,7 +39,7 @@ class StudyHistoryScreen extends StatefulWidget {
 class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
   _HistoryView _view = _HistoryView.weekGraph;
   DateTime? _periodDate;
-  bool _legacy = false;
+  late bool _legacy;
   String? _owner;
   late Future<StudyHistory?> _history;
   late DateTime _today;
@@ -42,6 +48,7 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
   @override
   void initState() {
     super.initState();
+    _legacy = widget.showLegacyHistory;
     _today = _currentDate;
     _lifecycle = AppLifecycleListener(onResume: _refreshDate);
   }

@@ -20,10 +20,30 @@ enum SessionState {
   syncing,
 }
 
+sealed class LeaveResult {
+  const LeaveResult();
+}
+
+enum LeaveFailure implements LeaveResult {
+  unavailable,
+  storage,
+  storageAfterRelease,
+}
+
+enum LeaveServerFailure { connection, request }
+
+final class LeaveCompleted extends LeaveResult {
+  const LeaveCompleted(this.record, this.serverFailure);
+
+  final StudySession record;
+  final LeaveServerFailure? serverFailure;
+}
+
 /// Provider for managing study session state.
 class SessionProvider extends ChangeNotifier {
   final ApiService _apiService;
   final bool useMockFallback;
+  static const _mockSessionPrefix = 'mock-session-';
   AuthProvider? _authProvider;
   UserSettingsProvider? _userSettingsProvider;
 
@@ -42,6 +62,7 @@ class SessionProvider extends ChangeNotifier {
   String? _ownerId;
   StudySession? _pendingRecord;
   bool _leaving = false;
+  bool _remoteLeaveCompleted = false;
   bool _disposed = false;
   Future<bool>? _restoreOperation;
   static const _keyActive = StudyPersistenceKeys.activeSession;
@@ -123,6 +144,8 @@ class SessionProvider extends ChangeNotifier {
   int get currentDuration => _currentDuration;
   String? get error => _error;
   bool get isFinalizing => _pendingRecord != null;
+  bool get hasReleasedSeat => _remoteLeaveCompleted;
+  StudyHistoryRepository get historyRepository => _historyRepository;
   bool get isSeated => _state == SessionState.seated;
 
   /// Clear the current error state.
@@ -282,7 +305,7 @@ class SessionProvider extends ChangeNotifier {
         debugPrint('API error (mock fallback): $e');
         _error = null;
         _currentRoomId = roomId;
-        _sessionId = 'mock-session-${DateTime.now().millisecondsSinceEpoch}';
+        _sessionId = '$_mockSessionPrefix${DateTime.now().millisecondsSinceEpoch}';
         _seatNumber = seatNumber;
         _sessionStartedAt = DateTime.now();
         _currentDuration = 0;
@@ -313,98 +336,101 @@ class SessionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Leave the seat.
-  Future<bool> leave() async {
-    if (_sessionId == null || _currentRoomId == null || _leaving) return false;
+  /// Completes local finalization and reports whether seat release was confirmed.
+  /// A zero-duration session completes without creating a history record.
+  Future<LeaveResult> leave() async {
+    if (_sessionId == null || _currentRoomId == null || _leaving) {
+      return LeaveFailure.unavailable;
+    }
     _leaving = true;
+    _error = null;
     try {
       if (_pendingRecord == null) {
         final timer = _timerProvider;
-        if (timer != null && timer.sessionId == _sessionId) {
-          timer.freezeForFinalization();
-          await timer.ensurePersisted();
-          _currentDuration = timer.totalStudySeconds;
-        }
-        _pendingRecord = StudySession(
-          sessionId: _sessionId!,
-          ownerId: _ownerId ?? StudySession.legacyOwner,
-          roomId: _currentRoomId!,
-          startTime: _sessionStartedAt ?? DateTime.now(),
-          durationSeconds: _currentDuration,
-          intervals: timer != null &&
-                  timer.sessionId == _sessionId &&
-                  timer.hasExactIntervals
-              ? timer.focusIntervals
-              : null,
-        );
+        final boundTimer = timer?.sessionId == _sessionId ? timer : null;
+        _pendingRecord = _freezeStudyRecord(boundTimer);
+        await boundTimer?.ensurePersisted();
       }
-      // Freeze finalization before the network request: kill/retry cannot add time.
+      final record = _pendingRecord!;
+      // Persist finalization before contacting the API so recovery cannot add time.
       await _persistSession();
-    } catch (e) {
-      _error = 'historySaveFailed';
-      _leaving = false;
-      notifyListeners();
-      return false;
-    }
 
-    try {
-      _error = null;
-      await _ensureAuthToken();
-      await _apiService.leave(_currentRoomId!, _sessionId!, _currentDuration);
-    } catch (e) {
-      bool retrySuccess = e is ApiException && e.statusCode == 404;
-      // 401 Retry Logic
-      if (e is ApiException && e.statusCode == 401) {
+      LeaveServerFailure? serverFailure;
+      if (!_remoteLeaveCompleted) {
         try {
-          if (_authProvider != null) {
-            final newToken =
-                await _authProvider!.getIdToken(forceRefresh: true);
-            if (newToken != null) {
-              _apiService.setAuthToken(newToken);
-              await _apiService.leave(
-                  _currentRoomId!, _sessionId!, _currentDuration);
-              retrySuccess = true;
-            }
-          }
-        } catch (retryError) {
-          debugPrint('Retry failed: $retryError');
+          await _leaveOnServer(record);
+          _remoteLeaveCompleted = true;
+        } catch (error) {
+          serverFailure = isNetworkError(error)
+              ? LeaveServerFailure.connection
+              : LeaveServerFailure.request;
         }
+        if (_remoteLeaveCompleted) await _persistSession();
       }
 
-      if (!retrySuccess) {
-        if (useMockFallback) {
-          // Development mode: log but allow state reset
-          debugPrint('API error (mock fallback): $e');
-        } else {
-          // Production mode: set error but still reset local state
-          // Use localization key for network errors
-          if (isNetworkError(e)) {
-            _error = NetworkErrorKey.networkError;
-          } else {
-            _error = 'Failed to leave: ${e.toString()}';
-          }
-        }
-      }
-    }
-
-    try {
-      if (_pendingRecord != null && _pendingRecord!.durationSeconds > 0) {
-        await _historyRepository.saveSession(_pendingRecord!);
+      if (record.durationSeconds > 0) {
+        await _historyRepository.saveSession(record);
       }
       await _clearPersistedSession();
-    } catch (e) {
-      _error = 'historySaveFailed';
+      _cancelSyncTimer();
+      _timerProvider?.endSession();
+      _reset();
+      try {
+        await _notificationService.stopStudySession();
+      } catch (error) {
+        debugPrint('Could not stop study notification: ${error.runtimeType}');
+      }
+      return LeaveCompleted(record, serverFailure);
+    } catch (error) {
+      debugPrint('Could not finalize study record: ${error.runtimeType}');
+      return _remoteLeaveCompleted
+          ? LeaveFailure.storageAfterRelease
+          : LeaveFailure.storage;
+    } finally {
+      if (_state == SessionState.syncing) _state = SessionState.seated;
       _leaving = false;
-      notifyListeners();
-      return false;
+      if (!_disposed) notifyListeners();
     }
-    _cancelSyncTimer();
-    await _notificationService.stopStudySession();
-    _timerProvider?.endSession();
-    _reset();
-    _leaving = false;
-    notifyListeners();
-    return true;
+  }
+
+  StudySession _freezeStudyRecord(TimerProvider? boundTimer) {
+    if (boundTimer != null) {
+      boundTimer.freezeForFinalization();
+      _currentDuration = boundTimer.totalStudySeconds;
+    }
+    return StudySession(
+      sessionId: _sessionId!,
+      ownerId: _ownerId ?? StudySession.legacyOwner,
+      roomId: _currentRoomId!,
+      startTime: _sessionStartedAt ?? DateTime.now(),
+      durationSeconds: _currentDuration,
+      intervals: boundTimer != null && boundTimer.hasExactIntervals
+          ? boundTimer.focusIntervals
+          : null,
+    );
+  }
+
+  Future<void> _leaveOnServer(StudySession record) async {
+    if (record.sessionId.startsWith(_mockSessionPrefix)) return;
+
+    Future<void> send() =>
+        _apiService.leave(record.roomId, record.sessionId, record.durationSeconds);
+
+    try {
+      await _ensureAuthToken();
+      try {
+        await send();
+      } on ApiException catch (error) {
+        if (error.statusCode != 401) rethrow;
+        final token = await _authProvider?.getIdToken(forceRefresh: true);
+        if (token == null) rethrow;
+        _apiService.setAuthToken(token);
+        await send();
+      }
+    } on ApiException catch (error) {
+      // The response may have been lost or the server session may have expired.
+      if (error.statusCode != 404) rethrow;
+    }
   }
 
   /// Start the sync timer.
@@ -432,18 +458,28 @@ class SessionProvider extends ChangeNotifier {
 
   /// Sync session with server.
   Future<void> _syncSession() async {
-    if (_sessionId == null ||
-        _currentRoomId == null ||
+    final sessionId = _sessionId;
+    final roomId = _currentRoomId;
+    if (sessionId == null ||
+        roomId == null ||
+        _leaving ||
         _pendingRecord != null ||
         _ownerId != historyOwnerId) {
       return;
     }
+
+    bool stillSyncing() =>
+        !_disposed &&
+        _sessionId == sessionId &&
+        !_leaving &&
+        _pendingRecord == null;
 
     _state = SessionState.syncing;
     notifyListeners();
 
     try {
       await _ensureAuthToken();
+      if (!stillSyncing()) return;
 
       // Get current user settings for sync
       String? displayName;
@@ -469,8 +505,8 @@ class SessionProvider extends ChangeNotifier {
           '🔄 Sync: iconSeed=$iconSeed, photoUrl=$photoUrl, displayName=$displayName');
 
       await _apiService.sync(
-        _currentRoomId!,
-        _sessionId!,
+        roomId,
+        sessionId,
         _currentDuration,
         displayName: displayName,
         countryCode: countryCode,
@@ -478,6 +514,7 @@ class SessionProvider extends ChangeNotifier {
         photoUrl: photoUrl,
       );
     } catch (e) {
+      if (!stillSyncing()) return;
       bool retrySuccess = false;
       // 401 Retry Logic
       if (e is ApiException && e.statusCode == 401) {
@@ -485,10 +522,9 @@ class SessionProvider extends ChangeNotifier {
           if (_authProvider != null) {
             final newToken =
                 await _authProvider!.getIdToken(forceRefresh: true);
-            if (newToken != null) {
+            if (newToken != null && stillSyncing()) {
               _apiService.setAuthToken(newToken);
-              await _apiService.sync(
-                  _currentRoomId!, _sessionId!, _currentDuration);
+              await _apiService.sync(roomId, sessionId, _currentDuration);
               retrySuccess = true;
             }
           }
@@ -497,7 +533,7 @@ class SessionProvider extends ChangeNotifier {
         }
       }
 
-      if (!retrySuccess) {
+      if (!retrySuccess && stillSyncing()) {
         // Use localization key for network errors
         if (isNetworkError(e)) {
           _error = NetworkErrorKey.networkError;
@@ -507,13 +543,16 @@ class SessionProvider extends ChangeNotifier {
       }
     }
 
-    _state = SessionState.seated;
-    notifyListeners();
+    if (stillSyncing()) {
+      _state = SessionState.seated;
+      notifyListeners();
+    }
   }
 
   /// Reset session state.
   void _reset() {
     _pendingRecord = null;
+    _remoteLeaveCompleted = false;
     _ownerId = null;
     _state = SessionState.idle;
     _currentRoomId = null;
@@ -540,6 +579,7 @@ class SessionProvider extends ChangeNotifier {
           'startedAt': _sessionStartedAt?.toIso8601String(),
           'ownerId': _ownerId,
           'pending': _pendingRecord?.toMap(),
+          'remoteLeaveCompleted': _remoteLeaveCompleted,
         }));
     if (!saved) throw StateError('Session write failed');
     // Compatibility keys for notifications and diagnostics.
@@ -630,6 +670,7 @@ class SessionProvider extends ChangeNotifier {
           ? null
           : StudySession.fromMap(
               Map<String, dynamic>.from(data['pending'] as Map));
+      _remoteLeaveCompleted = data['remoteLeaveCompleted'] == true;
       _currentDuration = _pendingRecord?.durationSeconds ?? 0;
       // Restore the timer before announcing the session. This also supports
       // owner changes without requiring a screen recreation or an app restart.

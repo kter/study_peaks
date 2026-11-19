@@ -230,6 +230,66 @@ abstract class AppLocalizations {
   /// **'Leave'**
   String get leave;
 
+  /// No description provided for @leaveSeat.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave Seat'**
+  String get leaveSeat;
+
+  /// No description provided for @leaveSeatConfirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to leave your seat?'**
+  String get leaveSeatConfirmation;
+
+  /// No description provided for @leaveConnectionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not confirm that your seat was released. Check your internet connection.'**
+  String get leaveConnectionFailed;
+
+  /// No description provided for @leaveRequestFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not confirm that your seat was released.'**
+  String get leaveRequestFailed;
+
+  /// No description provided for @leftSeat.
+  ///
+  /// In en, this message translates to:
+  /// **'You have left your seat.'**
+  String get leftSeat;
+
+  /// No description provided for @leaveSummaryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Study time recorded'**
+  String get leaveSummaryTitle;
+
+  /// No description provided for @leaveSummarySession.
+  ///
+  /// In en, this message translates to:
+  /// **'This session'**
+  String get leaveSummarySession;
+
+  /// No description provided for @leaveRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry leaving'**
+  String get leaveRetry;
+
+  /// No description provided for @leaveSummaryAllocation.
+  ///
+  /// In en, this message translates to:
+  /// **'From this session, {today} counts toward today and {week} toward this week.'**
+  String leaveSummaryAllocation(String today, String week);
+
+  /// No description provided for @leaveSummaryTotalsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load today’s and this week’s totals.'**
+  String get leaveSummaryTotalsUnavailable;
+
   /// No description provided for @anonymous.
   ///
   /// In en, this message translates to:

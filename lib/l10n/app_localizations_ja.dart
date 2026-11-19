@@ -77,6 +77,38 @@ class AppLocalizationsJa extends AppLocalizations {
   String get leave => '離席';
 
   @override
+  String get leaveSeat => '離席する';
+
+  @override
+  String get leaveSeatConfirmation => '席を離れますか？';
+
+  @override
+  String get leaveConnectionFailed => '通信できなかったため、座席が空いたことを確認できませんでした。';
+
+  @override
+  String get leaveRequestFailed => '座席が空いたことを確認できませんでした。';
+
+  @override
+  String get leftSeat => '離席しました。';
+
+  @override
+  String get leaveSummaryTitle => '学習時間を記録しました';
+
+  @override
+  String get leaveSummarySession => '今回';
+
+  @override
+  String get leaveRetry => '離席を再試行';
+
+  @override
+  String leaveSummaryAllocation(String today, String week) {
+    return '今回のうち、今日の合計に$today、今週の合計に$week入っています。';
+  }
+
+  @override
+  String get leaveSummaryTotalsUnavailable => '今日と今週の合計を読み込めませんでした。';
+
+  @override
   String get anonymous => '匿名ユーザー';
 
   @override
