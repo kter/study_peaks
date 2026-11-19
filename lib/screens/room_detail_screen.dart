@@ -501,9 +501,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
         navigator.mounted &&
         record.isVisibleTo(session.historyOwnerId)) {
       unawaited(navigator.push(MaterialPageRoute<void>(
-        builder: (_) => StudyHistoryScreen(
-          showLegacyHistory: record.ownerId == StudySession.legacyOwner,
-        ),
+        builder: (_) => const StudyHistoryScreen(),
       )));
     }
   }
