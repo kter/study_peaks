@@ -31,8 +31,26 @@ Every query requires an explicit `ownerId`; no unfiltered history query is expos
 | `getMonth(ownerId, containing)` | All dates of the specified month |
 | `getTotalStudyTime(ownerId)` | Lifetime completed seconds |
 | `getSessions(ownerId)` | Records, including timing evidence |
+| `getHistory(ownerId)` | One snapshot for dashboard totals, calendar dates, and per-day session details |
 
 All daily queries include zero entries for unstudied dates, including leap days. `now`/`containing` describe the caller's civil date. Travel never changes previously allocated dates. Querying today after travel uses today's device civil date against those fixed historical labels.
+
+## Monthly calendar
+
+The Week graph, Month graph, and Calendar views show their date range above the results. Switching between Month graph and Calendar keeps the same month. The calendar uses Monday as the first day of the week, matching the graph.
+
+Each date with a positive daily total counts once, including days with less than a minute of study. Counts and session times use the completed seconds from the shared aggregation. A session that spans midnight contributes only its allocated seconds to each date, independent of breaks between sessions or any study goal. Selecting a date shows its full date and exact total, with the session start in the device's local time and the seconds credited to that date for each session. The recorded focus-date label stays fixed when the device timezone changes.
+
+A dot marks each studied date. The legend groups daily totals into four bands.
+
+| Band | Daily study time |
+| --- | --- |
+| Neutral | 0 seconds |
+| Light | 1 to 1,799 seconds (under 30 minutes) |
+| Medium | 1,800 to 3,599 seconds (30 to under 60 minutes) |
+| Strong | 3,600 seconds or more |
+
+Past and current dates with no records are selectable and show a zero total and an empty session list. On narrow displays the grid scrolls horizontally so each date keeps a 48 dp touch target. Future dates without recorded time are unshaded and unavailable. Dates that already have recorded time remain available even if the device's date or timezone moves backward. Date cells expose their full date, duration or future status, and selection state to screen readers.
 
 ## Recovery and finalization
 

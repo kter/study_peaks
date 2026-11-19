@@ -198,10 +198,68 @@ class AppLocalizationsEn extends AppLocalizations {
   String get historyThisWeek => 'This week';
 
   @override
-  String get historyWeek => 'Week';
+  String get historyWeek => 'Week graph';
 
   @override
-  String get historyMonth => 'Month';
+  String get historyMonth => 'Month graph';
+
+  @override
+  String get historyCalendar => 'Calendar';
+
+  @override
+  String historyStudyDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count study days',
+      one: '1 study day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get historyCalendarLegend => 'Daily study time';
+
+  @override
+  String get historyCalendarNoStudy => '0 min';
+
+  @override
+  String get historyCalendarUnderThirty => '<30 min';
+
+  @override
+  String get historyCalendarUnderSixty => '30–59 min';
+
+  @override
+  String get historyCalendarSixtyOrMore => '60+ min';
+
+  @override
+  String get historyCalendarFuture => 'Future date';
+
+  @override
+  String historyCalendarToday(String date) {
+    return '$date (today)';
+  }
+
+  @override
+  String historyCalendarDayLabel(String date, String duration) {
+    return '$date, $duration';
+  }
+
+  @override
+  String historyDayTotal(String duration) {
+    return 'Total for this day: $duration';
+  }
+
+  @override
+  String get historyDaySessions => 'Sessions';
+
+  @override
+  String get historyDayEmpty => 'No study sessions';
+
+  @override
+  String historySessionStart(String date) {
+    return 'Started $date';
+  }
 
   @override
   String get historyPreviousPeriod => 'Previous period';

@@ -196,10 +196,62 @@ class AppLocalizationsJa extends AppLocalizations {
   String get historyThisWeek => '今週';
 
   @override
-  String get historyWeek => '週';
+  String get historyWeek => '週グラフ';
 
   @override
-  String get historyMonth => '月';
+  String get historyMonth => '月グラフ';
+
+  @override
+  String get historyCalendar => 'カレンダー';
+
+  @override
+  String historyStudyDays(int count) {
+    return '学習日数 $count日';
+  }
+
+  @override
+  String get historyCalendarLegend => '1日の学習時間';
+
+  @override
+  String get historyCalendarNoStudy => '0分';
+
+  @override
+  String get historyCalendarUnderThirty => '30分未満';
+
+  @override
+  String get historyCalendarUnderSixty => '30〜59分';
+
+  @override
+  String get historyCalendarSixtyOrMore => '60分以上';
+
+  @override
+  String get historyCalendarFuture => '先の日付';
+
+  @override
+  String historyCalendarToday(String date) {
+    return '$date（今日）';
+  }
+
+  @override
+  String historyCalendarDayLabel(String date, String duration) {
+    return '$date、$duration';
+  }
+
+  @override
+  String historyDayTotal(String duration) {
+    return 'この日の合計 $duration';
+  }
+
+  @override
+  String get historyDaySessions => 'セッション履歴';
+
+  @override
+  String get historyDayEmpty => 'セッションはありません';
+
+  @override
+  String historySessionStart(String date) {
+    return '開始 $date';
+  }
 
   @override
   String get historyPreviousPeriod => '前の期間';
