@@ -134,7 +134,15 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   ///
   /// [sessionId] ties the saved timer state to the current seat session.
   void start({String? sessionId}) {
-    if (_isRunning) return;
+    if (_isRunning) {
+      // Already running (e.g. started before sitting down): bind it to the
+      // new session so it can be restored.
+      if (sessionId != null && sessionId != _sessionId) {
+        _sessionId = sessionId;
+        _persistState();
+      }
+      return;
+    }
 
     if (sessionId != null) _sessionId = sessionId;
     _isRunning = true;
@@ -188,7 +196,25 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// Reset the timer.
+  ///
+  /// The stopped, reset state is saved for the current session so that a
+  /// restore keeps it stopped (and keeps the mode) instead of auto-starting.
   void reset() {
+    _resetFields();
+    _persistState();
+    notifyListeners();
+  }
+
+  /// Reset the timer and forget its seat session. Call when leaving the seat;
+  /// plain [reset] (reset button, mode switch) keeps the session binding.
+  void endSession() {
+    _sessionId = null;
+    _resetFields();
+    _queuePersistence(null);
+    notifyListeners();
+  }
+
+  void _resetFields() {
     _timer?.cancel();
     _isRunning = false;
 
@@ -200,16 +226,6 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _pomodoroPhase = PomodoroPhase.focus;
     _pomodoroPhaseStartedAt = null;
     _pomodoroElapsedBeforePause = 0;
-
-    _queuePersistence(null);
-    notifyListeners();
-  }
-
-  /// Reset the timer and forget its seat session. Call when leaving the seat;
-  /// plain [reset] (reset button, mode switch) keeps the session binding.
-  void endSession() {
-    _sessionId = null;
-    reset();
   }
 
   /// Switch between focus and break phases in Pomodoro mode.

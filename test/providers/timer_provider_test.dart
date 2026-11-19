@@ -196,15 +196,48 @@ void main() {
         expect(provider.isRunning, false);
       });
 
-      test('reset clears saved state even with pending writes', () async {
+      test('endSession clears saved state even with pending writes',
+          () async {
         provider.setMode(TimerMode.pomodoro);
         provider.start();
         provider.pause();
-        provider.reset();
+        provider.endSession();
         expect(await provider.restoreState(), false);
         final restored = TimerProvider();
         addTearDown(restored.dispose);
         expect(await restored.restoreState(), false);
+      });
+
+      test('reset during a session is restored as stopped, keeping the mode',
+          () async {
+        provider.setMode(TimerMode.pomodoro);
+        provider.start(sessionId: 'session-A');
+        await Future<void>.delayed(const Duration(milliseconds: 1100));
+        provider.reset();
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        provider.dispose();
+        provider = TimerProvider();
+
+        expect(await provider.restoreState(sessionId: 'session-A'), true);
+        expect(provider.isRunning, false);
+        expect(provider.mode, TimerMode.pomodoro);
+        expect(provider.pomodoroRemainingSeconds,
+            TimerProvider.pomodoroFocusDuration);
+      });
+
+      test('a timer started before sitting is bound to the new session',
+          () async {
+        provider.start();
+        await Future<void>.delayed(const Duration(milliseconds: 1100));
+        provider.start(sessionId: 'session-A');
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        final elapsed = provider.elapsedSeconds;
+        provider.dispose();
+        provider = TimerProvider();
+
+        expect(await provider.restoreState(sessionId: 'session-A'), true);
+        expect(provider.isRunning, true);
+        expect(provider.elapsedSeconds, greaterThanOrEqualTo(elapsed));
       });
 
       test('restores only the state saved for the same session', () async {
