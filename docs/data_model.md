@@ -80,6 +80,8 @@ Study room definitions.
 
 Individual seat state within a room.
 
+When a signed-in user takes a seat, the API looks up all seat documents for that `userId` across rooms, deletes them, and writes the new seat in one transaction. Taking the same seat replaces its session ID. If someone else occupies the requested seat, the transaction leaves the user's existing seats in place.
+
 | Field | Type | Description |
 |-------|------|-------------|
 | `seatId` | string | Document ID (e.g., "seat-001") |
@@ -120,6 +122,12 @@ Individual seat state within a room.
 ---
 
 ## Indexes
+
+### Single-Field Index for Seat Moves
+
+Terraform adds an ascending `COLLECTION_GROUP` index for `seats.userId` so the sit transaction can find seats by UID across rooms. The default collection-scope indexes are preserved.
+
+Apply this index with Terraform and wait until it is `READY` before deploying an API version that moves seats. Without it, every signed-in sit fails with `FAILED_PRECONDITION`.
 
 ### Required Composite Indexes
 

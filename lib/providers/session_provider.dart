@@ -41,6 +41,7 @@ final class LeaveCompleted extends LeaveResult {
 
 /// Provider for managing study session state.
 class SessionProvider extends ChangeNotifier {
+  static const seatReleasedMessageKey = 'sessionSeatReleased';
   final ApiService _apiService;
   final bool useMockFallback;
   static const _mockSessionPrefix = 'mock-session-';
@@ -296,12 +297,15 @@ class SessionProvider extends ChangeNotifier {
 
   /// Completes local finalization and reports whether seat release was confirmed.
   /// A zero-duration session completes without creating a history record.
-  Future<LeaveResult> leave() async {
+  Future<LeaveResult> leave() => _finalizeSession();
+
+  Future<LeaveResult> _finalizeSession({bool seatAlreadyReleased = false}) async {
     if (_sessionId == null || _currentRoomId == null || _leaving) {
       return LeaveFailure.unavailable;
     }
     _leaving = true;
     _error = null;
+    if (seatAlreadyReleased) _remoteLeaveCompleted = true;
     try {
       if (_pendingRecord == null) {
         final timer = _timerProvider;
@@ -338,9 +342,11 @@ class SessionProvider extends ChangeNotifier {
       } catch (error) {
         debugPrint('Could not stop study notification: ${error.runtimeType}');
       }
+      if (seatAlreadyReleased) _error = seatReleasedMessageKey;
       return LeaveCompleted(record, serverFailure);
     } catch (error) {
       debugPrint('Could not finalize study record: ${error.runtimeType}');
+      if (seatAlreadyReleased) _error = 'historySaveFailed';
       return _remoteLeaveCompleted
           ? LeaveFailure.storageAfterRelease
           : LeaveFailure.storage;
@@ -413,6 +419,7 @@ class SessionProvider extends ChangeNotifier {
     final roomId = _currentRoomId;
     if (sessionId == null ||
         roomId == null ||
+        sessionId.startsWith(_mockSessionPrefix) ||
         _leaving ||
         _pendingRecord != null ||
         _ownerId != historyOwnerId) {
@@ -461,6 +468,10 @@ class SessionProvider extends ChangeNotifier {
       );
     } catch (e) {
       if (!stillSyncing()) return;
+      if (e is ApiException && e.statusCode == 404) {
+        await _finalizeSession(seatAlreadyReleased: true);
+        return;
+      }
       _error = errorKeyFor(e, e.toString());
     }
 

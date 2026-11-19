@@ -59,7 +59,12 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       await roomProvider.fetchSeats(widget.room.roomId);
 
       await _restoreSessionIfNeeded();
-      if (mounted) _restoreUserSeat();
+      if (mounted) {
+        _restoreUserSeat();
+        if (_sessionProvider?.error == SessionProvider.seatReleasedMessageKey) {
+          _onErrorChanged();
+        }
+      }
     });
     // 定期的に席データを更新して他ユーザーの変更を反映
     _seatRefreshTimer = Timer.periodic(
@@ -88,25 +93,29 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
 
   void _onErrorChanged() {
     if (!mounted) return;
-    
+
     final session = context.read<SessionProvider>();
-    if (session.error != null) {
+    final errorKey = session.error;
+    if (errorKey != null) {
       final l10n = AppLocalizations.of(context)!;
-      final errorMessage = switch (session.error!) {
+      final errorMessage = switch (errorKey) {
         'historySaveFailed' => l10n.historySaveFailed,
         'historyOtherOwnerActive' => l10n.historyOtherOwnerActive,
+        SessionProvider.seatReleasedMessageKey => l10n.sessionSeatReleased,
         final key => localizeErrorKey(l10n, key),
       };
+      final seatReleased = errorKey == SessionProvider.seatReleasedMessageKey;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(errorMessage),
-          backgroundColor: Colors.red,
+          backgroundColor: seatReleased ? null : Colors.red,
         ),
       );
-      
+
       // Clear error immediately after showing SnackBar so it doesn't persist
       session.clearError();
+      if (seatReleased) unawaited(_refreshSeats());
     }
   }
 

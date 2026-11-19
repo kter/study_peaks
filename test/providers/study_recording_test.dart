@@ -13,6 +13,7 @@ import 'package:study_peaks/providers/timer_provider.dart';
 import 'package:study_peaks/repositories/study_history_repository.dart';
 import 'package:study_peaks/services/notification_service.dart';
 import 'package:study_peaks/services/lock_task_service.dart';
+import 'package:study_peaks/services/study_persistence_keys.dart';
 import '../helpers/test_helpers.dart';
 
 class Notifications extends Mock implements NotificationService {}
@@ -205,6 +206,62 @@ void main() {
     expect(await recovered.leave(), LeaveFailure.unavailable);
     expect((await SharedPreferences.getInstance()).getString('study_active_v2'),
         isNull);
+  });
+
+  test('sync 404 finalizes the study record and clears the active session',
+      () async {
+    final api = MockApiService();
+    final auth = MutableAuth('moved-user');
+    final history = History();
+    final t = timer();
+    final session = SessionProvider(
+      apiService: api,
+      historyRepository: history,
+      useMockFallback: false,
+    )
+      ..setTimerProvider(t)
+      ..setAuthProvider(auth);
+    addTearDown(auth.dispose);
+    addTearDown(session.dispose);
+    final startedAt = now;
+    when(() => api.sit('fuji', 1, displayName: 'moved-user', userId: 'moved-user'))
+        .thenAnswer((_) async => createMockSitResponse(
+            sessionId: 'moved', sessionStartedAt: startedAt));
+    when(() => api.sync('fuji', 'moved', any()))
+        .thenThrow(ApiException('Failed to sync', 404));
+    when(() => history.saveSession(any())).thenAnswer((_) async {});
+
+    expect(await session.sit('fuji', 1), isTrue);
+    now = startedAt.add(const Duration(seconds: 20));
+    await t.ensurePersisted();
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.containsKey(StudyPersistenceKeys.activeSession), isTrue);
+    expect(prefs.containsKey(StudyPersistenceKeys.timerState), isTrue);
+    await prefs.setString(StudyPersistenceKeys.notificationState, '{}');
+
+    await session.forceSync();
+    await session.forceSync();
+
+    expect(session.state, SessionState.idle);
+    expect(session.sessionId, isNull);
+    expect(session.error, 'sessionSeatReleased');
+    expect(t.sessionId, isNull);
+    expect(t.isRunning, isFalse);
+    expect(prefs.containsKey(StudyPersistenceKeys.activeSession), isFalse);
+    expect(prefs.containsKey(StudyPersistenceKeys.legacySessionId), isFalse);
+    expect(prefs.containsKey(StudyPersistenceKeys.timerState), isFalse);
+    expect(prefs.containsKey(StudyPersistenceKeys.notificationState), isFalse);
+    final saved = verify(() => history.saveSession(captureAny()));
+    saved.called(1);
+    final record = saved.captured.single as StudySession;
+    expect(record.sessionId, 'moved');
+    expect(record.ownerId, auth.historyOwnerId);
+    expect(record.roomId, 'fuji');
+    expect(record.durationSeconds, 20);
+    expect(record.intervals!.single.start, startedAt);
+    expect(record.intervals!.single.end, now);
+    verify(() => api.sync('fuji', 'moved', any())).called(1);
+    verifyNever(() => api.leave(any(), any(), any()));
   });
 
   test('retry after network and storage failures reuses the frozen record',

@@ -10,7 +10,7 @@ resource "google_firestore_database" "main" {
   provider = google-beta
   project  = var.project_id
   name     = "(default)"
-  
+
   location_id                 = var.region
   type                        = "FIRESTORE_NATIVE"
   concurrency_mode            = "OPTIMISTIC"
@@ -20,6 +20,32 @@ resource "google_firestore_database" "main" {
   deletion_policy = local.config.deletion_protection ? "ABANDON" : "DELETE"
 
   depends_on = [google_project_service.firestore]
+}
+
+resource "google_firestore_field" "seats_user_id" {
+  project    = var.project_id
+  database   = google_firestore_database.main.name
+  collection = "seats"
+  field      = "userId"
+
+  index_config {
+    indexes {
+      order       = "ASCENDING"
+      query_scope = "COLLECTION_GROUP"
+    }
+    indexes {
+      order       = "ASCENDING"
+      query_scope = "COLLECTION"
+    }
+    indexes {
+      order       = "DESCENDING"
+      query_scope = "COLLECTION"
+    }
+    indexes {
+      array_config = "CONTAINS"
+      query_scope  = "COLLECTION"
+    }
+  }
 }
 
 # Firestore Security Rules
