@@ -66,7 +66,8 @@ class SessionProvider extends ChangeNotifier {
   bool _disposed = false;
   Future<bool>? _restoreOperation;
   static const _keyActive = StudyPersistenceKeys.activeSession;
-  String get historyOwnerId => StudySession.ownerFor(_authProvider?.userId);
+  String get historyOwnerId =>
+      _authProvider?.historyOwnerId ?? StudySession.guestOwner;
 
   void setTimerProvider(TimerProvider timer) {
     _timerProvider?.removeListener(_onTimerChanged);
@@ -75,6 +76,7 @@ class SessionProvider extends ChangeNotifier {
   }
 
   void _onTimerChanged() {
+    // The timer widget listens to TimerProvider for its second-by-second display.
     if (_timerProvider?.sessionId == _sessionId &&
         _sessionId != null &&
         _pendingRecord == null) {
@@ -86,8 +88,6 @@ class SessionProvider extends ChangeNotifier {
   String? _notificationTitle;
   String _studyingFormat = 'Studying - {duration}'; // Default fallback
 
-  static const syncIntervalMinutes = AppConfig.sessionSyncIntervalMinutes;
-
   // SharedPreferences keys for session persistence
   static const _keySessionId = StudyPersistenceKeys.legacySessionId;
   static const _keyRoomId = 'persisted_room_id';
@@ -97,7 +97,7 @@ class SessionProvider extends ChangeNotifier {
 
   /// Creates a SessionProvider.
   ///
-  /// [useMockFallback] controls whether API errors fall back to mock mode.
+  /// [useMockFallback] controls whether network errors fall back to mock mode.
   /// Defaults to [kDebugMode], so production builds will show errors to users.
   SessionProvider({
     ApiService? apiService,
@@ -133,6 +133,28 @@ class SessionProvider extends ChangeNotifier {
       _apiService.setAuthToken(token);
     } else {
       _apiService.clearAuthToken();
+    }
+  }
+
+  Future<T> _withAuthRetry<T>(
+    Future<T> Function() call, {
+    bool Function()? canRetry,
+  }) async {
+    try {
+      return await call();
+    } on ApiException catch (error) {
+      if (error.statusCode != 401 || canRetry?.call() == false) rethrow;
+      try {
+        final token = await _authProvider?.getIdToken(forceRefresh: true);
+        if (token != null && canRetry?.call() != false) {
+          _apiService.setAuthToken(token);
+          return await call();
+        }
+      } catch (retryError) {
+        debugPrint('Retry failed: $retryError');
+        rethrow;
+      }
+      rethrow;
     }
   }
 
@@ -183,15 +205,17 @@ class SessionProvider extends ChangeNotifier {
     try {
       _error = null;
       await _ensureAuthToken();
-      final response = await _apiService.sit(
-        roomId,
-        seatNumber,
-        displayName: displayName ?? _authProvider?.displayName,
-        countryCode: countryCode,
-        userId: _authProvider?.userId,
-        iconSeed: iconSeed,
-        photoUrl: photoUrl,
-      );
+      final sitDisplayName = displayName ?? _authProvider?.displayName;
+      final userId = _authProvider?.userId;
+      final response = await _withAuthRetry(() => _apiService.sit(
+            roomId,
+            seatNumber,
+            displayName: sitDisplayName,
+            countryCode: countryCode,
+            userId: userId,
+            iconSeed: iconSeed,
+            photoUrl: photoUrl,
+          ));
 
       _currentRoomId = roomId;
       _currentRoomName = roomName;
@@ -212,95 +236,35 @@ class SessionProvider extends ChangeNotifier {
       _startSyncTimer();
 
       // Start foreground notification
+      final timer = _timerProvider;
+      final mode = timer?.mode ?? TimerMode.normal;
       await _notificationService.startStudySession(
         notificationTitle: _notificationTitle!,
         notificationText: notificationSessionStarted ?? 'Session started - 0m',
+        mode: mode,
+        // The timer starts after the foreground service is initialized.
+        isRunning: false,
+        remainingSeconds: mode == TimerMode.pomodoro
+            ? timer?.pomodoroFocusDuration
+            : null,
+        studyingFormat: _studyingFormat,
+        focusRemainingFormat: notificationFocusRemaining,
+        breakRemainingFormat: notificationBreakRemaining,
+        focusFinishedText: notificationFocusFinished,
+        breakFinishedText: notificationBreakFinished,
       );
-
-      // Update localization for Pomodoro mode if provided
-      if (notificationFocusRemaining != null &&
-          notificationBreakRemaining != null &&
-          notificationFocusFinished != null &&
-          notificationBreakFinished != null) {
-        await _notificationService.updatePomodoroLocalization(
-          focusRemainingFormat: notificationFocusRemaining,
-          breakRemainingFormat: notificationBreakRemaining,
-          focusFinishedText: notificationFocusFinished,
-          breakFinishedText: notificationBreakFinished,
-        );
-      }
-
-      // Persist session for recovery after app restart
-      await _persistSession();
+      timer?.start(sessionId: _sessionId);
 
       notifyListeners();
       return true;
     } catch (e) {
-      // 401 Retry Logic
-
-      if (e is ApiException && e.statusCode == 401) {
-        try {
-          // Force token refresh
-          if (_authProvider != null) {
-            final newToken =
-                await _authProvider!.getIdToken(forceRefresh: true);
-            if (newToken != null) {
-              _apiService.setAuthToken(newToken);
-              // Retry the request once
-              final response = await _apiService.sit(
-                roomId,
-                seatNumber,
-                displayName: displayName ?? _authProvider?.displayName,
-                countryCode: countryCode,
-                userId: _authProvider?.userId,
-                iconSeed: iconSeed,
-                photoUrl: photoUrl,
-              );
-
-              _currentRoomId = roomId;
-              _currentRoomName = roomName;
-              _sessionId = response.sessionId;
-              _seatNumber = response.seatNumber;
-              _sessionStartedAt = response.sessionStartedAt;
-              _currentDuration = 0;
-              _ownerId = ownerAtStart;
-              _state = SessionState.seated;
-              await _persistSession();
-
-              // Store notification strings for later updates
-              _notificationTitle =
-                  notificationTitle ?? 'Studying at ${roomName ?? roomId}';
-              _studyingFormat =
-                  notificationStudyingFormat ?? 'Studying - {duration}';
-
-              _startSyncTimer();
-
-              // Start foreground notification
-              await _notificationService.startStudySession(
-                notificationTitle: _notificationTitle!,
-                notificationText:
-                    notificationSessionStarted ?? 'Session started - 0m',
-              );
-
-              // Persist session for recovery after app restart
-              await _persistSession();
-
-              notifyListeners();
-              return true;
-            }
-          }
-        } catch (retryError) {
-          // If retry fails, fall through to normal error handling
-          debugPrint('Retry failed: $retryError');
-        }
-      }
-
       if (_sessionId != null && _ownerId != null) {
         _error = 'historySaveFailed';
         notifyListeners();
         return false;
       }
-      if (useMockFallback) {
+      final errorKey = errorKeyFor(e, 'Failed to sit: $e');
+      if (useMockFallback && errorKey == NetworkErrorKey.networkError) {
         // Development mode: log and fall back to mock mode
         debugPrint('API error (mock fallback): $e');
         _error = null;
@@ -312,23 +276,17 @@ class SessionProvider extends ChangeNotifier {
         _ownerId = ownerAtStart;
         await _persistSession();
         _state = SessionState.seated;
+        _timerProvider?.start(sessionId: _sessionId);
         notifyListeners();
         return true;
-      } else {
-        // Production mode: surface error to UI
-        // Use localization key for network errors
-        if (isNetworkError(e)) {
-          _error = NetworkErrorKey.networkError;
-        } else {
-          _error = 'Failed to sit: ${e.toString()}';
-        }
-        notifyListeners();
-        return false;
       }
+      _error = errorKey;
+      notifyListeners();
+      return false;
     }
   }
 
-  /// Update session duration (called from timer provider).
+  /// Update the session duration directly.
   void updateDuration(int durationSeconds) {
     if (_pendingRecord != null) return;
     _currentDuration = durationSeconds;
@@ -361,7 +319,7 @@ class SessionProvider extends ChangeNotifier {
           await _leaveOnServer(record);
           _remoteLeaveCompleted = true;
         } catch (error) {
-          serverFailure = isNetworkError(error)
+          serverFailure = isTransportError(error)
               ? LeaveServerFailure.connection
               : LeaveServerFailure.request;
         }
@@ -413,20 +371,13 @@ class SessionProvider extends ChangeNotifier {
   Future<void> _leaveOnServer(StudySession record) async {
     if (record.sessionId.startsWith(_mockSessionPrefix)) return;
 
-    Future<void> send() =>
-        _apiService.leave(record.roomId, record.sessionId, record.durationSeconds);
-
     try {
       await _ensureAuthToken();
-      try {
-        await send();
-      } on ApiException catch (error) {
-        if (error.statusCode != 401) rethrow;
-        final token = await _authProvider?.getIdToken(forceRefresh: true);
-        if (token == null) rethrow;
-        _apiService.setAuthToken(token);
-        await send();
-      }
+      await _withAuthRetry(() => _apiService.leave(
+            record.roomId,
+            record.sessionId,
+            record.durationSeconds,
+          ));
     } on ApiException catch (error) {
       // The response may have been lost or the server session may have expired.
       if (error.statusCode != 404) rethrow;
@@ -436,7 +387,7 @@ class SessionProvider extends ChangeNotifier {
   /// Start the sync timer.
   void _startSyncTimer() {
     _syncTimer = Timer.periodic(
-      const Duration(minutes: syncIntervalMinutes),
+      const Duration(minutes: AppConfig.sessionSyncIntervalMinutes),
       (_) => _syncSession(),
     );
   }
@@ -487,60 +438,30 @@ class SessionProvider extends ChangeNotifier {
       String? iconSeed;
       String? photoUrl;
 
-      if (_userSettingsProvider != null) {
-        displayName = _userSettingsProvider!.displayName;
-        countryCode = _userSettingsProvider!.countryCode;
-        iconSeed = _userSettingsProvider!.iconSeed;
-
-        // Determine photoUrl based on settings and auth state
-        if (_authProvider != null &&
-            _authProvider!.isSignedIn &&
-            _authProvider!.photoUrl != null &&
-            _userSettingsProvider!.useGoogleAvatar) {
-          photoUrl = _authProvider!.photoUrl;
-        }
+      final settings = _userSettingsProvider;
+      if (settings != null) {
+        displayName = settings.displayName;
+        countryCode = settings.countryCode;
+        iconSeed = settings.iconSeed;
+        photoUrl = googleAvatarUrl(_authProvider, settings);
       }
 
-      debugPrint(
-          '🔄 Sync: iconSeed=$iconSeed, photoUrl=$photoUrl, displayName=$displayName');
-
-      await _apiService.sync(
-        roomId,
-        sessionId,
-        _currentDuration,
-        displayName: displayName,
-        countryCode: countryCode,
-        iconSeed: iconSeed,
-        photoUrl: photoUrl,
+      final duration = _currentDuration;
+      await _withAuthRetry(
+        () => _apiService.sync(
+          roomId,
+          sessionId,
+          duration,
+          displayName: displayName,
+          countryCode: countryCode,
+          iconSeed: iconSeed,
+          photoUrl: photoUrl,
+        ),
+        canRetry: stillSyncing,
       );
     } catch (e) {
       if (!stillSyncing()) return;
-      bool retrySuccess = false;
-      // 401 Retry Logic
-      if (e is ApiException && e.statusCode == 401) {
-        try {
-          if (_authProvider != null) {
-            final newToken =
-                await _authProvider!.getIdToken(forceRefresh: true);
-            if (newToken != null && stillSyncing()) {
-              _apiService.setAuthToken(newToken);
-              await _apiService.sync(roomId, sessionId, _currentDuration);
-              retrySuccess = true;
-            }
-          }
-        } catch (retryError) {
-          debugPrint('Retry failed: $retryError');
-        }
-      }
-
-      if (!retrySuccess && stillSyncing()) {
-        // Use localization key for network errors
-        if (isNetworkError(e)) {
-          _error = NetworkErrorKey.networkError;
-        } else {
-          _error = e.toString();
-        }
-      }
+      _error = errorKeyFor(e, e.toString());
     }
 
     if (stillSyncing()) {
@@ -601,25 +522,6 @@ class SessionProvider extends ChangeNotifier {
     ]) {
       if (!await prefs.remove(key)) throw StateError('Session cleanup failed');
     }
-  }
-
-  /// Restore session from seat map data when user's ID is found on a seat.
-  /// Returns true if session was restored, false otherwise.
-  ///
-  /// This should be called when the seat map is opened to handle the case where
-  /// the app was killed but the user's session still exists on the server.
-  ///
-  /// [roomId] - The room ID to check
-  /// [seats] - The list of seats from the room
-  /// [userId] - The current user's ID to search for
-  Future<bool> restoreFromSeatData({
-    required String roomId,
-    required List<dynamic> seats,
-    required String userId,
-    String? roomName,
-  }) async {
-    if (isSeated) return false;
-    return restoreSessionIfNeeded();
   }
 
   /// Local recovery does not depend on the foreground service or server TTL.

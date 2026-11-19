@@ -40,3 +40,19 @@ class WeeklyStudyGoals {
     return null;
   }
 }
+
+class WeeklyGoalProgress {
+  const WeeklyGoalProgress(this.goalMinutes, this.actualSeconds);
+
+  final int? goalMinutes;
+  final int actualSeconds;
+
+  int get targetSeconds => (goalMinutes ?? 0) * 60;
+  bool get hasGoal => targetSeconds > 0;
+
+  int get percent => hasGoal ? actualSeconds * 100 ~/ targetSeconds : 0;
+  int get remainingSeconds =>
+      hasGoal ? (targetSeconds - actualSeconds).clamp(0, targetSeconds) : 0;
+  double get fraction =>
+      hasGoal ? (actualSeconds / targetSeconds).clamp(0.0, 1.0) : 0.0;
+}

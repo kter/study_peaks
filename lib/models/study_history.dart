@@ -59,6 +59,24 @@ class StudyHistory {
 
   DateTime? get latestStudyDay => _latestStudyDay;
 
+  DateTime lastNavigableDay(DateTime today) {
+    final currentDay = civilDate(today);
+    final studyDay = latestStudyDay;
+    return studyDay != null && studyDay.isAfter(currentDay)
+        ? studyDay
+        : currentDay;
+  }
+
+  static DateTime clampAnchor(
+    StudyHistoryPeriod period,
+    DateTime requestedDate,
+    DateTime lastNavigableDay,
+  ) {
+    return period.start(requestedDate).isAfter(period.start(lastNavigableDay))
+        ? civilDate(lastNavigableDay)
+        : civilDate(requestedDate);
+  }
+
   List<DailyStudySession> sessionsOn(DateTime day) =>
       List.unmodifiable(_sessionsByDay[civilDate(day)] ?? const []);
 
@@ -87,4 +105,13 @@ class StudyHistory {
 
   Map<DateTime, int> daysIn(StudyHistoryPeriod period, DateTime containing) =>
       daysBetween(period.start(containing), period.shift(containing, 1));
+
+  int studyDaysIn(DateTime month) =>
+      daysIn(StudyHistoryPeriod.month, month)
+          .values
+          .where((seconds) => seconds > 0)
+          .length;
+
+  bool isPeriodEmpty(StudyHistoryPeriod period, DateTime containing) =>
+      daysIn(period, containing).values.every((seconds) => seconds == 0);
 }

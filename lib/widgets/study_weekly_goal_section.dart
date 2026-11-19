@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/study_history.dart';
-import '../models/study_session.dart';
 import '../models/weekly_study_goals.dart';
 import '../providers/auth_provider.dart';
 import '../repositories/study_history_repository.dart';
@@ -34,23 +33,27 @@ class StudyWeeklyGoalSection extends StatefulWidget {
 }
 
 class _StudyWeeklyGoalSectionState extends State<StudyWeeklyGoalSection> {
-  late Future<WeeklyStudyGoals?> _goals;
+  Future<WeeklyStudyGoals?>? _goals;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    _goals = _loadGoals();
+    _goals = _loadVisibleGoals();
   }
 
   @override
   void didUpdateWidget(StudyWeeklyGoalSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.currentWeek != widget.currentWeek ||
+    if (_goals == null ||
+        oldWidget.currentWeek != widget.currentWeek ||
         oldWidget.repository != widget.repository) {
-      _goals = _loadGoals();
+      _goals = _loadVisibleGoals();
     }
   }
+
+  Future<WeeklyStudyGoals?>? _loadVisibleGoals() =>
+      widget.selectedWeek == null ? null : _loadGoals();
 
   Future<WeeklyStudyGoals?> _loadGoals() async {
     try {
@@ -65,15 +68,15 @@ class _StudyWeeklyGoalSectionState extends State<StudyWeeklyGoalSection> {
     }
   }
 
-  static String _ownerOf(AuthProvider auth) =>
-      StudySession.ownerFor(auth.userId);
-
   Future<void> _editGoal(DateTime week, int? minutes) async {
     final owner = widget.ownerId;
     final result = await showDialog<({int? minutes})>(
       context: context,
       builder: (dialogContext) {
-        if (dialogContext.select<AuthProvider, String>(_ownerOf) == owner) {
+        final currentOwner = dialogContext.select<AuthProvider, String>(
+          (auth) => auth.historyOwnerId,
+        );
+        if (currentOwner == owner) {
           return WeeklyStudyGoalDialog(goalMinutes: minutes);
         }
         final l10n = AppLocalizations.of(dialogContext)!;
@@ -168,11 +171,11 @@ class _StudyWeeklyGoalSectionState extends State<StudyWeeklyGoalSection> {
 
   bool _isCurrentOwner(String owner) =>
       widget.ownerId == owner &&
-      _ownerOf(context.read<AuthProvider>()) == owner;
+      context.read<AuthProvider>().historyOwnerId == owner;
 
   void _refreshGoals() {
     setState(() {
-      _goals = _loadGoals();
+      _goals = _loadVisibleGoals();
     });
   }
 
@@ -211,9 +214,10 @@ class _StudyWeeklyGoalSectionState extends State<StudyWeeklyGoalSection> {
             latestWeek != null && latestWeek.isAfter(widget.currentWeek);
         final editable = current && !dateEarlier;
         return _WeeklyGoalCard(
-          goalMinutes: minutes,
-          actualSeconds:
-              widget.history.secondsIn(StudyHistoryPeriod.week, week),
+          progress: WeeklyGoalProgress(
+            minutes,
+            widget.history.secondsIn(StudyHistoryPeriod.week, week),
+          ),
           editable: editable,
           onEdit: loaded && !_saving ? () => _editGoal(week, minutes) : null,
           notice: current && dateEarlier ? l10n.weeklyGoalDateEarlier : null,
@@ -232,16 +236,14 @@ class _StudyWeeklyGoalSectionState extends State<StudyWeeklyGoalSection> {
 
 class _WeeklyGoalCard extends StatelessWidget {
   const _WeeklyGoalCard({
-    required this.goalMinutes,
-    required this.actualSeconds,
+    required this.progress,
     required this.editable,
     required this.onEdit,
     required this.notice,
     required this.onCorrectDate,
   });
 
-  final int? goalMinutes;
-  final int actualSeconds;
+  final WeeklyGoalProgress progress;
   final bool editable;
   final VoidCallback? onEdit;
   final String? notice;
@@ -250,9 +252,8 @@ class _WeeklyGoalCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final targetSeconds = (goalMinutes ?? 0) * 60;
     final theme = Theme.of(context);
-    final hasGoal = targetSeconds > 0;
+    final hasGoal = progress.hasGoal;
 
     String duration(int seconds) =>
         Formatters.formatStudyDuration(seconds, l10n);
@@ -267,16 +268,15 @@ class _WeeklyGoalCard extends StatelessWidget {
             Text(l10n.weeklyGoal, style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
             if (hasGoal) ...[
-              Text(l10n.weeklyGoalTarget(duration(targetSeconds))),
-              Text(l10n.weeklyGoalActual(duration(actualSeconds))),
+              Text(l10n.weeklyGoalTarget(duration(progress.targetSeconds))),
+              Text(l10n.weeklyGoalActual(duration(progress.actualSeconds))),
               Text(
                 l10n.weeklyGoalRemaining(
-                  duration(
-                      (targetSeconds - actualSeconds).clamp(0, targetSeconds)),
+                  duration(progress.remainingSeconds),
                 ),
               ),
               const SizedBox(height: 8),
-              _buildProgress(context, targetSeconds),
+              _buildProgress(context),
             ] else
               Text(l10n.weeklyGoalNotSet),
             if (notice != null) ...[
@@ -306,11 +306,11 @@ class _WeeklyGoalCard extends StatelessWidget {
     );
   }
 
-  Widget _buildProgress(BuildContext context, int targetSeconds) {
+  Widget _buildProgress(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final percent = actualSeconds * 100 ~/ targetSeconds;
     final label = l10n.weeklyGoalAchievement(
-      NumberFormat.percentPattern(l10n.localeName).format(percent / 100),
+      NumberFormat.percentPattern(l10n.localeName)
+          .format(progress.percent / 100),
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -318,9 +318,7 @@ class _WeeklyGoalCard extends StatelessWidget {
         Text(label),
         const SizedBox(height: 4),
         ExcludeSemantics(
-          child: LinearProgressIndicator(
-            value: (actualSeconds / targetSeconds).clamp(0.0, 1.0),
-          ),
+          child: LinearProgressIndicator(value: progress.fraction),
         ),
       ],
     );

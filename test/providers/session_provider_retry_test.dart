@@ -2,7 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:study_peaks/providers/auth_provider.dart';
 import 'package:study_peaks/providers/session_provider.dart';
+import 'package:study_peaks/providers/user_settings_provider.dart';
 import 'package:study_peaks/services/api_service.dart';
+import 'package:study_peaks/services/network_exception.dart';
 import 'package:study_peaks/models/study_session.dart';
 import 'package:study_peaks/repositories/study_history_repository.dart';
 
@@ -11,6 +13,8 @@ import '../helpers/test_helpers.dart';
 class MockHistory extends Mock implements StudyHistoryRepository {}
 
 class MockAuthProvider extends Mock implements AuthProvider {}
+
+class MockUserSettingsProvider extends Mock implements UserSettingsProvider {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -41,6 +45,7 @@ void main() {
         .thenAnswer((_) async => 'token');
     when(() => mockAuthProvider.displayName).thenReturn('Test User');
     when(() => mockAuthProvider.userId).thenReturn('test-uid');
+    when(() => mockAuthProvider.historyOwnerId).thenReturn('user:test-uid');
   });
 
   tearDown(() {
@@ -180,5 +185,69 @@ void main() {
       verify(() => mockAuthProvider.getIdToken(forceRefresh: true)).called(1);
       verify(() => mockApiService.leave(any(), any(), any())).called(2);
     });
+
+    test('sync retries with the same duration and profile fields', () async {
+      const photoUrl = 'https://example.com/avatar.png';
+      final settings = MockUserSettingsProvider();
+      when(() => settings.displayName).thenReturn('Sync user');
+      when(() => settings.countryCode).thenReturn('JP');
+      when(() => settings.iconSeed).thenReturn('icon-seed');
+      when(() => settings.useGoogleAvatar).thenReturn(true);
+      when(() => mockAuthProvider.isSignedIn).thenReturn(true);
+      when(() => mockAuthProvider.photoUrl).thenReturn(photoUrl);
+      provider.setUserSettingsProvider(settings);
+      when(() => mockApiService.sit(
+            'room-1',
+            10,
+            displayName: 'Test User',
+            userId: 'test-uid',
+          )).thenAnswer((_) async => createMockSitResponse());
+      expect(await provider.sit('room-1', 10), true);
+      provider.updateDuration(100);
+
+      when(() => mockAuthProvider.getIdToken(forceRefresh: true))
+          .thenAnswer((_) async {
+        provider.updateDuration(101);
+        return 'new-token';
+      });
+      var calls = 0;
+      when(() => mockApiService.sync(
+            'room-1',
+            'test-session-id',
+            100,
+            displayName: 'Sync user',
+            countryCode: 'JP',
+            iconSeed: 'icon-seed',
+            photoUrl: photoUrl,
+          )).thenAnswer((_) async {
+        if (++calls == 1) throw ApiException('Unauthorized', 401);
+      });
+
+      await provider.forceSync();
+
+      expect(calls, 2);
+      expect(provider.error, isNull);
+      verify(() => mockApiService.setAuthToken('new-token')).called(1);
+    });
+  });
+
+  test('sync distinguishes API responses from transport failures', () async {
+    when(() => mockApiService.sit(
+          'room-1',
+          10,
+          displayName: 'Test User',
+          userId: 'test-uid',
+        )).thenAnswer((_) async => createMockSitResponse());
+    expect(await provider.sit('room-1', 10), isTrue);
+
+    final apiError = ApiException('Connection refused', 503);
+    when(() => mockApiService.sync(any(), any(), any())).thenThrow(apiError);
+    await provider.forceSync();
+    expect(provider.error, apiError.toString());
+
+    when(() => mockApiService.sync(any(), any(), any()))
+        .thenThrow(const NetworkException('offline'));
+    await provider.forceSync();
+    expect(provider.error, NetworkErrorKey.networkError);
   });
 }

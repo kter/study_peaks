@@ -338,6 +338,12 @@ abstract class AppLocalizations {
   /// **'This seat was just taken. Please select another.'**
   String get seatTaken;
 
+  /// No description provided for @sessionRestoredFromSeatMap.
+  ///
+  /// In en, this message translates to:
+  /// **'Session restored from seat map'**
+  String get sessionRestoredFromSeatMap;
+
   /// No description provided for @notificationStudyingAt.
   ///
   /// In en, this message translates to:

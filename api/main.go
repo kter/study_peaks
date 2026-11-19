@@ -3,18 +3,35 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"cloud.google.com/go/firestore"
+	"cloud.google.com/go/firestore/apiv1/firestorepb"
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/auth"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
+	"google.golang.org/api/idtoken"
+	"google.golang.org/api/iterator"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+)
+
+type ctxKey int
+
+const userIdKey ctxKey = iota
+
+const (
+	anonymousPrefix = "anon_"
+	sessionTTL      = 24 * time.Hour
 )
 
 var (
@@ -50,7 +67,7 @@ func main() {
 		})
 	})
 
-	r.Post("/internal/cleanup-sessions", cleanupHandler)
+	r.With(cleanupAuthMiddleware, requireInit).Post("/internal/cleanup-sessions", cleanupHandler)
 
 	// Initialize Firebase in background
 	go initFirebase()
@@ -86,14 +103,14 @@ func initFirebase() {
 		return
 	}
 
+	initializeRooms(ctx, fc)
+
 	initMu.Lock()
 	firestoreClient = fc
 	authClient = ac
 	isInitialized = true
 	initMu.Unlock()
 
-	// Initialize rooms
-	initializeRooms(ctx)
 	log.Println("Firebase initialized successfully")
 }
 
@@ -111,7 +128,7 @@ func requireInit(next http.Handler) http.Handler {
 	})
 }
 
-func initializeRooms(ctx context.Context) {
+func initializeRooms(ctx context.Context, client *firestore.Client) {
 	rooms := []map[string]interface{}{
 		{"roomId": "everest", "name": "Mt. Everest", "capacity": 100},
 		{"roomId": "fuji", "name": "Mt. Fuji", "capacity": 50},
@@ -120,8 +137,8 @@ func initializeRooms(ctx context.Context) {
 	}
 
 	for _, room := range rooms {
-		roomId := room["roomId"].(string)
-		_, err := firestoreClient.Collection("rooms").Doc(roomId).Set(ctx, room, firestore.MergeAll)
+		roomId := getString(room, "roomId")
+		_, err := client.Collection("rooms").Doc(roomId).Set(ctx, room, firestore.MergeAll)
 		if err != nil {
 			log.Printf("Failed to initialize room %s: %v", roomId, err)
 		}
@@ -142,49 +159,100 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// optionalAuthMiddleware attempts to verify Firebase token if present,
-// but allows the request to proceed without authentication for anonymous users
-func optionalAuthMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		authHeader := r.Header.Get("Authorization")
-
-		if len(authHeader) >= 7 && authHeader[:7] == "Bearer " {
-			token := authHeader[7:]
-			decoded, err := authClient.VerifyIDToken(ctx, token)
-			if err == nil {
-				ctx = context.WithValue(ctx, "userId", decoded.UID)
-				ctx = context.WithValue(ctx, "isAuthenticated", true)
-			}
-		}
-
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+func bearerToken(header string) string {
+	parts := strings.Fields(header)
+	if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+		return parts[1]
+	}
+	return ""
 }
 
-func authMiddleware(next http.Handler) http.Handler {
+// optionalAuthMiddleware verifies Firebase tokens and allows guests without a header.
+func optionalAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
-			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Missing or invalid authorization header")
+		headers := r.Header.Values("Authorization")
+		if len(headers) == 0 {
+			next.ServeHTTP(w, r)
 			return
 		}
-
-		token := authHeader[7:]
-		decoded, err := authClient.VerifyIDToken(r.Context(), token)
-		if err != nil {
+		token := bearerToken(headers[0])
+		if len(headers) != 1 || token == "" {
 			writeError(w, http.StatusUnauthorized, "INVALID_TOKEN", "Invalid or expired token")
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), "userId", decoded.UID)
+		decoded, err := authClient.VerifyIDToken(r.Context(), token)
+		if err != nil {
+			log.Printf("Firebase ID token verification failed: %v", err)
+			writeError(w, http.StatusUnauthorized, "INVALID_TOKEN", "Invalid or expired token")
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), userIdKey, decoded.UID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
+func cleanupAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		audience := os.Getenv("CLEANUP_AUDIENCE")
+		invokerEmail := os.Getenv("CLEANUP_INVOKER_EMAIL")
+		if audience == "" || invokerEmail == "" {
+			log.Print("Cleanup authentication is not configured")
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "Cleanup access denied")
+			return
+		}
+
+		token := bearerToken(r.Header.Get("Authorization"))
+		if token == "" {
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "Cleanup access denied")
+			return
+		}
+		payload, err := idtoken.Validate(r.Context(), token, audience)
+		if err != nil {
+			log.Printf("Cleanup ID token verification failed: %v", err)
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "Cleanup access denied")
+			return
+		}
+		if !isCleanupInvoker(payload, invokerEmail) {
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "Cleanup access denied")
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func isCleanupInvoker(payload *idtoken.Payload, invokerEmail string) bool {
+	return (payload.Issuer == "https://accounts.google.com" || payload.Issuer == "accounts.google.com") &&
+		getString(payload.Claims, "email") == invokerEmail &&
+		getBool(payload.Claims, "email_verified")
+}
+
 func healthHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func seatsRef(roomId string) *firestore.CollectionRef {
+	return firestoreClient.Collection("rooms").Doc(roomId).Collection("seats")
+}
+
+func getRoom(ctx context.Context, roomId string) (*firestore.DocumentSnapshot, error) {
+	doc, err := firestoreClient.Collection("rooms").Doc(roomId).Get(ctx)
+	if status.Code(err) == codes.NotFound {
+		return nil, &AppError{Code: "ROOM_NOT_FOUND", Message: "Room not found", Status: http.StatusNotFound}
+	}
+	return doc, err
+}
+
+func findSeatBySession(ctx context.Context, roomId, sessionId string) (*firestore.DocumentSnapshot, error) {
+	iter := seatsRef(roomId).Where("sessionId", "==", sessionId).Limit(1).Documents(ctx)
+	defer iter.Stop()
+	doc, err := iter.Next()
+	if err == iterator.Done {
+		return nil, &AppError{Code: "SESSION_NOT_FOUND", Message: "Session not found", Status: http.StatusNotFound}
+	}
+	return doc, err
 }
 
 func getRoomsHandler(w http.ResponseWriter, r *http.Request) {
@@ -192,7 +260,7 @@ func getRoomsHandler(w http.ResponseWriter, r *http.Request) {
 
 	docs, err := firestoreClient.Collection("rooms").Documents(ctx).GetAll()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "FIRESTORE_ERROR", err.Error())
+		writeAPIError(w, "FIRESTORE_ERROR", err)
 		return
 	}
 
@@ -206,19 +274,26 @@ func getRoomsHandler(w http.ResponseWriter, r *http.Request) {
 	rooms := []RoomResponse{}
 	for _, doc := range docs {
 		data := doc.Data()
-		seatsQuery := firestoreClient.Collection("rooms").Doc(doc.Ref.ID).Collection("seats").Where("isOccupied", "==", true)
-		seatDocs, _ := seatsQuery.Documents(ctx).GetAll()
+		seatsQuery := seatsRef(doc.Ref.ID).Where("isOccupied", "==", true)
+		result, err := seatsQuery.NewAggregationQuery().WithCount("occupied").Get(ctx)
+		occupancy := 0
+		if err != nil {
+			log.Printf("Failed to count occupied seats in room %s: %v", doc.Ref.ID, err)
+		} else if count, ok := result["occupied"].(*firestorepb.Value); ok {
+			occupancy = int(count.GetIntegerValue())
+		} else {
+			log.Printf("Missing occupancy count for room %s", doc.Ref.ID)
+		}
 
 		rooms = append(rooms, RoomResponse{
 			RoomId:           doc.Ref.ID,
-			Name:             data["name"].(string),
-			Capacity:         int(data["capacity"].(int64)),
-			CurrentOccupancy: len(seatDocs),
+			Name:             getString(data, "name"),
+			Capacity:         getInt(data, "capacity"),
+			CurrentOccupancy: occupancy,
 		})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"rooms": rooms})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"rooms": rooms})
 }
 
 func getSeatsHandler(w http.ResponseWriter, r *http.Request) {
@@ -226,18 +301,17 @@ func getSeatsHandler(w http.ResponseWriter, r *http.Request) {
 	roomId := chi.URLParam(r, "roomId")
 
 	// Get room capacity
-	roomDoc, err := firestoreClient.Collection("rooms").Doc(roomId).Get(ctx)
+	roomDoc, err := getRoom(ctx, roomId)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "ROOM_NOT_FOUND", "Room not found")
+		writeAPIError(w, "FIRESTORE_ERROR", err)
 		return
 	}
-	roomData := roomDoc.Data()
-	capacity := int(roomData["capacity"].(int64))
+	capacity := getInt(roomDoc.Data(), "capacity")
 
 	// Get occupied seats from Firestore
-	docs, err := firestoreClient.Collection("rooms").Doc(roomId).Collection("seats").Documents(ctx).GetAll()
+	docs, err := seatsRef(roomId).Documents(ctx).GetAll()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "FIRESTORE_ERROR", err.Error())
+		writeAPIError(w, "FIRESTORE_ERROR", err)
 		return
 	}
 
@@ -263,11 +337,11 @@ func getSeatsHandler(w http.ResponseWriter, r *http.Request) {
 	occupiedSeats := make(map[int]SeatResponse)
 	for _, doc := range docs {
 		data := doc.Data()
-		seatNum := int(data["seatNumber"].(int64))
+		seatNum := getInt(data, "seatNumber")
 		seat := SeatResponse{
 			SeatId:     doc.Ref.ID,
 			SeatNumber: seatNum,
-			IsOccupied: data["isOccupied"].(bool),
+			IsOccupied: getBool(data, "isOccupied"),
 		}
 
 		seat.SessionStartedAt = getTime(data, "sessionStartedAt")
@@ -288,7 +362,7 @@ func getSeatsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate all seats (1 to capacity)
-	seats := make([]SeatResponse, 0, capacity)
+	seats := make([]SeatResponse, 0, max(0, capacity))
 	for i := 1; i <= capacity; i++ {
 		if occupied, exists := occupiedSeats[i]; exists {
 			seats = append(seats, occupied)
@@ -303,8 +377,7 @@ func getSeatsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"seats": seats})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"seats": seats})
 }
 
 func sitHandler(w http.ResponseWriter, r *http.Request) {
@@ -315,12 +388,22 @@ func sitHandler(w http.ResponseWriter, r *http.Request) {
 		SeatNumber  int    `json:"seatNumber"`
 		DisplayName string `json:"displayName"`
 		CountryCode string `json:"countryCode"`
-		UserId      string `json:"userId"`
+		UserId      string `json:"userId"` // Accepted for client compatibility.
 		IconSeed    string `json:"iconSeed"`
 		PhotoUrl    string `json:"photoUrl"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+		return
+	}
+
+	roomDoc, err := getRoom(ctx, roomId)
+	if err != nil {
+		writeAPIError(w, "FIRESTORE_ERROR", err)
+		return
+	}
+	if !validSeatNumber(req.SeatNumber, getInt(roomDoc.Data(), "capacity")) {
+		writeError(w, http.StatusBadRequest, "INVALID_SEAT", "Seat number is outside the room capacity")
 		return
 	}
 
@@ -334,37 +417,34 @@ func sitHandler(w http.ResponseWriter, r *http.Request) {
 		req.CountryCode = "JP"
 	}
 
-	// Get userId from auth context or request, generate if not present
-	userId := ""
-	if ctxUserId := ctx.Value("userId"); ctxUserId != nil {
-		userId = ctxUserId.(string)
-	} else if req.UserId != "" {
-		userId = req.UserId
-	} else {
-		userId = "anon_" + uuid.New().String()[:8]
+	userId := authenticatedUserId(ctx)
+	if userId == "" {
+		userId = anonymousPrefix + uuid.New().String()
 	}
 
-	seatRef := firestoreClient.Collection("rooms").Doc(roomId).Collection("seats").Doc(seatId(req.SeatNumber))
+	seatRef := seatsRef(roomId).Doc(seatId(req.SeatNumber))
+	var sessionId string
+	var startedAt time.Time
 
-	err := firestoreClient.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+	err = firestoreClient.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
 		doc, err := tx.Get(seatRef)
-		if err == nil && doc.Exists() {
-			data := doc.Data()
-			if data["isOccupied"].(bool) {
-				return &AppError{Code: "SEAT_OCCUPIED", Message: "Seat is already occupied", Status: http.StatusConflict}
-			}
+		if err != nil && status.Code(err) != codes.NotFound {
+			return err
+		}
+		if err == nil && getBool(doc.Data(), "isOccupied") {
+			return &AppError{Code: "SEAT_OCCUPIED", Message: "Seat is already occupied", Status: http.StatusConflict}
 		}
 
-		sessionId := "sess_" + uuid.New().String()[:8]
-		now := time.Now().UTC()
+		sessionId = "sess_" + uuid.New().String()
+		startedAt = time.Now().UTC().Truncate(time.Microsecond)
 
 		updateMap := map[string]interface{}{
 			"seatNumber":             req.SeatNumber,
 			"isOccupied":             true,
 			"userId":                 userId,
 			"sessionId":              sessionId,
-			"sessionStartedAt":       now,
-			"lastSyncAt":             now,
+			"sessionStartedAt":       startedAt,
+			"lastSyncAt":             startedAt,
 			"currentSessionDuration": 0,
 			"displayName":            req.DisplayName,
 			"countryCode":            req.CountryCode,
@@ -383,24 +463,52 @@ func sitHandler(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
-		if appErr, ok := err.(*AppError); ok {
-			writeError(w, appErr.Status, appErr.Code, appErr.Message)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "TRANSACTION_ERROR", err.Error())
+		writeAPIError(w, "TRANSACTION_ERROR", err)
 		return
 	}
 
-	doc, _ := seatRef.Get(ctx)
-	data := doc.Data()
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"sessionId":        data["sessionId"],
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"sessionId":        sessionId,
 		"seatNumber":       req.SeatNumber,
-		"sessionStartedAt": data["sessionStartedAt"],
+		"sessionStartedAt": startedAt,
 		"userId":           userId,
 	})
+}
+
+func validSeatNumber(seatNumber, capacity int) bool {
+	return seatNumber >= 1 && seatNumber <= capacity
+}
+
+func authenticatedUserId(ctx context.Context) string {
+	userId, _ := ctx.Value(userIdKey).(string)
+	return userId
+}
+
+func canModifySession(ownerId, callerId string) bool {
+	return strings.HasPrefix(ownerId, anonymousPrefix) || (callerId != "" && callerId == ownerId)
+}
+
+func mutateSession(ctx context.Context, roomId, sessionId string, mutate func(*firestore.DocumentRef, firestore.Precondition) error) error {
+	const maxAttempts = 3
+	userId := authenticatedUserId(ctx)
+	var err error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		doc, lookupErr := findSeatBySession(ctx, roomId, sessionId)
+		if lookupErr != nil {
+			return lookupErr
+		}
+		if !canModifySession(getString(doc.Data(), "userId"), userId) {
+			return &AppError{Code: "FORBIDDEN", Message: "Session belongs to another user", Status: http.StatusForbidden}
+		}
+
+		err = mutate(doc.Ref, firestore.LastUpdateTime(doc.UpdateTime))
+		code := status.Code(err)
+		if code != codes.FailedPrecondition && code != codes.NotFound {
+			return err
+		}
+		// Recheck the session and its owner if a write raced with this request.
+	}
+	return err
 }
 
 func syncHandler(w http.ResponseWriter, r *http.Request) {
@@ -420,16 +528,8 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := firestoreClient.Collection("rooms").Doc(roomId).Collection("seats").Where("sessionId", "==", req.SessionId).Limit(1)
-	docs, err := query.Documents(ctx).GetAll()
-	if err != nil || len(docs) == 0 {
-		writeError(w, http.StatusNotFound, "SESSION_NOT_FOUND", "Session not found")
-		return
-	}
-
-	now := time.Now().UTC()
+	var syncedAt time.Time
 	updates := []firestore.Update{
-		{Path: "lastSyncAt", Value: now},
 		{Path: "currentSessionDuration", Value: req.CurrentDuration},
 	}
 
@@ -447,15 +547,17 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 	// So we always update it if it's present in the request
 	updates = append(updates, firestore.Update{Path: "photoUrl", Value: req.PhotoUrl})
 
-	_, err = docs[0].Ref.Update(ctx, updates)
-
+	err := mutateSession(ctx, roomId, req.SessionId, func(ref *firestore.DocumentRef, precondition firestore.Precondition) error {
+		syncedAt = time.Now().UTC()
+		_, err := ref.Update(ctx, append(updates, firestore.Update{Path: "lastSyncAt", Value: syncedAt}), precondition)
+		return err
+	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "UPDATE_ERROR", err.Error())
+		writeAPIError(w, "UPDATE_ERROR", err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"syncedAt": now})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"syncedAt": syncedAt})
 }
 
 func getSessionHandler(w http.ResponseWriter, r *http.Request) {
@@ -464,38 +566,29 @@ func getSessionHandler(w http.ResponseWriter, r *http.Request) {
 	sessionId := chi.URLParam(r, "sessionId")
 
 	// Get room info for room name
-	roomDoc, err := firestoreClient.Collection("rooms").Doc(roomId).Get(ctx)
+	roomDoc, err := getRoom(ctx, roomId)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "ROOM_NOT_FOUND", "Room not found")
+		writeAPIError(w, "FIRESTORE_ERROR", err)
 		return
 	}
 	roomData := roomDoc.Data()
 	roomName := getString(roomData, "name")
 
-	// Find the session by sessionId
-	query := firestoreClient.Collection("rooms").Doc(roomId).Collection("seats").Where("sessionId", "==", sessionId).Limit(1)
-	docs, err := query.Documents(ctx).GetAll()
-	if err != nil || len(docs) == 0 {
-		writeError(w, http.StatusNotFound, "SESSION_NOT_FOUND", "Session not found or expired")
+	doc, err := findSeatBySession(ctx, roomId, sessionId)
+	if err != nil {
+		writeAPIError(w, "FIRESTORE_ERROR", err)
 		return
 	}
 
-	data := docs[0].Data()
-
-	// Check if the session is still valid (not stale)
-	// Sessions without sync for 3 hours are considered expired
-	if lastSyncAt, ok := data["lastSyncAt"].(time.Time); ok {
-		if time.Since(lastSyncAt) > 3*time.Hour {
-			writeError(w, http.StatusNotFound, "SESSION_EXPIRED", "Session has expired due to inactivity")
-			return
-		}
-	}
-
+	data := doc.Data()
 	sessionStartedAt := getTime(data, "sessionStartedAt")
 	lastSyncAt := getTime(data, "lastSyncAt")
+	if !lastSyncAt.IsZero() && time.Since(lastSyncAt) > sessionTTL {
+		writeError(w, http.StatusNotFound, "SESSION_EXPIRED", "Session has expired due to inactivity")
+		return
+	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"sessionId":        sessionId,
 		"roomId":           roomId,
 		"roomName":         roomName,
@@ -519,60 +612,60 @@ func leaveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := firestoreClient.Collection("rooms").Doc(roomId).Collection("seats").Where("sessionId", "==", req.SessionId).Limit(1)
-	docs, err := query.Documents(ctx).GetAll()
-	if err != nil || len(docs) == 0 {
-		writeError(w, http.StatusNotFound, "SESSION_NOT_FOUND", "Session not found")
-		return
-	}
-
-	now := time.Now().UTC()
-	_, err = docs[0].Ref.Delete(ctx)
+	err := mutateSession(ctx, roomId, req.SessionId, func(ref *firestore.DocumentRef, precondition firestore.Precondition) error {
+		_, err := ref.Delete(ctx, precondition)
+		return err
+	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "DELETE_ERROR", err.Error())
+		writeAPIError(w, "DELETE_ERROR", err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"totalSessionDuration": req.FinalDuration,
-		"endedAt":              now,
+		"endedAt":              time.Now().UTC(),
 	})
 }
 
 func cleanupHandler(w http.ResponseWriter, r *http.Request) {
-	initMu.RLock()
-	ready := isInitialized
-	initMu.RUnlock()
-
-	if !ready {
-		writeError(w, http.StatusServiceUnavailable, "INITIALIZING", "Service is starting up")
-		return
-	}
-
 	ctx := r.Context()
-	cutoff := time.Now().UTC().Add(-24 * time.Hour)
+	cutoff := time.Now().UTC().Add(-sessionTTL)
 	cleaned := 0
 
-	rooms, _ := firestoreClient.Collection("rooms").Documents(ctx).GetAll()
+	rooms, err := firestoreClient.Collection("rooms").Documents(ctx).GetAll()
+	if err != nil {
+		writeAPIError(w, "FIRESTORE_ERROR", err)
+		return
+	}
 	for _, room := range rooms {
-		query := room.Ref.Collection("seats").Where("lastSyncAt", "<", cutoff)
-		docs, _ := query.Documents(ctx).GetAll()
+		query := seatsRef(room.Ref.ID).Where("lastSyncAt", "<", cutoff)
+		docs, err := query.Documents(ctx).GetAll()
+		if err != nil {
+			writeAPIError(w, "FIRESTORE_ERROR", err)
+			return
+		}
 		for _, doc := range docs {
-			doc.Ref.Delete(ctx)
-			cleaned++
+			_, err := doc.Ref.Delete(ctx, firestore.LastUpdateTime(doc.UpdateTime))
+			switch status.Code(err) {
+			case codes.OK:
+				cleaned++
+			case codes.FailedPrecondition, codes.NotFound:
+				// The seat changed or was removed after the query.
+			default:
+				writeAPIError(w, "DELETE_ERROR", err)
+				return
+			}
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"cleanedSessions": cleaned,
 		"processedAt":     time.Now().UTC(),
 	})
 }
 
 func seatId(num int) string {
-	return "seat-" + string(rune('0'+num/10)) + string(rune('0'+num%10))
+	return fmt.Sprintf("seat-%02d", num)
 }
 
 func getString(data map[string]interface{}, key string) string {
@@ -604,15 +697,36 @@ func getInt(data map[string]interface{}, key string) int {
 	return 0
 }
 
-func writeError(w http.ResponseWriter, status int, code, message string) {
+func getBool(data map[string]interface{}, key string) bool {
+	value, _ := data[key].(bool)
+	return value
+}
+
+func writeJSON(w http.ResponseWriter, status int, value interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(value); err != nil {
+		log.Printf("Failed to write JSON response: %v", err)
+	}
+}
+
+func writeError(w http.ResponseWriter, status int, code, message string) {
+	writeJSON(w, status, map[string]interface{}{
 		"error": map[string]string{
 			"code":    code,
 			"message": message,
 		},
 	})
+}
+
+func writeAPIError(w http.ResponseWriter, code string, err error) {
+	var appErr *AppError
+	if errors.As(err, &appErr) {
+		writeError(w, appErr.Status, appErr.Code, appErr.Message)
+		return
+	}
+	log.Printf("%s: %v", code, err)
+	writeError(w, http.StatusInternalServerError, code, "Database operation failed")
 }
 
 type AppError struct {

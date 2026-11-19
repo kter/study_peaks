@@ -8,11 +8,13 @@ REST API endpoints for the virtual study room application.
 
 ## Authentication
 
-All API requests require a valid Identity Platform JWT token in the `Authorization` header:
+Room and seat listings are public. For sit, sync, leave, and session lookup, signed-in clients send a Firebase ID token in the `Authorization` header.
 
 ```
 Authorization: Bearer <id_token>
 ```
+
+Guest clients omit the header. An invalid or expired token returns HTTP 401 with code `INVALID_TOKEN` on these endpoints.
 
 ---
 
@@ -52,6 +54,8 @@ Returns all available study rooms with occupancy information.
 
 Returns all seats in a room with current occupant information.
 
+An unknown room returns HTTP 404 with code `ROOM_NOT_FOUND`.
+
 **Response (200)**
 ```json
 {
@@ -83,6 +87,8 @@ Returns all seats in a room with current occupant information.
 
 Occupies a seat in the specified room.
 
+The server uses the verified Firebase UID for signed-in users and generates an `anon_` ID with a full UUID for guests. The request may include `userId`, which the server ignores.
+
 **Request Body**
 ```json
 {
@@ -93,18 +99,22 @@ Occupies a seat in the specified room.
 **Response (200)**
 ```json
 {
-  "sessionId": "sess_abc123",
+  "sessionId": "sess_550e8400-e29b-41d4-a716-446655440000",
   "seatNumber": 42,
-  "sessionStartedAt": "2026-01-12T02:00:00Z"
+  "sessionStartedAt": "2026-01-12T02:00:00Z",
+  "userId": "anon_9ad7e76b-15b0-4a0c-ae80-e72b93c76d1b"
 }
 ```
 
+New session IDs use a `sess_` prefix followed by a full UUID. Clients treat the entire ID as an opaque string.
+
 **Errors**
-| Code | Description |
-|------|-------------|
-| 400  | Seat number invalid |
-| 409  | Seat already occupied |
-| 409  | User already seated in another room |
+| HTTP | Code | Description |
+|------|------|-------------|
+| 400 | `INVALID_SEAT` | Seat number is outside the range from 1 through the room capacity |
+| 401 | `INVALID_TOKEN` | Firebase ID token is invalid or expired |
+| 404 | `ROOM_NOT_FOUND` | Room does not exist |
+| 409 | `SEAT_OCCUPIED` | Seat is already occupied |
 
 ---
 
@@ -114,10 +124,12 @@ Occupies a seat in the specified room.
 
 Updates the session's `lastSyncAt` timestamp and duration. Called every 5 minutes from the client.
 
+Signed-in sessions require a verified Firebase UID that matches the session owner. For guest sessions, the session ID is sufficient.
+
 **Request Body**
 ```json
 {
-  "sessionId": "sess_abc123",
+  "sessionId": "sess_550e8400-e29b-41d4-a716-446655440000",
   "currentDuration": 1800
 }
 ```
@@ -129,6 +141,13 @@ Updates the session's `lastSyncAt` timestamp and duration. Called every 5 minute
 }
 ```
 
+**Errors**
+| HTTP | Code | Description |
+|------|------|-------------|
+| 401 | `INVALID_TOKEN` | Firebase ID token is invalid or expired |
+| 403 | `FORBIDDEN` | Signed-in session requires its owner's Firebase UID |
+| 404 | `SESSION_NOT_FOUND` | Session does not exist |
+
 ---
 
 ### Leave Seat
@@ -137,10 +156,12 @@ Updates the session's `lastSyncAt` timestamp and duration. Called every 5 minute
 
 Ends the current study session and frees the seat.
 
+Leave uses the same ownership rules as sync.
+
 **Request Body**
 ```json
 {
-  "sessionId": "sess_abc123",
+  "sessionId": "sess_550e8400-e29b-41d4-a716-446655440000",
   "finalDuration": 3600
 }
 ```
@@ -153,6 +174,13 @@ Ends the current study session and frees the seat.
 }
 ```
 
+**Errors**
+| HTTP | Code | Description |
+|------|------|-------------|
+| 401 | `INVALID_TOKEN` | Firebase ID token is invalid or expired |
+| 403 | `FORBIDDEN` | Signed-in session requires its owner's Firebase UID |
+| 404 | `SESSION_NOT_FOUND` | Session does not exist |
+
 ---
 
 ### Get Session (Validate Session)
@@ -164,9 +192,9 @@ Validates if a session is still active. Used to restore session state after app 
 **Response (200)**
 ```json
 {
-  "sessionId": "sess_abc123",
-  "roomId": "denali",
-  "roomName": "Denali",
+  "sessionId": "sess_550e8400-e29b-41d4-a716-446655440000",
+  "roomId": "everest",
+  "roomName": "Mt. Everest",
   "seatNumber": 42,
   "sessionStartedAt": "2026-01-12T02:00:00Z",
   "lastSyncAt": "2026-01-12T02:30:00Z",
@@ -175,12 +203,15 @@ Validates if a session is still active. Used to restore session state after app 
 ```
 
 **Errors**
-| Code | Description |
-|------|-------------|
-| 404  | Session not found or expired |
+| HTTP | Code | Description |
+|------|------|-------------|
+| 401 | `INVALID_TOKEN` | Firebase ID token is invalid or expired |
+| 404 | `ROOM_NOT_FOUND` | Room does not exist |
+| 404 | `SESSION_NOT_FOUND` | Session does not exist |
+| 404 | `SESSION_EXPIRED` | More than 24 hours have passed since the last sync |
 
 > [!NOTE]
-> Sessions without sync for 3 hours are considered expired.
+> Session lookup and cleanup use the same 24-hour inactivity TTL.
 
 ---
 
@@ -188,10 +219,16 @@ Validates if a session is still active. Used to restore session state after app 
 
 **`POST /internal/cleanup-sessions`**
 
-Called by Cloud Scheduler every hour to force logout sessions inactive for 24+ hours.
+Called by Cloud Scheduler every hour to remove sessions that have been inactive for more than 24 hours. This endpoint is relative to the service URL, outside `/v1`.
 
-> [!NOTE]
-> This endpoint requires Cloud Scheduler OIDC authentication.
+Cloud Scheduler sends a Google OIDC ID token as a Bearer token in the `Authorization` header. The API verifies the token against two environment variables.
+
+| Variable | Value |
+|----------|-------|
+| `CLEANUP_AUDIENCE` | Cloud Run service URL used as the Scheduler token audience |
+| `CLEANUP_INVOKER_EMAIL` | Email address of the Scheduler service account |
+
+If either variable is unset or empty, or the token is missing, invalid, or from another caller, the endpoint returns HTTP 403 with code `FORBIDDEN`.
 
 **Response (200)**
 ```json

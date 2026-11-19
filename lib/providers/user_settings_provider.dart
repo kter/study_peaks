@@ -2,6 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import 'auth_provider.dart';
+
+String? googleAvatarUrl(AuthProvider? auth, UserSettingsProvider settings) {
+  if (auth == null || !auth.isSignedIn) return null;
+
+  final photoUrl = auth.photoUrl;
+  return photoUrl != null && settings.useGoogleAvatar ? photoUrl : null;
+}
+
 /// Provider for managing user settings stored locally.
 /// Works whether user is signed in or not.
 /// 
@@ -91,12 +100,7 @@ class UserSettingsProvider extends ChangeNotifier {
 
   /// Regenerate icon with new random seed.
   /// Throws [StateError] if [init] has not been called.
-  Future<void> regenerateIcon() async {
-    _ensureInitialized();
-    _iconSeed = const Uuid().v4();
-    await _prefs!.setString(_keyIconSeed, _iconSeed);
-    notifyListeners();
-  }
+  Future<void> regenerateIcon() => setIconSeed(const Uuid().v4());
 
   /// Update country code.
   /// Throws [StateError] if [init] has not been called.

@@ -131,13 +131,3 @@ class DevMockDataRepository implements MockDataRepository {
     return statuses[index % statuses.length];
   }
 }
-
-/// Production implementation that returns empty data.
-/// Used when mock data should be disabled.
-class EmptyMockDataRepository implements MockDataRepository {
-  @override
-  List<Seat> getMockSeats(String roomId) => [];
-  
-  @override
-  List<Room> getMockRooms() => [];
-}

@@ -101,12 +101,7 @@ class RoomProvider extends ChangeNotifier {
     try {
       _rooms = await _apiService.getRooms();
     } catch (e) {
-      // Use localization key for network errors
-      if (isNetworkError(e)) {
-        _error = NetworkErrorKey.networkError;
-      } else {
-        _error = e.toString();
-      }
+      _error = errorKeyFor(e, e.toString());
       _roomsError = _error;
       // Use mock data for development (if repository provided)
       _rooms = _mockDataRepository?.getMockRooms() ?? [];
@@ -132,12 +127,7 @@ class RoomProvider extends ChangeNotifier {
       }
       _syncRoomOccupancy(roomId);
     } catch (e) {
-      // Use localization key for network errors
-      if (isNetworkError(e)) {
-        _error = NetworkErrorKey.networkError;
-      } else {
-        _error = e.toString();
-      }
+      _error = errorKeyFor(e, e.toString());
       // Preserve existing seat data on network error; fall back to mock only if no existing data
       if (!_roomSeats.containsKey(roomId) || _roomSeats[roomId]!.isEmpty) {
         _roomSeats[roomId] = _mockDataRepository?.getMockSeats(roomId) ?? [];

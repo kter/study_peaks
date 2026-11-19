@@ -147,11 +147,15 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   String? get sessionId => _sessionId;
   bool get isRunning => _isRunning;
   PomodoroPhase get pomodoroPhase => _pomodoroPhase;
+  bool get isOnBreak =>
+      mode == TimerMode.pomodoro && pomodoroPhase == PomodoroPhase.shortBreak;
   int get pomodoroCompletedCycles => _pomodoroCompletedCycles;
 
   // Lock task getters
   bool get screenLockEnabled => _screenLockEnabled;
   bool get isScreenLocked => _isScreenLocked;
+  bool get shouldPromptForScreenLock =>
+      screenLockEnabled && !isScreenLocked && !isOnBreak;
 
   /// Get elapsed seconds using timestamp-based calculation.
   /// This ensures accurate time even when the app is in background.

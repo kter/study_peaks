@@ -40,6 +40,7 @@
   "loadRoomsFailed": "ルームを読み込めませんでした。",
   "connectionRestored": "接続が復元されました",
   "seatTaken": "この席は他の人に取られました。別の席を選んでください。",
+  "sessionRestoredFromSeatMap": "座席表からセッションを復元しました",
   "notificationStudyingAt": "{roomName}で勉強中",
   "notificationSessionStarted": "セッション開始 - 0分",
   "notificationStudying": "勉強中 - {duration}",

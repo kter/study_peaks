@@ -9,7 +9,7 @@ import '../providers/room_provider.dart';
 import '../providers/session_provider.dart';
 import '../providers/timer_provider.dart';
 import '../providers/user_settings_provider.dart';
-import '../services/network_exception.dart';
+import '../utils/error_localization.dart';
 import '../widgets/dialogs/leave_confirmation_dialog.dart';
 import '../widgets/dialogs/leave_summary_dialog.dart';
 import '../widgets/dialogs/room_info_dialog.dart';
@@ -50,7 +50,6 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     _sessionProvider?.addListener(_onErrorChanged);
 
     _timerProvider = context.read<TimerProvider>();
-    _timerProvider?.addListener(_onTimerTick);
 
     // Set up lock task exit callback
     _timerProvider?.onLockTaskExited = _onLockTaskExited;
@@ -58,26 +57,9 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final roomProvider = context.read<RoomProvider>();
       await roomProvider.fetchSeats(widget.room.roomId);
-      
-      // Try to restore session from seat map if user is found
-      await _restoreSessionFromSeatMapIfNeeded();
-      
-      // If seated but the timer is not bound to this session yet (no saved
-      // timer state was restored), start it from the server-side duration.
-      // A timer already bound to the session is left as is, so a stopped or
-      // finished-phase timer is not restarted behind the user's back.
-      if (mounted) {
-        final session = context.read<SessionProvider>();
-        final timer = context.read<TimerProvider>();
-        if (session.isSeated && !session.isFinalizing && timer.sessionId != session.sessionId) {
-          if (!timer.isRunning && session.currentDuration > 0) {
-            timer.setInitialDuration(Duration(seconds: session.currentDuration));
-          }
-          timer.start(sessionId: session.sessionId);
-        }
-      }
-      
-      _restoreUserSeat();
+
+      await _restoreSessionIfNeeded();
+      if (mounted) _restoreUserSeat();
     });
     // 定期的に席データを更新して他ユーザーの変更を反映
     _seatRefreshTimer = Timer.periodic(
@@ -86,46 +68,18 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     );
   }
 
-  /// シートマップから自分のセッションを検出して復元
-  Future<void> _restoreSessionFromSeatMapIfNeeded() async {
+  Future<void> _restoreSessionIfNeeded() async {
     if (!mounted) return;
-    
+
     final sessionProvider = context.read<SessionProvider>();
-    final authProvider = context.read<AuthProvider>();
-    final roomProvider = context.read<RoomProvider>();
-    
-    // Local recovery applies to guests as well as signed-in users.
     if (sessionProvider.isSeated) return;
-    
-    final seats = roomProvider.getSeats(widget.room.roomId);
-    final userId = authProvider.userId;
-    
-    final restored = await sessionProvider.restoreFromSeatData(
-      roomId: widget.room.roomId,
-      seats: seats,
-      userId: userId,
-      roomName: widget.room.name,
-    );
-    
+
+    final restored = await sessionProvider.restoreSessionIfNeeded();
     if (restored && mounted) {
-      // Restore the saved timer for this session; otherwise start it from
-      // the server-side session duration.
-      final timer = context.read<TimerProvider>();
-      final timerRestored = await timer.restoreState(
-        sessionId: sessionProvider.sessionId,
-      );
-      if (!mounted) return;
-      if (!timerRestored && !sessionProvider.isFinalizing) {
-        if (sessionProvider.currentDuration > 0) {
-          timer.setInitialDuration(
-              Duration(seconds: sessionProvider.currentDuration));
-        }
-        timer.start(sessionId: sessionProvider.sessionId);
-      }
-      
+      final l10n = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Session restored from seat map'),
+        SnackBar(
+          content: Text(l10n.sessionRestoredFromSeatMap),
           backgroundColor: Colors.blue,
         ),
       );
@@ -139,10 +93,9 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     if (session.error != null) {
       final l10n = AppLocalizations.of(context)!;
       final errorMessage = switch (session.error!) {
-        NetworkErrorKey.networkError => l10n.networkError,
         'historySaveFailed' => l10n.historySaveFailed,
         'historyOtherOwnerActive' => l10n.historyOtherOwnerActive,
-        final message => message,
+        final key => localizeErrorKey(l10n, key),
       };
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -180,18 +133,9 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
   void dispose() {
     _seatRefreshTimer?.cancel();
     _sessionProvider?.removeListener(_onErrorChanged);
-    _timerProvider?.removeListener(_onTimerTick);
     _timerProvider?.onLockTaskExited = null;
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
-  }
-
-  void _onTimerTick() {
-    if (!mounted) return;
-    final session = context.read<SessionProvider>();
-    if (session.isSeated && _timerProvider != null) {
-      session.updateDuration(_timerProvider!.totalStudySeconds);
-    }
   }
 
   @override
@@ -211,12 +155,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       final userSettings = context.read<UserSettingsProvider>();
       final authProvider = context.read<AuthProvider>();
       
-      // Determine photoUrl for restore
-      final String? photoUrl = (authProvider.isSignedIn &&
-              authProvider.photoUrl != null &&
-              userSettings.useGoogleAvatar)
-          ? authProvider.photoUrl
-          : null;
+      final photoUrl = googleAvatarUrl(authProvider, userSettings);
 
       context.read<RoomProvider>().updateSeatOccupancy(
             roomId: widget.room.roomId,
@@ -420,12 +359,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     final authProvider = context.read<AuthProvider>();
     final l10n = AppLocalizations.of(context)!;
 
-    // Determine photoUrl: only send if signed in and 'useGoogleAvatar' is true
-    final String? photoUrl = (authProvider.isSignedIn &&
-            authProvider.photoUrl != null &&
-            userSettings.useGoogleAvatar)
-        ? authProvider.photoUrl
-        : null;
+    final photoUrl = googleAvatarUrl(authProvider, userSettings);
 
     final success = await context.read<SessionProvider>().sit(
           widget.room.roomId,
@@ -452,10 +386,6 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
           content: Text('You are now seated at seat ${seat.seatNumber}!'),
           backgroundColor: Colors.green,
         ),
-      );
-      // Start timer when sitting down
-      context.read<TimerProvider>().start(
-        sessionId: context.read<SessionProvider>().sessionId,
       );
       final userSettings = context.read<UserSettingsProvider>();
       context.read<RoomProvider>().updateSeatOccupancy(

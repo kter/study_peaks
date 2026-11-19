@@ -29,6 +29,8 @@ class MutableAuth extends ChangeNotifier implements AuthProvider {
   @override
   String get userId => uid;
   @override
+  String get historyOwnerId => StudySession.ownerFor(userId);
+  @override
   String get displayName => uid;
   @override
   Future<String?> getIdToken({bool forceRefresh = false}) async => null;
@@ -70,6 +72,34 @@ void main() {
     addTearDown(t.dispose);
     return t;
   }
+
+  test('timer ticks update duration without notifying session listeners',
+      () async {
+    final api = MockApiService();
+    when(() => api.sit('fuji', 1))
+        .thenAnswer((_) async => createMockSitResponse(sessionId: 'a'));
+    final t = timer();
+    final session = SessionProvider(apiService: api)..setTimerProvider(t);
+    try {
+      final startedAt = now;
+      expect(await session.sit('fuji', 1), true);
+      expect(t.sessionId, 'a');
+      expect(t.isRunning, true);
+
+      var notifications = 0;
+      session.addListener(() => notifications++);
+      for (final seconds in [1, 59, 60]) {
+        now = startedAt.add(Duration(seconds: seconds));
+        await Future<void>.delayed(const Duration(milliseconds: 1100));
+        expect(session.currentDuration, seconds);
+        expect(notifications, 0);
+      }
+    } finally {
+      session.dispose();
+      t.pause();
+      await t.ensurePersisted();
+    }
+  });
 
   test('normal pause, reset and mode changes retain only focus intervals',
       () async {
@@ -150,7 +180,6 @@ void main() {
       ..setTimerProvider(t);
     addTearDown(session.dispose);
     expect(await session.sit('fuji', 1), true);
-    t.start(sessionId: 'a');
     now = now.add(const Duration(seconds: 20));
     expect(await session.leave(), LeaveFailure.storageAfterRelease);
     expect(session.isSeated, true);
@@ -256,6 +285,7 @@ void main() {
     when(() => api.leave('fuji', 'guest', any()))
         .thenAnswer((_) async => createMockLeaveResponse());
     when(() => auth.userId).thenReturn('A');
+    when(() => auth.historyOwnerId).thenReturn('user:A');
     when(() => auth.getIdToken()).thenAnswer((_) async => null);
     StudySession? saved;
     when(() => history.saveSession(any())).thenAnswer((i) async {
@@ -306,7 +336,8 @@ void main() {
       ..setTimerProvider(t);
     addTearDown(session.dispose);
     expect(await session.restoreSessionIfNeeded(), true);
-    expect(await t.restoreState(sessionId: 'old-session'), true);
+    expect(t.sessionId, 'old-session');
+    expect(t.isRunning, false);
     expect(t.totalStudySeconds, 20);
     expect(await session.leave(), isA<LeaveCompleted>());
     expect(saved!.ownerId, StudySession.legacyOwner);
@@ -336,6 +367,7 @@ void main() {
     final api = MockApiService();
     final auth = Auth();
     when(() => auth.userId).thenReturn('A');
+    when(() => auth.historyOwnerId).thenReturn('user:A');
     when(() => auth.displayName).thenReturn('A');
     when(() => auth.getIdToken()).thenAnswer((_) async => null);
     when(() => api.sit('fuji', 1, displayName: 'A', userId: 'A'))

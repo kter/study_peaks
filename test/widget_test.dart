@@ -7,7 +7,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:study_peaks/main.dart';
-import 'package:study_peaks/providers/auth_provider.dart';
 import 'package:study_peaks/providers/room_provider.dart';
 import 'package:study_peaks/providers/session_provider.dart';
 
@@ -27,9 +26,9 @@ void main() {
           ChangeNotifierProvider(create: (_) => RoomProvider()),
           ChangeNotifierProvider(create: (_) => SessionProvider()),
         ],
-        child: MaterialApp(
+        child: const MaterialApp(
           title: 'Global Study Peaks',
-          home: const SizedBox(), // Placeholder
+          home: SizedBox(), // Placeholder
         ),
       ),
     );

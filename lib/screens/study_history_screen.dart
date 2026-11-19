@@ -9,7 +9,7 @@ import '../models/study_history.dart';
 import '../models/study_session.dart';
 import '../providers/auth_provider.dart';
 import '../repositories/study_history_repository.dart';
-import '../utils/formatters.dart';
+import '../widgets/study_duration_row.dart';
 import '../widgets/study_history_calendar.dart';
 import '../widgets/study_history_chart.dart';
 import '../widgets/study_weekly_goal_section.dart';
@@ -65,7 +65,7 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _setOwner(context.watch<AuthProvider>().userId);
+    _setOwner(context.watch<AuthProvider>().historyOwnerId);
   }
 
   @override
@@ -75,9 +75,8 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
     super.dispose();
   }
 
-  void _setOwner(String uid) {
-    final owner =
-        _legacy ? StudySession.legacyOwner : StudySession.ownerFor(uid);
+  void _setOwner(String historyOwnerId) {
+    final owner = _legacy ? StudySession.legacyOwner : historyOwnerId;
     if (owner != _owner) {
       _owner = owner;
       _history = _fetchHistory(owner);
@@ -113,10 +112,10 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
   }
 
   void _toggleOwner() {
-    final uid = context.read<AuthProvider>().userId;
+    final historyOwnerId = context.read<AuthProvider>().historyOwnerId;
     setState(() {
       _legacy = !_legacy;
-      _setOwner(uid);
+      _setOwner(historyOwnerId);
     });
   }
 
@@ -157,19 +156,18 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
               builder: (context, snapshot) {
                 final loaded = snapshot.connectionState == ConnectionState.done;
                 final history = loaded ? snapshot.data : null;
-                final latestStudyDay = history?.latestStudyDay ?? today;
-                final latest =
-                    latestStudyDay.isAfter(today) ? latestStudyDay : today;
-                final requestedDate = _periodDate ?? today;
-                final anchor =
-                    period.start(requestedDate).isAfter(period.start(latest))
-                        ? latest
-                        : requestedDate;
+                final lastNavigableDay =
+                    history?.lastNavigableDay(today) ?? today;
+                final anchor = StudyHistory.clampAnchor(
+                  period,
+                  _periodDate ?? today,
+                  lastNavigableDay,
+                );
                 return Column(
                   children: [
                     if (history != null) _buildSummary(history, today, l10n),
                     const SizedBox(height: 16),
-                    _buildPeriodControls(l10n, anchor, latest),
+                    _buildPeriodControls(l10n, anchor, lastNavigableDay),
                     if (history != null && !_legacy)
                       StudyWeeklyGoalSection(
                         key: ValueKey(_owner),
@@ -231,7 +229,7 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
       children: [
         if (!history.hasRecords)
           Text(l10n.historyEmpty)
-        else if (days.values.every((seconds) => seconds == 0))
+        else if (history.isPeriodEmpty(period, anchor))
           Text(l10n.historyPeriodEmpty),
         StudyHistoryChart(
           key: ValueKey((_owner, days.keys.first, period, today)),
@@ -262,22 +260,7 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
         child: Column(
           children: [
             for (final (label, seconds) in totals)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    Expanded(child: Text(label)),
-                    const SizedBox(width: 12),
-                    Flexible(
-                      child: Text(
-                        Formatters.formatStudyDuration(seconds, l10n),
-                        textAlign: TextAlign.end,
-                        style: theme.textTheme.titleMedium,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              StudyDurationRow(label: label, seconds: seconds),
           ],
         ),
       ),
@@ -287,7 +270,7 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
   Widget _buildPeriodControls(
     AppLocalizations l10n,
     DateTime anchor,
-    DateTime latest,
+    DateTime lastNavigableDay,
   ) {
     final locale = Localizations.localeOf(context).toLanguageTag();
     final dateFormat = DateFormat.yMMMd(locale);
@@ -347,7 +330,7 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
             ),
             IconButton(
               tooltip: l10n.historyNextPeriod,
-              onPressed: nextPeriod.isAfter(latest)
+              onPressed: nextPeriod.isAfter(lastNavigableDay)
                   ? null
                   : () => _showPeriod(_view, nextPeriod),
               icon: const Icon(Icons.chevron_right),

@@ -6,6 +6,7 @@ import '../../models/study_history.dart';
 import '../../models/study_session.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/formatters.dart';
+import '../study_duration_row.dart';
 
 class LeaveSummaryDialog extends StatefulWidget {
   const LeaveSummaryDialog({
@@ -33,7 +34,7 @@ class _LeaveSummaryDialogState extends State<LeaveSummaryDialog> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final currentOwner = context.select<AuthProvider, String>(
-      (auth) => StudySession.ownerFor(auth.userId),
+      (auth) => auth.historyOwnerId,
     );
     final record = widget.record;
     final canShowRecord = record.isVisibleTo(currentOwner);
@@ -57,13 +58,20 @@ class _LeaveSummaryDialogState extends State<LeaveSummaryDialog> {
                     if (warning != null) Text(warning),
                     if (record.ownerId == StudySession.legacyOwner)
                       Text(l10n.historyLegacyNotice),
-                    _durationRow(context, l10n, l10n.leaveSummarySession,
-                        record.durationSeconds),
+                    StudyDurationRow(
+                      label: l10n.leaveSummarySession,
+                      seconds: record.durationSeconds,
+                    ),
                     if (totals != null) ...[
-                      _durationRow(context, l10n, l10n.historyToday,
-                          totals.secondsOn(today)),
-                      _durationRow(context, l10n, l10n.historyThisWeek,
-                          totals.secondsIn(StudyHistoryPeriod.week, today)),
+                      StudyDurationRow(
+                        label: l10n.historyToday,
+                        seconds: totals.secondsOn(today),
+                      ),
+                      StudyDurationRow(
+                        label: l10n.historyThisWeek,
+                        seconds:
+                            totals.secondsIn(StudyHistoryPeriod.week, today),
+                      ),
                       if (thisSessionToday != record.durationSeconds ||
                           thisSessionWeek != record.durationSeconds)
                         Text(l10n.leaveSummaryAllocation(
@@ -93,30 +101,6 @@ class _LeaveSummaryDialogState extends State<LeaveSummaryDialog> {
             child: Text(l10n.studyHistory),
           ),
       ],
-    );
-  }
-
-  Widget _durationRow(
-    BuildContext context,
-    AppLocalizations l10n,
-    String label,
-    int seconds,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Expanded(child: Text(label)),
-          const SizedBox(width: 12),
-          Flexible(
-            child: Text(
-              Formatters.formatStudyDuration(seconds, l10n),
-              textAlign: TextAlign.end,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

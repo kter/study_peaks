@@ -18,6 +18,11 @@ class Seat {
     this.currentSessionDuration = 0,
   });
 
+  Duration elapsedAt(DateTime now) {
+    final startedAt = sessionStartedAt;
+    return startedAt == null ? Duration.zero : now.difference(startedAt);
+  }
+
   factory Seat.empty(int seatNumber) {
     return Seat(
       seatId: 'seat-${seatNumber.toString().padLeft(3, '0')}',

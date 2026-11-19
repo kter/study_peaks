@@ -1,9 +1,13 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
 import '../utils/formatters.dart';
 import '../models/timer_mode.dart';
+import 'study_persistence_keys.dart';
 
 /// Service for managing foreground notifications during study sessions.
 class NotificationService {
@@ -94,17 +98,18 @@ class NotificationService {
   /// 
   /// [notificationTitle] - Localized title, e.g. "Studying at Denali"
   /// [notificationText] - Localized text, e.g. "Session started - 0m"
-
-  /// Start the foreground service for a study session.
-  /// 
-  /// [notificationTitle] - Localized title, e.g. "Studying at Denali"
-  /// [notificationText] - Localized text, e.g. "Session started - 0m"
   Future<void> startStudySession({
     required String notificationTitle,
     required String notificationText,
+    required String studyingFormat,
+    required bool isRunning,
     TimerMode mode = TimerMode.normal,
     PomodoroPhase? pomodoroPhase,
     int? remainingSeconds,
+    String? focusRemainingFormat,
+    String? breakRemainingFormat,
+    String? focusFinishedText,
+    String? breakFinishedText,
   }) async {
     debugPrint('📢 Starting foreground service: $notificationTitle');
     
@@ -116,6 +121,26 @@ class NotificationService {
     }
     
     try {
+      // The task runs in a separate isolate. Save its state before starting it
+      // so it can initialize even if it isn't ready to receive messages yet.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        StudyPersistenceKeys.notificationState,
+        jsonEncode({
+          ..._timerStateData(
+            mode: mode,
+            pomodoroPhase: pomodoroPhase,
+            seconds: remainingSeconds ?? 0,
+            isRunning: isRunning,
+          ),
+          'studyingFormat': studyingFormat,
+          'focusRemainingFormat': focusRemainingFormat,
+          'breakRemainingFormat': breakRemainingFormat,
+          'focusFinishedText': focusFinishedText,
+          'breakFinishedText': breakFinishedText,
+        }),
+      );
+
       if (await FlutterForegroundTask.isRunningService) {
         await FlutterForegroundTask.restartService();
       } else {
@@ -128,15 +153,6 @@ class NotificationService {
           callback: _startCallback,
         );
       }
-      
-      // Send initial state to the task
-      await updateTimerState(
-        mode: mode,
-        pomodoroPhase: pomodoroPhase,
-        seconds: remainingSeconds ?? 0,
-        isRunning: true,
-      );
-
     } catch (e) {
       debugPrint('📢 Error starting foreground service: $e');
     }
@@ -149,33 +165,47 @@ class NotificationService {
     PomodoroPhase? pomodoroPhase,
     required int seconds, // Elapsed for Normal, Remaining for Pomodoro
   }) async {
-    FlutterForegroundTask.sendDataToTask({
-      'mode': mode.index,
-      'phase': pomodoroPhase?.index,
-      'seconds': seconds,
-      'isRunning': isRunning,
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-    });
+    final data = _timerStateData(
+      mode: mode,
+      isRunning: isRunning,
+      pomodoroPhase: pomodoroPhase,
+      seconds: seconds,
+    );
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString(StudyPersistenceKeys.notificationState);
+    // An update already in flight when the session stops can arrive late.
+    if (saved == null) return;
+    final state = jsonDecode(saved) as Map<String, dynamic>;
+    final saving = prefs.setString(
+      StudyPersistenceKeys.notificationState,
+      jsonEncode({...state, ...data}),
+    );
+    FlutterForegroundTask.sendDataToTask(data);
+    await saving;
   }
 
-  /// Update the localized strings for Pomodoro mode.
-  Future<void> updatePomodoroLocalization({
-    required String focusRemainingFormat,
-    required String breakRemainingFormat,
-    required String focusFinishedText,
-    required String breakFinishedText,
-  }) async {
-    FlutterForegroundTask.sendDataToTask({
-      'focusRemainingFormat': focusRemainingFormat,
-      'breakRemainingFormat': breakRemainingFormat,
-      'focusFinishedText': focusFinishedText,
-      'breakFinishedText': breakFinishedText,
-    });
-  }
+  Map<String, Object?> _timerStateData({
+    required TimerMode mode,
+    required bool isRunning,
+    required PomodoroPhase? pomodoroPhase,
+    required int seconds,
+  }) =>
+      {
+        'mode': mode.index,
+        'phase': pomodoroPhase?.index,
+        'seconds': seconds,
+        'isRunning': isRunning,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      };
 
   /// Stop the foreground service.
   Future<void> stopStudySession() async {
-    await FlutterForegroundTask.stopService();
+    try {
+      await FlutterForegroundTask.stopService();
+    } finally {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(StudyPersistenceKeys.notificationState);
+    }
   }
 
   /// Check if the foreground service is running.
@@ -226,21 +256,31 @@ void _startCallback() {
   FlutterForegroundTask.setTaskHandler(_StudySessionHandler());
 }
 
+@visibleForTesting
+int notificationElapsedSeconds({
+  required DateTime now,
+  required DateTime? startedAt,
+  required int pausedSeconds,
+}) {
+  if (startedAt == null) return pausedSeconds;
+  final elapsed = now.difference(startedAt).inSeconds;
+  return elapsed < 0 ? 0 : elapsed;
+}
+
 /// Task handler for the foreground service.
 class _StudySessionHandler extends TaskHandler {
   TimerMode _mode = TimerMode.normal;
   PomodoroPhase _phase = PomodoroPhase.focus;
-  
-  // For Normal mode: elapsed seconds
-  int _elapsedSeconds = 0;
-  
-  // For Pomodoro mode: target end time
-  DateTime? _pomodoroEndTime;
-  int _remainingSeconds = 0;
-  
+
+  DateTime? _normalStartedAt;
+  int _pausedSeconds = 0;
+  late DateTime _pomodoroEndTime;
+
   bool _isRunning = false;
-  
-  // Localized strings
+  bool _initialized = false;
+  bool _receivedTimerState = false;
+
+  String _studyingFormat = 'Studying - {duration}';
   String _focusRemainingFormat = 'Focus: {duration} remaining';
   String _breakRemainingFormat = 'Break: {duration} remaining';
   String _focusFinishedText = 'Focus Finished!';
@@ -248,43 +288,55 @@ class _StudySessionHandler extends TaskHandler {
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
-    _elapsedSeconds = 0;
-    _mode = TimerMode.normal;
-    _phase = PomodoroPhase.focus;
-    _isRunning = true;
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString(StudyPersistenceKeys.notificationState);
+    if (saved != null) {
+      final state = jsonDecode(saved) as Map<String, dynamic>;
+      _studyingFormat = state['studyingFormat'] as String? ?? _studyingFormat;
+      _focusRemainingFormat =
+          state['focusRemainingFormat'] as String? ?? _focusRemainingFormat;
+      _breakRemainingFormat =
+          state['breakRemainingFormat'] as String? ?? _breakRemainingFormat;
+      _focusFinishedText =
+          state['focusFinishedText'] as String? ?? _focusFinishedText;
+      _breakFinishedText =
+          state['breakFinishedText'] as String? ?? _breakFinishedText;
+
+      // A live update may have arrived while the saved state was loading.
+      if (!_receivedTimerState) _applyTimerState(state);
+    }
+    _initialized = true;
+    if ((saved != null || _receivedTimerState) &&
+        (_mode == TimerMode.normal || _isRunning)) {
+      _updateNotification(DateTime.now());
+    }
   }
 
   @override
   void onRepeatEvent(DateTime timestamp) {
-    if (!_isRunning) return;
+    if (_isRunning) _updateNotification(timestamp);
+  }
 
+  void _updateNotification(DateTime now) {
     String notificationText;
-
     if (_mode == TimerMode.normal) {
-      _elapsedSeconds += 1; 
-      final durationText = Formatters.formatDuration(_elapsedSeconds);
-      notificationText = 'Studying - $durationText';
-      
+      final seconds = notificationElapsedSeconds(
+        now: now,
+        startedAt: _normalStartedAt,
+        pausedSeconds: _pausedSeconds,
+      );
+      final durationText = Formatters.formatDuration(seconds);
+      notificationText = _studyingFormat.replaceAll('{duration}', durationText);
     } else {
-      // Pomodoro
-      if (_pomodoroEndTime != null) {
-        final now = DateTime.now();
-        final difference = _pomodoroEndTime!.difference(now).inSeconds;
-        _remainingSeconds = difference > 0 ? difference : 0;
-      } else {
-         _remainingSeconds -= 1; 
-         if (_remainingSeconds < 0) _remainingSeconds = 0;
-      }
-      
-      final durationText = Formatters.formatDuration(_remainingSeconds);
-      
-      if (_remainingSeconds <= 0) {
-        notificationText = _phase == PomodoroPhase.focus 
-            ? _focusFinishedText 
+      final remainingSeconds = _pomodoroEndTime.difference(now).inSeconds;
+      if (remainingSeconds <= 0) {
+        notificationText = _phase == PomodoroPhase.focus
+            ? _focusFinishedText
             : _breakFinishedText;
       } else {
-        final format = _phase == PomodoroPhase.focus 
-            ? _focusRemainingFormat 
+        final durationText = Formatters.formatDuration(remainingSeconds);
+        final format = _phase == PomodoroPhase.focus
+            ? _focusRemainingFormat
             : _breakRemainingFormat;
         notificationText = format.replaceAll('{duration}', durationText);
       }
@@ -302,49 +354,29 @@ class _StudySessionHandler extends TaskHandler {
 
   @override
   void onReceiveData(Object data) {
-    if (data is Map<String, dynamic>) {
-      if (data.containsKey('mode')) {
-        _mode = TimerMode.values[data['mode'] as int];
-      }
-      
-      if (data.containsKey('phase')) {
-        final phaseIndex = data['phase'] as int?;
-        if (phaseIndex != null) {
-          _phase = PomodoroPhase.values[phaseIndex];
-        }
-      }
-      
-      if (data.containsKey('isRunning')) {
-        _isRunning = data['isRunning'] as bool;
-      }
+    if (data is! Map<String, dynamic> || !data.containsKey('mode')) return;
+    _receivedTimerState = true;
+    _applyTimerState(data);
+    if (_initialized && (_mode == TimerMode.normal || _isRunning)) {
+      _updateNotification(DateTime.now());
+    }
+  }
 
-      if (data.containsKey('seconds')) {
-        final seconds = data['seconds'] as int;
-        if (_mode == TimerMode.normal) {
-          _elapsedSeconds = seconds;
-        } else {
-          _remainingSeconds = seconds;
-          // Calculate end time based on remaining seconds
-          _pomodoroEndTime = DateTime.now().add(Duration(seconds: seconds));
-        }
-      }
-      
-      // Update localization strings
-      if (data.containsKey('focusRemainingFormat')) {
-        _focusRemainingFormat = data['focusRemainingFormat'] as String;
-      }
-      if (data.containsKey('breakRemainingFormat')) {
-        _breakRemainingFormat = data['breakRemainingFormat'] as String;
-      }
-      if (data.containsKey('focusFinishedText')) {
-        _focusFinishedText = data['focusFinishedText'] as String;
-      }
-      if (data.containsKey('breakFinishedText')) {
-        _breakFinishedText = data['breakFinishedText'] as String;
-      }
-      
-      // Immediately update notification on state change
-      onRepeatEvent(DateTime.now());
+  void _applyTimerState(Map<String, dynamic> data) {
+    _mode = TimerMode.values[data['mode'] as int];
+    final phaseIndex = data['phase'] as int?;
+    _phase = phaseIndex == null
+        ? PomodoroPhase.focus
+        : PomodoroPhase.values[phaseIndex];
+    _isRunning = data['isRunning'] as bool;
+    final duration = Duration(seconds: data['seconds'] as int);
+    final reportedAt =
+        DateTime.fromMillisecondsSinceEpoch(data['timestamp'] as int);
+    if (_mode == TimerMode.normal) {
+      _pausedSeconds = duration.inSeconds;
+      _normalStartedAt = _isRunning ? reportedAt.subtract(duration) : null;
+    } else {
+      _pomodoroEndTime = reportedAt.add(duration);
     }
   }
 }

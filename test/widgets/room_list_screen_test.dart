@@ -24,7 +24,7 @@ class _MockTimerProvider extends Mock implements TimerProvider {}
 
 class _MockUserSettingsProvider extends Mock implements UserSettingsProvider {}
 
-void stubLocalization(_MockTimerProvider timer) {
+void _stubLocalization(_MockTimerProvider timer) {
   when(() => timer.updateLocalization(
         focusFinishedTitle: any(named: 'focusFinishedTitle'),
         breakFinishedTitle: any(named: 'breakFinishedTitle'),
@@ -34,53 +34,45 @@ void stubLocalization(_MockTimerProvider timer) {
 }
 
 void main() {
-  for (final timerRestored in [false, true]) {
-    testWidgets('restored session: saved timer state is $timerRestored',
-        (tester) async {
-      final api = MockApiService();
-      when(() => api.getRooms()).thenAnswer((_) async => []);
-      final rooms = RoomProvider(apiService: api);
-      addTearDown(rooms.dispose);
-      final auth = _MockAuthProvider();
-      when(() => auth.isSignedIn).thenReturn(false);
-      final settings = _MockUserSettingsProvider();
-      when(() => settings.iconSeed).thenReturn('test');
-      final session = _MockSessionProvider();
-      when(() => session.restoreSessionIfNeeded()).thenAnswer((_) async => true);
-      when(() => session.currentRoomId).thenReturn(null);
-      when(() => session.currentDuration).thenReturn(0);
-      when(() => session.isFinalizing).thenReturn(false);
-      final timer = _MockTimerProvider();
-      stubLocalization(timer);
-      when(() => timer.restoreState()).thenAnswer((_) async => timerRestored);
+  testWidgets('room list delegates timer recovery to the session provider',
+      (tester) async {
+    final api = MockApiService();
+    when(() => api.getRooms()).thenAnswer((_) async => []);
+    final rooms = RoomProvider(apiService: api);
+    addTearDown(rooms.dispose);
+    final auth = _MockAuthProvider();
+    when(() => auth.isSignedIn).thenReturn(false);
+    final settings = _MockUserSettingsProvider();
+    when(() => settings.iconSeed).thenReturn('test');
+    final session = _MockSessionProvider();
+    when(() => session.restoreSessionIfNeeded()).thenAnswer((_) async => true);
+    when(() => session.currentRoomId).thenReturn(null);
+    final timer = _MockTimerProvider();
+    _stubLocalization(timer);
 
-      await tester.pumpWidget(
-        MultiProvider(
-          providers: [
-            ChangeNotifierProvider<RoomProvider>.value(value: rooms),
-            ChangeNotifierProvider<AuthProvider>.value(value: auth),
-            ChangeNotifierProvider<UserSettingsProvider>.value(value: settings),
-            ChangeNotifierProvider<SessionProvider>.value(value: session),
-            ChangeNotifierProvider<TimerProvider>.value(value: timer),
-          ],
-          child: const MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            locale: Locale('en'),
-            home: RoomListScreen(),
-          ),
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<RoomProvider>.value(value: rooms),
+          ChangeNotifierProvider<AuthProvider>.value(value: auth),
+          ChangeNotifierProvider<UserSettingsProvider>.value(value: settings),
+          ChangeNotifierProvider<SessionProvider>.value(value: session),
+          ChangeNotifierProvider<TimerProvider>.value(value: timer),
+        ],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: RoomListScreen(),
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      verify(() => timer.restoreState()).called(1);
-      if (timerRestored) {
-        verifyNever(() => timer.start());
-      } else {
-        verify(() => timer.start()).called(1);
-      }
-    });
-  }
+    verify(() => session.restoreSessionIfNeeded()).called(1);
+    verifyNever(() => timer.restoreState(sessionId: any(named: 'sessionId')));
+    verifyNever(() => timer.start(sessionId: any(named: 'sessionId')));
+  });
 
   for (final useMockRooms in [false, true]) {
     for (final networkError in [false, true]) {
@@ -106,7 +98,7 @@ void main() {
           when(() => session.restoreSessionIfNeeded())
               .thenAnswer((_) async => false);
           final timer = _MockTimerProvider();
-          stubLocalization(timer);
+          _stubLocalization(timer);
 
           await tester.pumpWidget(
             MultiProvider(
