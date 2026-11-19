@@ -449,14 +449,98 @@ abstract class AppLocalizations {
   /// No description provided for @historyWeek.
   ///
   /// In en, this message translates to:
-  /// **'Week'**
+  /// **'Week graph'**
   String get historyWeek;
 
   /// No description provided for @historyMonth.
   ///
   /// In en, this message translates to:
-  /// **'Month'**
+  /// **'Month graph'**
   String get historyMonth;
+
+  /// No description provided for @historyCalendar.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar'**
+  String get historyCalendar;
+
+  /// No description provided for @historyStudyDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 study day} other{{count} study days}}'**
+  String historyStudyDays(int count);
+
+  /// No description provided for @historyCalendarLegend.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily study time'**
+  String get historyCalendarLegend;
+
+  /// No description provided for @historyCalendarNoStudy.
+  ///
+  /// In en, this message translates to:
+  /// **'0 min'**
+  String get historyCalendarNoStudy;
+
+  /// No description provided for @historyCalendarUnderThirty.
+  ///
+  /// In en, this message translates to:
+  /// **'<30 min'**
+  String get historyCalendarUnderThirty;
+
+  /// No description provided for @historyCalendarUnderSixty.
+  ///
+  /// In en, this message translates to:
+  /// **'30–59 min'**
+  String get historyCalendarUnderSixty;
+
+  /// No description provided for @historyCalendarSixtyOrMore.
+  ///
+  /// In en, this message translates to:
+  /// **'60+ min'**
+  String get historyCalendarSixtyOrMore;
+
+  /// No description provided for @historyCalendarFuture.
+  ///
+  /// In en, this message translates to:
+  /// **'Future date'**
+  String get historyCalendarFuture;
+
+  /// No description provided for @historyCalendarToday.
+  ///
+  /// In en, this message translates to:
+  /// **'{date} (today)'**
+  String historyCalendarToday(String date);
+
+  /// No description provided for @historyCalendarDayLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{date}, {duration}'**
+  String historyCalendarDayLabel(String date, String duration);
+
+  /// No description provided for @historyDayTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total for this day: {duration}'**
+  String historyDayTotal(String duration);
+
+  /// No description provided for @historyDaySessions.
+  ///
+  /// In en, this message translates to:
+  /// **'Sessions'**
+  String get historyDaySessions;
+
+  /// No description provided for @historyDayEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No study sessions'**
+  String get historyDayEmpty;
+
+  /// No description provided for @historySessionStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Started {date}'**
+  String historySessionStart(String date);
 
   /// No description provided for @historyPreviousPeriod.
   ///

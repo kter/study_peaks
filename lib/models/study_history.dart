@@ -23,19 +23,44 @@ enum StudyHistoryPeriod {
   }
 }
 
+/// The portion of a completed session credited to one civil date.
+class DailyStudySession {
+  const DailyStudySession(this.startTime, this.seconds);
+
+  final DateTime startTime;
+  final int seconds;
+}
+
 /// Completed records for one owner, aggregated from a single database read.
 class StudyHistory {
   StudyHistory(List<StudySession> sessions) : hasRecords = sessions.isNotEmpty {
-    for (final session in sessions) {
+    final newestFirst = [...sessions]
+      ..sort((a, b) => b.startTime.compareTo(a.startTime));
+    for (final session in newestFirst) {
       for (final entry in session.dailySeconds.entries) {
-        _dailySeconds.update(entry.key, (seconds) => seconds + entry.value,
-            ifAbsent: () => entry.value);
+        final day = entry.key;
+        final seconds = entry.value;
+        if (seconds == 0) continue;
+        _sessionsByDay
+            .putIfAbsent(day, () => [])
+            .add(DailyStudySession(session.startTime, seconds));
+        _dailySeconds.update(day, (total) => total + seconds,
+            ifAbsent: () => seconds);
+        final latest = _latestStudyDay;
+        if (latest == null || day.isAfter(latest)) _latestStudyDay = day;
       }
     }
   }
 
   final bool hasRecords;
   final _dailySeconds = <DateTime, int>{};
+  final _sessionsByDay = <DateTime, List<DailyStudySession>>{};
+  DateTime? _latestStudyDay;
+
+  DateTime? get latestStudyDay => _latestStudyDay;
+
+  List<DailyStudySession> sessionsOn(DateTime day) =>
+      List.unmodifiable(_sessionsByDay[civilDate(day)] ?? const []);
 
   int get totalSeconds =>
       _dailySeconds.values.fold(0, (sum, seconds) => sum + seconds);
