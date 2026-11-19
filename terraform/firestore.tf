@@ -25,39 +25,3 @@ resource "google_firestore_database" "main" {
 # Firestore Security Rules
 # Note: Security rules must be deployed via gcloud or CI/CD
 # terraform does not fully support firestore rules deployment
-
-# Index for querying seats by lastSyncAt (for auto-logout cleanup)
-resource "google_firestore_index" "seats_last_sync" {
-  provider   = google-beta
-  project    = var.project_id
-  database   = google_firestore_database.main.name
-  collection = "seats"
-
-  fields {
-    field_path = "roomId"
-    order      = "ASCENDING"
-  }
-
-  fields {
-    field_path = "lastSyncAt"
-    order      = "ASCENDING"
-  }
-}
-
-# Index for querying active sessions
-resource "google_firestore_index" "seats_occupied" {
-  provider   = google-beta
-  project    = var.project_id
-  database   = google_firestore_database.main.name
-  collection = "seats"
-
-  fields {
-    field_path = "isOccupied"
-    order      = "ASCENDING"
-  }
-
-  fields {
-    field_path = "roomId"
-    order      = "ASCENDING"
-  }
-}

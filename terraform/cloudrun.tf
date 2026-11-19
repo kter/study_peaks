@@ -11,9 +11,19 @@ resource "google_project_service" "scheduler" {
   disable_on_destroy = false
 }
 
+data "google_project" "current" {
+  project_id = var.project_id
+}
+
+locals {
+  api_service_name = "study-peaks-api-${local.environment}"
+  # Cloud Run's deterministic URL is available without referencing the service.
+  cleanup_audience = "https://${local.api_service_name}-${data.google_project.current.number}.${var.region}.run.app"
+}
+
 # Cloud Run Service for Backend API
 resource "google_cloud_run_v2_service" "api" {
-  name     = "study-peaks-api-${local.environment}"
+  name     = local.api_service_name
   location = var.region
   
   depends_on = [
@@ -34,6 +44,16 @@ resource "google_cloud_run_v2_service" "api" {
       env {
         name  = "ENVIRONMENT"
         value = local.environment
+      }
+
+      env {
+        name  = "CLEANUP_AUDIENCE"
+        value = local.cleanup_audience
+      }
+
+      env {
+        name  = "CLEANUP_INVOKER_EMAIL"
+        value = google_service_account.scheduler.email
       }
 
       resources {
@@ -100,14 +120,15 @@ resource "google_cloud_scheduler_job" "auto_logout" {
   time_zone   = "UTC"
   region      = var.region
 
-  depends_on = [google_project_service.scheduler]
+  depends_on = [google_project_service.scheduler, google_cloud_run_v2_service.api]
 
   http_target {
     http_method = "POST"
-    uri         = "${google_cloud_run_v2_service.api.uri}/internal/cleanup-sessions"
+    uri         = "${local.cleanup_audience}/internal/cleanup-sessions"
 
     oidc_token {
       service_account_email = google_service_account.scheduler.email
+      audience              = local.cleanup_audience
     }
   }
 
