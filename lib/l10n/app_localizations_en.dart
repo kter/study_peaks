@@ -221,10 +221,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get studyHistory => 'Study History';
 
   @override
-  String get historyStorageNotice =>
-      'Study history and goals are stored on this device, separately for guests and each account. They do not transfer to other devices.';
-
-  @override
   String get historyToday => 'Today';
 
   @override

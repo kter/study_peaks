@@ -97,7 +97,6 @@
   "lockTaskUnpinHint": "Unpin: long-press Back + Recent",
   "lockTaskExitedMessage": "Screen pinning was released",
   "studyHistory": "Study History",
-  "historyStorageNotice": "Study history and goals are stored on this device, separately for guests and each account. They do not transfer to other devices.",
   "historyToday": "Today",
   "historyThisWeek": "This week",
   "historyWeek": "Week graph",

@@ -74,7 +74,6 @@
   "lockTaskUnpinHint": "解除：戻る＋履歴ボタン長押し",
   "lockTaskExitedMessage": "画面固定が解除されました",
   "studyHistory": "学習履歴",
-  "historyStorageNotice": "学習履歴と目標はこの端末に保存し、ゲストと各アカウントで分けています。端末変更時の引き継ぎには対応していません。",
   "historyToday": "今日",
   "historyThisWeek": "今週",
   "historyWeek": "週グラフ",

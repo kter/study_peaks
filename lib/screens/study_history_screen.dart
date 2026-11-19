@@ -124,7 +124,6 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Text(l10n.historyStorageNotice),
             FutureBuilder<StudyHistory?>(
               future: _history,
               builder: (context, snapshot) {

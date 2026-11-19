@@ -482,12 +482,6 @@ abstract class AppLocalizations {
   /// **'Study History'**
   String get studyHistory;
 
-  /// No description provided for @historyStorageNotice.
-  ///
-  /// In en, this message translates to:
-  /// **'Study history and goals are stored on this device, separately for guests and each account. They do not transfer to other devices.'**
-  String get historyStorageNotice;
-
   /// No description provided for @historyToday.
   ///
   /// In en, this message translates to:

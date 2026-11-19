@@ -214,10 +214,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get studyHistory => '学習履歴';
 
   @override
-  String get historyStorageNotice =>
-      '学習履歴と目標はこの端末に保存し、ゲストと各アカウントで分けています。端末変更時の引き継ぎには対応していません。';
-
-  @override
   String get historyToday => '今日';
 
   @override
