@@ -1,0 +1,22 @@
+{
+  "records": [
+    {
+      "sessionId": "fixture",
+      "roomId": "fuji",
+      "startTime": "2026-11-20T14:59:58.000Z",
+      "durationSeconds": 3,
+      "focusIntervals": [
+        {
+          "start": "2026-11-20T14:59:58.000Z",
+          "end": "2026-11-20T14:59:59.600Z",
+          "offset": 540
+        },
+        {
+          "start": "2026-11-20T15:00:00.000Z",
+          "end": "2026-11-20T15:00:01.600Z",
+          "offset": 540
+        }
+      ]
+    }
+  ]
+}

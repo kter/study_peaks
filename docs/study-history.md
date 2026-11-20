@@ -8,7 +8,27 @@ A completed record has a stable `session_id`, an immutable `owner_id`, its room,
 
 The owner is captured when sitting down. `user:<Firebase UID>` identifies signed-in users. `guest:device` identifies the guest within this installation's local database. Guest history is retained when signing in; it is never adopted by the account. Signing out reveals the same device guest history. Different accounts read separate records. An already active session retains its original owner across an authentication change. A recovered session belonging to another owner is not restored or overwritten: switch back and leave it first. Guest avatar regeneration does not change history ownership. While another owner's recovery record exists, unbound timer starts are blocked after owner-aware recovery; every timer write also checks the active session ID to protect the startup window before recovery runs. Queued writes and removals for unrelated sessions cannot replace the recoverable journal.
 
-History is stored only on this device. There is no cloud history, transfer, account merge, analytics, or cross-device recovery. Account deletion on the server does not delete this local database: records remain under their original UID and are not reassigned to the guest or a new account. Clearing app storage or uninstalling removes local records; the existing app backup policy remains applicable. A future account-deletion feature must provide an explicit local deletion policy if removal is required.
+Signed-in accounts sync completed records through the authenticated API. The first sync uploads existing records owned by that account. To transfer history to a replacement phone, update the app on the old device, sign in with the original Google account, and wait for Study History to show that syncing completed. Sign in with the same account on the new device to download the records. Guest and unknown-owner records remain on the original device.
+
+Sync runs on sign-in, when the app returns to the foreground, when Study History opens, and after a completed record is saved. The sync button in Study History also runs it on demand. SQLite stays available offline. Failed uploads stay pending, and downloads resume from the last page saved locally. Firestore creates each record once per UID and session ID, so retries and uploads from multiple devices do not double count. The API verifies that the Firebase token matches the requested UID. The device still owns active timer state and weekly goal settings.
+
+Clearing app storage or uninstalling removes local records and pending uploads. Synced account records can be downloaded again until a deletion request is processed.
+
+## Account deletion
+
+For a verified [account deletion request](delete-account.html), locate the Firebase UID for the requesting account. Disable the Firebase user and revoke their refresh tokens. Wait at least 70 minutes before removing any data. This allows for the one-hour ID token lifetime and the Admin SDK's five-minute clock skew so a device cannot re-upload records during deletion. Remove the user's room seats and recursively delete the matching Firestore account document and all its `studyRecords` descendants. Then delete the Firebase user and confirm the deletion after checking that both the account document and its subcollection are empty. Local copies can be cleared through Android's app storage settings.
+
+The following command targets one account in the production project. Set `study_peaks_uid` to the verified UID first. Firebase CLI prompts before deleting the document and its descendants.
+
+```bash
+: "${study_peaks_uid:?Set the verified Firebase UID}"
+study_peaks_history_document=$(python3 -c 'import base64, sys; print(base64.urlsafe_b64encode(sys.argv[1].encode()).decode().rstrip("="))' "$study_peaks_uid")
+firebase firestore:delete "studyHistoryAccounts/u_$study_peaks_history_document" --project studypeaks-prd --recursive
+```
+
+## Release order
+
+Use the same API image tag in development and production. Deploy the development API and verify sync on the Android emulator before merging. After merging, deploy the production API and verify `GET /health` returns 200 and an unauthenticated request to `/v1/users/release-check/study-history` returns 401 before submitting the Android release. Keep the Play Data safety form in sync with the [privacy policy](privacy-policy.html), including account-linked completed study records sent for app functionality.
 
 ## Focus and civil dates
 
@@ -67,15 +87,17 @@ The authoritative active metadata is a single `study_active_v2` SharedPreference
 
 On leave, freeze the timer, await its queued writes, and persist the frozen record before making the API request. Insert the record into SQLite before deleting recovery metadata. A local persistence failure retains the record and displays a localized retry message. A confirmed seat release is stored with the frozen record so a local retry can finish without contacting the server. Retrying or restarting reuses the frozen timestamps and identity. A pending record cannot resume the timer. Completed insertion followed by a failed cleanup is safe to replay.
 
-Local recovery does not require a live foreground service or a valid server seat. It retries on authentication changes and applies to guests; its timer is restored before announcing the recovered seat. A running normal timer counts all process downtime as focus until it is paused or finalized; Pomodoro remains capped at its focus deadline. Network errors and server expiry do not erase focus evidence. A connection failure or temporary server error saves the record locally and retains the session for retry. The room shows a retry action until the server confirms release. A permanent rejection such as an authorization failure completes locally and reports that seat release could not be confirmed. A retry reuses the original record and does not show the saved-record summary again. No backend deployment is required. Syncing an active seat stops while the authenticated owner differs from its captured owner; the server seat may expire, but local history remains recoverable. A local DB open failure can be retried.
+Local recovery does not require a live foreground service or a valid server seat. It retries on authentication changes and applies to guests; its timer is restored before announcing the recovered seat. A running normal timer counts all process downtime as focus until it is paused or finalized; Pomodoro remains capped at its focus deadline. Network errors and server expiry do not erase focus evidence. A connection failure or temporary server error saves the record locally and retains the session for retry. The room shows a retry action until the server confirms release. A permanent rejection such as an authorization failure completes locally and reports that seat release could not be confirmed. A retry reuses the original record and does not show the saved-record summary again. Syncing an active seat stops while the authenticated owner differs from its captured owner; the server seat may expire, but local history remains recoverable. A local DB open failure can be retried.
 
 Storage operations are asynchronous; a process killed before an initial transition reaches durable storage, disk corruption, or user deletion of app storage cannot be recovered. Failed writes are surfaced when completing the session, rather than reported as a completed save.
 
 ## Migration
 
-SQLite opens at version 3. Upgrading from version 1 adds columns without deleting or recreating old rows. Each old row receives `legacy-<id>` and owner `legacy:unknown`. Its duration and original start string remain intact. Old timestamps lack timezone evidence and old durations lack pause/break intervals, so the entire old total stays on its original start date. It is not converted into fictitious exact focus intervals.
+SQLite opens at version 4. Upgrading from version 1 adds columns without deleting or recreating old rows. Each old row receives `legacy-<id>` and owner `legacy:unknown`. Its duration and original start string remain intact. Old timestamps lack timezone evidence and old durations lack pause/break intervals, so the entire old total stays on its original start date.
 
 Version 3 adds the weekly goal table to both version 1 and version 2 databases. Every owner starts with an unset goal. Upgrading preserves all existing study records.
+
+Version 4 adds upload tracking and a per-account download cursor. Existing account records become eligible for upload the next time their owner signs in.
 
 Legacy rows remain in the local database and are omitted from Study History and guest and account totals. Signing in leaves them under unknown ownership. Pre-v2 active metadata is also retained under unknown ownership. Pre-v2 timer totals are retained as estimates and allocated to the original start date.
 

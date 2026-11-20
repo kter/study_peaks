@@ -12,7 +12,9 @@ import 'providers/user_settings_provider.dart';
 import 'repositories/mock_data_repository.dart';
 import 'repositories/study_history_repository.dart';
 import 'screens/room_list_screen.dart';
+import 'services/api_service.dart';
 import 'services/notification_service.dart';
+import 'services/study_history_sync.dart';
 
 /// Mock data is enabled by default in debug builds and can be overridden with
 /// --dart-define=USE_MOCK_DATA=true or false.
@@ -49,6 +51,13 @@ class StudyPeaksApp extends StatelessWidget {
           create: (_) => StudyHistoryRepository(),
         ),
         ChangeNotifierProvider(
+          create: (context) => StudyHistorySync(
+            context.read<AuthProvider>(),
+            context.read<StudyHistoryRepository>(),
+            ApiService(),
+          ),
+        ),
+        ChangeNotifierProvider(
           create: (_) => RoomProvider(
             mockDataRepository: kUseMockData ? DevMockDataRepository() : null,
           ),
@@ -56,6 +65,7 @@ class StudyPeaksApp extends StatelessWidget {
         ChangeNotifierProxyProvider2<AuthProvider, UserSettingsProvider, SessionProvider>(
           create: (context) => SessionProvider(
             historyRepository: context.read<StudyHistoryRepository>(),
+            onStudyRecordSaved: context.read<StudyHistorySync>().recordSaved,
             useMockFallback: kUseMockData,
           )..setTimerProvider(context.read<TimerProvider>()),
           update: (_, auth, userSettings, session) => session!

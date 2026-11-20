@@ -221,9 +221,68 @@ class ApiService {
     }
   }
 
+  // History requests carry a fixed token, including across transport retries.
+  Map<String, String> _historyHeaders(String token) => {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      };
+
+  Uri _studyHistoryUri(String uid) =>
+      Uri.parse('$baseUrl/users/${Uri.encodeComponent(uid)}/study-history');
+
+  Future<Set<String>> uploadStudyRecords(
+      String token, String uid, List<StudySession> records) {
+    return _withRetry(() async {
+      final response = await _client.post(
+        _studyHistoryUri(uid),
+        headers: _historyHeaders(token),
+        body: jsonEncode({
+          'records': records.map((record) => record.toSyncJson()).toList(),
+        }),
+      );
+      if (response.statusCode != 200) {
+        throw ApiException('Failed to upload study history', response.statusCode);
+      }
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return (data['rejectedSessionIds'] as List<dynamic>).cast<String>().toSet();
+    });
+  }
+
+  Future<StudyHistoryPage> getStudyRecords(
+      String token, String uid, String? cursor) {
+    return _withRetry(() async {
+      final response = await _client.get(
+        _studyHistoryUri(uid).replace(
+          queryParameters: cursor == null ? null : {'cursor': cursor},
+        ),
+        headers: _historyHeaders(token),
+      );
+      if (response.statusCode != 200) {
+        throw ApiException('Failed to fetch study history', response.statusCode);
+      }
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return StudyHistoryPage(
+        (data['records'] as List<dynamic>)
+            .map((json) => StudySession.fromSyncJson(
+                json as Map<String, dynamic>, StudySession.ownerFor(uid)))
+            .toList(),
+        data['nextCursor'] as String,
+        data['hasMore'] as bool,
+      );
+    });
+  }
+
   void dispose() {
     _client.close();
   }
+}
+
+class StudyHistoryPage {
+  const StudyHistoryPage(this.records, this.nextCursor, this.hasMore);
+
+  final List<StudySession> records;
+  final String nextCursor;
+  final bool hasMore;
 }
 
 class SitResponse {
