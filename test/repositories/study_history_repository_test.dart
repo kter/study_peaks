@@ -327,6 +327,12 @@ void main() {
         'study_sessions',
         record('existing', '2026-12-28T10:00:00Z', '2026-12-28T16:30:00Z')
             .toMap());
+    await old.insert(
+        'study_sessions',
+        record('account-record', '2026-12-28T10:00:00Z',
+                '2026-12-28T10:05:00Z',
+                user: 'user:A')
+            .toMap());
     await old.close();
     await db.close();
 
@@ -334,6 +340,8 @@ void main() {
     repository = StudyHistoryRepository.withDatabase(db);
     final today = DateTime(2026, 12, 31);
     expect(await repository.getTotalStudyTime(ownerId: owner), 23400);
+    final pending = await repository.pendingSyncSessions('user:A', limit: 20);
+    expect(pending.single.sessionId, 'account-record');
     expect((await loadGoals(today)).minutesInWeek(today), isNull);
     await repository.saveWeeklyGoal(ownerId: owner, today: today, minutes: 600);
     await repository.saveWeeklyGoal(

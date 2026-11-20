@@ -21,13 +21,15 @@ class StudyHistoryRepository {
       });
 
   static Future<Database> open(String path) =>
-      openDatabase(path, version: 3, onCreate: (db, _) async {
+      openDatabase(path, version: 4, onCreate: (db, _) async {
         await db.execute('''CREATE TABLE study_sessions(
         id INTEGER PRIMARY KEY AUTOINCREMENT, room_id TEXT NOT NULL,
         start_time TEXT NOT NULL, duration_seconds INTEGER NOT NULL,
         session_id TEXT NOT NULL, owner_id TEXT NOT NULL, focus_intervals TEXT,
+        synced INTEGER NOT NULL DEFAULT 0,
         UNIQUE(owner_id, session_id))''');
         await _createWeeklyGoals(db);
+        await _createSyncState(db);
       }, onUpgrade: (db, oldVersion, _) async {
         if (oldVersion < 2) {
           await db
@@ -42,7 +44,19 @@ class StudyHistoryRepository {
               'CREATE UNIQUE INDEX session_identity ON study_sessions(owner_id, session_id)');
         }
         if (oldVersion < 3) await _createWeeklyGoals(db);
+        if (oldVersion < 4) {
+          await db.execute(
+              'ALTER TABLE study_sessions ADD COLUMN synced INTEGER NOT NULL DEFAULT 0');
+          await _createSyncState(db);
+        }
       });
+
+  static Future<void> _createSyncState(Database db) async {
+    await db.execute('''CREATE TABLE study_history_sync(
+      owner_id TEXT PRIMARY KEY NOT NULL, cursor TEXT NOT NULL)''');
+    await db.execute(
+        'CREATE INDEX study_sync_pending ON study_sessions(owner_id, id) WHERE synced = 0');
+  }
 
   static Future<void> _createWeeklyGoals(Database db) =>
       db.execute('''CREATE TABLE weekly_study_goals(
@@ -66,6 +80,50 @@ class StudyHistoryRepository {
             where: 'owner_id = ?', whereArgs: [ownerId]))
         .map(StudySession.fromMap)
         .toList();
+  }
+
+  Future<List<StudySession>> pendingSyncSessions(String ownerId,
+      {required int limit, int afterId = 0}) async {
+    final db = await database;
+    return (await db.query('study_sessions',
+            where: 'owner_id = ? AND synced = 0 AND id > ?',
+            whereArgs: [ownerId, afterId],
+            orderBy: 'id',
+            limit: limit))
+        .map(StudySession.fromMap)
+        .toList();
+  }
+
+  Future<void> markSessionsSynced(String ownerId, List<String> ids) async {
+    final db = await database;
+    final placeholders = List.filled(ids.length, '?').join(',');
+    await db.update('study_sessions', {'synced': 1},
+        where: 'owner_id = ? AND session_id IN ($placeholders)',
+        whereArgs: [ownerId, ...ids]);
+  }
+
+  Future<String?> getSyncCursor(String ownerId) async {
+    final db = await database;
+    final rows = await db.query('study_history_sync',
+        where: 'owner_id = ?', whereArgs: [ownerId]);
+    return rows.firstOrNull?['cursor'] as String?;
+  }
+
+  Future<void> mergeSyncedSessions(
+      String ownerId, List<StudySession> sessions, String cursor) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      final batch = txn.batch();
+      for (final session in sessions) {
+        batch.insert('study_sessions',
+            {...session.toMap(), 'owner_id': ownerId, 'synced': 1},
+            conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+      batch.insert(
+          'study_history_sync', {'owner_id': ownerId, 'cursor': cursor},
+          conflictAlgorithm: ConflictAlgorithm.replace);
+      await batch.commit(noResult: true);
+    });
   }
 
   Future<StudyHistory> getHistory({required String ownerId}) async =>

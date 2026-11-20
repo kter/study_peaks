@@ -65,6 +65,11 @@ func main() {
 			r.Post("/rooms/{roomId}/leave", leaveHandler)
 			r.Get("/rooms/{roomId}/sessions/{sessionId}", getSessionHandler)
 		})
+		r.Group(func(r chi.Router) {
+			r.Use(optionalAuthMiddleware, requireStudyHistoryOwner)
+			r.Get("/users/{userId}/study-history", getStudyHistoryHandler)
+			r.Post("/users/{userId}/study-history", saveStudyHistoryHandler)
+		})
 	})
 
 	r.With(cleanupAuthMiddleware, requireInit).Post("/internal/cleanup-sessions", cleanupHandler)

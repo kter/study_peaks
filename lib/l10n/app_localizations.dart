@@ -689,8 +689,32 @@ abstract class AppLocalizations {
   /// No description provided for @historySignInNotice.
   ///
   /// In en, this message translates to:
-  /// **'Signing in keeps a separate history for this account on this device. History is not synced across devices.'**
+  /// **'Sign in with the same Google account to sync completed study records across your devices. Guest records stay on this device.'**
   String get historySignInNotice;
+
+  /// No description provided for @historySyncAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync study history'**
+  String get historySyncAction;
+
+  /// No description provided for @historySyncing.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing study history…'**
+  String get historySyncing;
+
+  /// No description provided for @historySynced.
+  ///
+  /// In en, this message translates to:
+  /// **'Study history synced'**
+  String get historySynced;
+
+  /// No description provided for @historySyncFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not sync study history. Tap the sync button to try again.'**
+  String get historySyncFailed;
 
   /// No description provided for @weeklyGoal.
   ///

@@ -103,6 +103,27 @@ class StudySession {
                 .toList(),
       );
 
+  Map<String, dynamic> toSyncJson() => {
+        'sessionId': sessionId,
+        'roomId': roomId,
+        'startTime': startTime.toIso8601String(),
+        'durationSeconds': durationSeconds,
+        'focusIntervals': intervals?.map((i) => i.toMap()).toList(),
+      };
+
+  factory StudySession.fromSyncJson(
+          Map<String, dynamic> json, String ownerId) =>
+      StudySession(
+        sessionId: json['sessionId'] as String,
+        ownerId: ownerId,
+        roomId: json['roomId'] as String,
+        startTime: DateTime.parse(json['startTime'] as String),
+        durationSeconds: json['durationSeconds'] as int,
+        intervals: (json['focusIntervals'] as List<dynamic>?)
+            ?.map((i) => FocusInterval.fromMap(i as Map<String, dynamic>))
+            .toList(),
+      );
+
   /// Civil dates are UTC date labels, independent of the viewer's timezone.
   Map<DateTime, int> get dailySeconds {
     if (intervals == null) {

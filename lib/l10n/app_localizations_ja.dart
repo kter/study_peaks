@@ -340,7 +340,19 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get historySignInNotice =>
-      'サインインすると、この端末でアカウントごとに履歴を保存します。端末間では同期されません。';
+      '同じ Google アカウントでサインインすると、学習履歴を端末間で同期できます。ゲストの記録はこの端末に残ります。';
+
+  @override
+  String get historySyncAction => '学習履歴を同期';
+
+  @override
+  String get historySyncing => '学習履歴を同期しています…';
+
+  @override
+  String get historySynced => '学習履歴を同期しました';
+
+  @override
+  String get historySyncFailed => '学習履歴を同期できませんでした。同期ボタンから再試行できます。';
 
   @override
   String get weeklyGoal => '週間学習目標';

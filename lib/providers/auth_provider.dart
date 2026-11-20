@@ -111,10 +111,11 @@ class AuthProvider extends ChangeNotifier {
   ///
   /// Uses [RetryHelper] to handle transient network issues.
   Future<String?> getIdToken({bool forceRefresh = false}) async {
-    if (_user == null) return null;
+    final user = _user;
+    if (user == null) return null;
 
     return await RetryHelper.execute<String?>(
-      () => _user!.getIdToken(forceRefresh),
+      () => user.getIdToken(forceRefresh),
       maxRetries: AppConfig.maxRetries,
       retryDelays: AppConfig.retryDelays,
     );

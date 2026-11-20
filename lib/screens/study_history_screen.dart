@@ -8,6 +8,7 @@ import '../l10n/app_localizations.dart';
 import '../models/study_history.dart';
 import '../providers/auth_provider.dart';
 import '../repositories/study_history_repository.dart';
+import '../services/study_history_sync.dart';
 import '../widgets/study_duration_row.dart';
 import '../widgets/study_history_calendar.dart';
 import '../widgets/study_history_chart.dart';
@@ -38,6 +39,7 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
   _HistoryView _view = _HistoryView.weekGraph;
   DateTime? _periodDate;
   String? _owner;
+  int? _syncRevision;
   late Future<StudyHistory?> _history;
   late DateTime _today;
   late final AppLifecycleListener _lifecycle;
@@ -58,7 +60,24 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _setOwner(context.watch<AuthProvider>().historyOwnerId);
+    final owner = context.watch<AuthProvider>().historyOwnerId;
+    final sync = context.watch<StudyHistorySync?>();
+    if (owner != _owner) {
+      _owner = owner;
+      _history = _fetchHistory(owner);
+      if (sync != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted &&
+              _owner == owner &&
+              sync.statusFor(owner) != StudyHistorySyncStatus.syncing) {
+            sync.requestSync();
+          }
+        });
+      }
+    } else if (sync?.revision != _syncRevision) {
+      _history = _fetchHistory(owner);
+    }
+    _syncRevision = sync?.revision;
   }
 
   @override
@@ -66,13 +85,6 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
     _dateTimer.cancel();
     _lifecycle.dispose();
     super.dispose();
-  }
-
-  void _setOwner(String owner) {
-    if (owner != _owner) {
-      _owner = owner;
-      _history = _fetchHistory(owner);
-    }
   }
 
   Future<StudyHistory?> _fetchHistory(String owner) async {
@@ -117,18 +129,42 @@ class _StudyHistoryScreenState extends State<StudyHistoryScreen> {
     final l10n = AppLocalizations.of(context)!;
     final today = _today;
     final period = _view.period;
+    final sync = context.watch<StudyHistorySync?>();
+    final signedIn = sync != null && context.watch<AuthProvider>().isSignedIn;
+    final syncStatus = sync?.statusFor(_owner) ?? StudyHistorySyncStatus.idle;
+    final syncMessage = switch (syncStatus) {
+      StudyHistorySyncStatus.idle => null,
+      StudyHistorySyncStatus.syncing => l10n.historySyncing,
+      StudyHistorySyncStatus.synced => l10n.historySynced,
+      StudyHistorySyncStatus.failed => l10n.historySyncFailed,
+    };
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.studyHistory)),
+      appBar: AppBar(
+        title: Text(l10n.studyHistory),
+        actions: [
+          if (signedIn)
+            IconButton(
+              icon: const Icon(Icons.sync),
+              tooltip: l10n.historySyncAction,
+              onPressed: syncStatus == StudyHistorySyncStatus.syncing
+                  ? null
+                  : sync.requestSync,
+            ),
+        ],
+      ),
       body: SafeArea(
         top: false,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            if (signedIn && syncMessage != null) Text(syncMessage),
             FutureBuilder<StudyHistory?>(
+              key: ValueKey(_owner),
               future: _history,
               builder: (context, snapshot) {
-                final loaded = snapshot.connectionState == ConnectionState.done;
-                final history = loaded ? snapshot.data : null;
+                final history = snapshot.data;
+                final loaded = snapshot.hasData ||
+                    snapshot.connectionState == ConnectionState.done;
                 final lastNavigableDay =
                     history?.lastNavigableDay(today) ?? today;
                 final anchor = StudyHistory.clampAnchor(

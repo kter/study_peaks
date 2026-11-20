@@ -354,7 +354,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get historySignInNotice =>
-      'Signing in keeps a separate history for this account on this device. History is not synced across devices.';
+      'Sign in with the same Google account to sync completed study records across your devices. Guest records stay on this device.';
+
+  @override
+  String get historySyncAction => 'Sync study history';
+
+  @override
+  String get historySyncing => 'Syncing study history…';
+
+  @override
+  String get historySynced => 'Study history synced';
+
+  @override
+  String get historySyncFailed =>
+      'Could not sync study history. Tap the sync button to try again.';
 
   @override
   String get weeklyGoal => 'Weekly study goal';

@@ -60,6 +60,7 @@ class SessionProvider extends ChangeNotifier {
   String? _error;
   final NotificationService _notificationService = NotificationService();
   final StudyHistoryRepository _historyRepository;
+  final void Function(String ownerId)? _onStudyRecordSaved;
   TimerProvider? _timerProvider;
   String? _ownerId;
   StudySession? _pendingRecord;
@@ -136,8 +137,10 @@ class SessionProvider extends ChangeNotifier {
   SessionProvider({
     ApiService? apiService,
     StudyHistoryRepository? historyRepository,
+    void Function(String ownerId)? onStudyRecordSaved,
     bool? useMockFallback,
   })  : _historyRepository = historyRepository ?? StudyHistoryRepository(),
+        _onStudyRecordSaved = onStudyRecordSaved,
         _apiService = apiService ?? ApiService(),
         useMockFallback = useMockFallback ?? kDebugMode;
 
@@ -346,6 +349,7 @@ class SessionProvider extends ChangeNotifier {
       if (showSummary) {
         await _historyRepository.saveSession(record);
         _historySaved = true;
+        _onStudyRecordSaved?.call(record.ownerId);
       }
       if (retryRelease) {
         // Retain the frozen session ID for an explicit, idempotent leave retry.
