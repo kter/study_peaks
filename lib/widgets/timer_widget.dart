@@ -27,83 +27,90 @@ class TimerWidget extends StatelessWidget {
     );
   }
 
+  AppLocalizations _strings(BuildContext context) =>
+      AppLocalizations.of(context) ?? lookupAppLocalizations(const Locale('en'));
+
   Widget _buildCollapsedView(BuildContext context, TimerProvider timer) {
-    final isPomodoroBreak = timer.isOnBreak;
-
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
-    final primaryColor = Theme.of(context).colorScheme.primary;
-
+    final l10n = _strings(context);
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+    final isDark = theme.brightness == Brightness.dark;
+    final onBreak = timer.isOnBreak;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: cardColor,
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2)),
         ],
       ),
-      child: Row(
-        children: [
-          // Timer display
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: isPomodoroBreak
-                  ? Colors.green.shade100
-                  : primaryColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: double.infinity,
+        child: Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: onBreak ? Colors.green.shade100 : primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    timer.formattedTime,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: onBreak ? Colors.green.shade700 : primary,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+                _buildCompactModeToggle(context, timer),
+              ],
             ),
-            child: Text(
-              timer.formattedTime,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: isPomodoroBreak ? Colors.green.shade700 : primaryColor,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (timer.isScreenLocked)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Icon(Icons.lock, size: 16, color: primary),
+                  ),
+                Container(
+                  decoration: BoxDecoration(color: primary, shape: BoxShape.circle),
+                  child: IconButton(
+                    tooltip: timer.isRunning ? l10n.pause : l10n.start,
+                    onPressed: () => _handlePlayPause(context, timer),
+                    icon: Icon(timer.isRunning ? Icons.pause : Icons.play_arrow),
+                    iconSize: 20,
+                    color: theme.colorScheme.onPrimary,
+                    padding: const EdgeInsets.all(8),
+                    constraints: const BoxConstraints(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: l10n.expandTimer,
+                  onPressed: onToggleCollapsed,
+                  icon: const Icon(Icons.expand_more),
+                  iconSize: 24,
+                  color: Colors.grey.shade600,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(width: 8),
-          // Compact mode toggle
-          _buildCompactModeToggle(context, timer),
-          const Spacer(),
-          // Lock indicator (shown when screen is locked)
-          if (timer.isScreenLocked)
-            Padding(
-              padding: const EdgeInsets.only(right: 4),
-              child: Icon(Icons.lock, size: 16, color: primaryColor),
-            ),
-          // Play/Pause button
-          Container(
-            decoration: BoxDecoration(
-              color: primaryColor,
-              shape: BoxShape.circle,
-            ),
-            child: IconButton(
-              onPressed: () => _handlePlayPause(context, timer),
-              icon: Icon(timer.isRunning ? Icons.pause : Icons.play_arrow),
-              iconSize: 20,
-              color: Theme.of(context).colorScheme.onPrimary,
-              padding: const EdgeInsets.all(8),
-              constraints: const BoxConstraints(),
-            ),
-          ),
-          const SizedBox(width: 8),
-          // Expand button
-          IconButton(
-            onPressed: onToggleCollapsed,
-            icon: const Icon(Icons.expand_more),
-            iconSize: 24,
-            color: Colors.grey.shade600,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -125,14 +132,14 @@ class TimerWidget extends StatelessWidget {
             timer,
             TimerMode.normal,
             Icons.timer_outlined,
-            'Normal',
+            _strings(context).normalMode,
           ),
           _buildCompactModeButton(
             context,
             timer,
             TimerMode.pomodoro,
             Icons.hourglass_empty,
-            'Pomodoro',
+            _strings(context).pomodoroMode,
           ),
         ],
       ),
@@ -176,8 +183,8 @@ class TimerWidget extends StatelessWidget {
                 const SizedBox(width: 4),
                 Text(
                   mode == TimerMode.pomodoro
-                      ? (isPomodoroBreak ? 'Break' : 'Focus')
-                      : 'Normal',
+                      ? (isPomodoroBreak ? _strings(context).breakPhase : _strings(context).focusPhase)
+                      : _strings(context).normalMode,
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -223,7 +230,7 @@ class TimerWidget extends StatelessWidget {
                 color: Colors.grey.shade600,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
-                tooltip: 'Collapse timer',
+                tooltip: _strings(context).collapseTimer,
               ),
             ],
           ),
@@ -254,7 +261,7 @@ class TimerWidget extends StatelessWidget {
   }
 
   Widget _buildScreenLockSwitch(BuildContext context, TimerProvider timer) {
-    final l10n = AppLocalizations.of(context);
+    final l10n = _strings(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -264,16 +271,19 @@ class TimerWidget extends StatelessWidget {
         color: isDark ? Colors.grey.shade800.withValues(alpha: 0.5) : Colors.grey.shade50,
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Row(
+      child: MergeSemantics(
+        child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.lock_outline, size: 16, color: primaryColor),
           const SizedBox(width: 6),
-          Text(
-            l10n?.lockScreenDuringFocus ?? 'Lock screen during focus',
-            style: TextStyle(
-              fontSize: 13,
-              color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+          Flexible(
+            child: Text(
+              l10n.lockScreenDuringFocus,
+              style: TextStyle(
+                fontSize: 13,
+                color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+              ),
             ),
           ),
           const SizedBox(width: 4),
@@ -281,17 +291,18 @@ class TimerWidget extends StatelessWidget {
             height: 32,
             child: Switch(
               value: timer.screenLockEnabled,
-              onChanged: timer.isRunning ? null : (v) => timer.setScreenLockEnabled(v),
+              onChanged: timer.isRunning ? null : timer.setScreenLockEnabled,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
           ),
         ],
+        ),
       ),
     );
   }
 
   Widget _buildUnlockHint(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
+    final l10n = _strings(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return AnimatedOpacity(
@@ -317,7 +328,7 @@ class TimerWidget extends StatelessWidget {
             const SizedBox(width: 6),
             Flexible(
               child: Text(
-                l10n?.lockTaskUnpinHint ?? 'Unpin: long-press Back + Recent',
+                l10n.lockTaskUnpinHint,
                 style: TextStyle(
                   fontSize: 11,
                   color: isDark ? Colors.amber.shade300 : Colors.amber.shade800,
@@ -338,22 +349,23 @@ class TimerWidget extends StatelessWidget {
         color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 8,
+        runSpacing: 4,
         children: [
           _buildModeButton(
             context,
             timer,
             TimerMode.normal,
-            'Normal',
+            _strings(context).normalMode,
             Icons.timer_outlined,
           ),
-          const SizedBox(width: 8),
           _buildModeButton(
             context,
             timer,
             TimerMode.pomodoro,
-            'Pomodoro',
+            _strings(context).pomodoroMode,
             Icons.hourglass_empty,
           ),
         ],
@@ -379,6 +391,7 @@ class TimerWidget extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
@@ -418,7 +431,7 @@ class TimerWidget extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              isPomodoroBreak ? '☕ Break Time' : '🎯 Focus Time',
+              isPomodoroBreak ? '☕ ${_strings(context).breakTime}' : '🎯 ${_strings(context).focusTime}',
               style: TextStyle(
                 color: isPomodoroBreak
                     ? Colors.green.shade700
@@ -485,6 +498,7 @@ class TimerWidget extends StatelessWidget {
       children: [
         // Reset button
         IconButton(
+          tooltip: _strings(context).reset,
           onPressed: timer.reset,
           icon: const Icon(Icons.refresh),
           iconSize: 28,
@@ -498,6 +512,7 @@ class TimerWidget extends StatelessWidget {
             shape: BoxShape.circle,
           ),
           child: IconButton(
+            tooltip: timer.isRunning ? _strings(context).pause : _strings(context).start,
             onPressed: () => _handlePlayPause(context, timer),
             icon: Icon(timer.isRunning ? Icons.pause : Icons.play_arrow),
             iconSize: 36,
@@ -553,7 +568,7 @@ class TimerWidget extends StatelessWidget {
         ),
         const SizedBox(width: 6),
         Text(
-          '${timer.pomodoroCompletedCycles} cycles completed',
+          _strings(context).cyclesCompleted(timer.pomodoroCompletedCycles),
           style: TextStyle(
             color: primaryColor,
             fontWeight: FontWeight.w500,

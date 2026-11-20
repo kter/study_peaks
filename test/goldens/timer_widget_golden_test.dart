@@ -28,6 +28,8 @@ void main() {
       final notifications = MockNotificationService();
       when(() => notifications.isRunning()).thenAnswer((_) async => true);
       when(() => notifications.updateTimerState(
+            sessionId: any(named: 'sessionId'),
+            waitingToStart: any(named: 'waitingToStart'),
             mode: any(named: 'mode'),
             isRunning: any(named: 'isRunning'),
             pomodoroPhase: any(named: 'pomodoroPhase'),

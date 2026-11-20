@@ -33,15 +33,18 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   bool _finalizing = false;
   void freezeForFinalization() {
+    final lockedWhilePaused = _isScreenLocked && !_isRunning;
+    _releaseLockTask();
     pause();
     _finalizing = true;
     _persistState();
+    if (lockedWhilePaused) notifyListeners();
   }
 
   List<FocusInterval> get focusIntervals {
     final result = List<FocusInterval>.of(_focusIntervals);
     if (_focusOpenedAt != null) {
-      var end = _now().toUtc().add(_focusClockShift);
+      var end = _observeNow().toUtc().add(_focusClockShift);
       if (_focusDeadline != null && end.isAfter(_focusDeadline!)) {
         end = _focusDeadline!;
       }
@@ -85,6 +88,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   // Timestamp-based tracking for accurate elapsed time
   DateTime? _startedAt;
+  DateTime? _lastObservedTime;
   Duration _pausedDuration = Duration.zero;
 
   // Pomodoro settings
@@ -95,7 +99,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   // Pomodoro timestamp tracking
   DateTime? _pomodoroPhaseStartedAt;
-  int _pomodoroElapsedBeforePause = 0;
+  Duration _pomodoroElapsedBeforePause = Duration.zero;
 
   final NotificationService _notificationService;
 
@@ -103,6 +107,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   final LockTaskService _lockTaskService;
   bool _screenLockEnabled = false;
   bool _isScreenLocked = false;
+  bool _pinning = false;
   StreamSubscription<bool>? _lockTaskExitedSubscription;
 
   /// Callback invoked when lock task mode is exited by the user.
@@ -146,6 +151,10 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// Seat session the timer state belongs to (null when not bound).
   String? get sessionId => _sessionId;
   bool get isRunning => _isRunning;
+  bool get waitingToStart => !_isRunning &&
+      (_mode == TimerMode.normal
+          ? _pausedDuration == Duration.zero
+          : _pomodoroElapsedBeforePause == Duration.zero);
   PomodoroPhase get pomodoroPhase => _pomodoroPhase;
   bool get isOnBreak =>
       mode == TimerMode.pomodoro && pomodoroPhase == PomodoroPhase.shortBreak;
@@ -160,29 +169,47 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// Get elapsed seconds using timestamp-based calculation.
   /// This ensures accurate time even when the app is in background.
   int get elapsedSeconds {
-    if (_startedAt == null) {
-      return _pausedDuration.inSeconds;
-    }
-    return _pausedDuration.inSeconds + _now().difference(_startedAt!).inSeconds;
+    final now = _observeNow();
+    return (_pausedDuration + _timeSince(_startedAt, now)).inSeconds;
   }
 
-  /// Get remaining seconds for pomodoro mode.
-  int get pomodoroRemainingSeconds {
-    final phaseDuration = _pomodoroPhase == PomodoroPhase.focus
+  DateTime _observeNow() {
+    final now = _now();
+    if (!_isRunning) return now;
+    final previous = _lastObservedTime;
+    _lastObservedTime = now;
+    if (previous != null && now.isBefore(previous)) {
+      final correction = previous.difference(now);
+      _startedAt = _startedAt?.subtract(correction);
+      _pomodoroPhaseStartedAt = _pomodoroPhaseStartedAt?.subtract(correction);
+      if (_focusOpenedAt != null) _focusClockShift += correction;
+      _persistState();
+      unawaited(_updateNotification());
+    }
+    return now;
+  }
+
+  Duration _timeSince(DateTime? start, DateTime now) {
+    if (start == null) return Duration.zero;
+    final elapsed = now.difference(start);
+    return elapsed.isNegative ? Duration.zero : elapsed;
+  }
+
+  Duration get _pomodoroRemaining {
+    final now = _observeNow();
+    final phaseSeconds = _pomodoroPhase == PomodoroPhase.focus
         ? pomodoroFocusDuration
         : pomodoroBreakDuration;
-
-    int elapsed;
-    if (_pomodoroPhaseStartedAt == null) {
-      elapsed = _pomodoroElapsedBeforePause;
-    } else {
-      elapsed = _pomodoroElapsedBeforePause +
-          _now().difference(_pomodoroPhaseStartedAt!).inSeconds;
-    }
-
-    final remaining = phaseDuration - elapsed;
-    return remaining > 0 ? remaining : 0;
+    final elapsed =
+        _pomodoroElapsedBeforePause + _timeSince(_pomodoroPhaseStartedAt, now);
+    final remaining = Duration(seconds: phaseSeconds) - elapsed;
+    return remaining.isNegative ? Duration.zero : remaining;
   }
+
+  /// Round up so a partially elapsed second is still visible on the countdown.
+  int get pomodoroRemainingSeconds =>
+      (_pomodoroRemaining.inMicroseconds + Duration.microsecondsPerSecond - 1) ~/
+      Duration.microsecondsPerSecond;
 
   /// Format duration as "HH:MM:SS" or "MM:SS".
   String get formattedTime {
@@ -249,9 +276,10 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _sessionId = sessionId;
     }
     if (_isRunning) return;
+    final now = _now();
+    _lastObservedTime = now;
     _isRunning = true;
     if (_mode == TimerMode.normal || _pomodoroPhase == PomodoroPhase.focus) {
-      final now = _now();
       final wallStart = now.toUtc();
       final previousEnd =
           _focusIntervals.isEmpty ? null : _focusIntervals.last.end;
@@ -263,14 +291,14 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _focusClockShift = _focusOpenedAt!.difference(wallStart);
       _focusOffset = now.timeZoneOffset.inMinutes;
       _focusDeadline = _mode == TimerMode.pomodoro
-          ? _focusOpenedAt!.add(Duration(seconds: pomodoroRemainingSeconds))
+          ? _focusOpenedAt!.add(_pomodoroRemaining)
           : null;
     }
 
     if (_mode == TimerMode.normal) {
-      _startedAt = _now();
+      _startedAt = now;
     } else {
-      _pomodoroPhaseStartedAt = _now();
+      _pomodoroPhaseStartedAt = now;
     }
 
     _updateNotification();
@@ -294,11 +322,21 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Start timer with screen lock (called from UI after dialog confirmation).
   Future<void> startWithLock() async {
-    if (_finalizing || _recoveryBlocked) return;
-    await _lockTaskService.startLockTask();
-    await _lockTaskService.setKeepScreenOn(true);
-    _isScreenLocked = true;
-    start();
+    if (_disposed || _finalizing || _recoveryBlocked || _isRunning || _pinning) return;
+    _pinning = true;
+    final sessionId = _sessionId;
+    try {
+      final pinned = await _lockTaskService.startLockTask();
+      if (_disposed || _finalizing || _recoveryBlocked || sessionId != _sessionId) {
+        if (pinned) await _lockTaskService.stopLockTask();
+        return;
+      }
+      _isScreenLocked = pinned;
+      if (pinned) await _lockTaskService.setKeepScreenOn(true);
+      start();
+    } finally {
+      _pinning = false;
+    }
   }
 
   /// Pause the timer.
@@ -306,22 +344,19 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (!_isRunning) return;
 
     _closeFocus();
+    final now = _observeNow();
     _timer?.cancel();
     _isRunning = false;
+    _lastObservedTime = null;
 
     if (_mode == TimerMode.normal) {
       // Save elapsed time when pausing
-      if (_startedAt != null) {
-        _pausedDuration += _now().difference(_startedAt!);
-        _startedAt = null;
-      }
+      _pausedDuration += _timeSince(_startedAt, now);
+      _startedAt = null;
     } else {
       // Save pomodoro elapsed time when pausing
-      if (_pomodoroPhaseStartedAt != null) {
-        _pomodoroElapsedBeforePause +=
-            _now().difference(_pomodoroPhaseStartedAt!).inSeconds;
-        _pomodoroPhaseStartedAt = null;
-      }
+      _pomodoroElapsedBeforePause += _timeSince(_pomodoroPhaseStartedAt, now);
+      _pomodoroPhaseStartedAt = null;
     }
 
     _persistState();
@@ -356,6 +391,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _closeFocus();
     _timer?.cancel();
     _isRunning = false;
+    _lastObservedTime = null;
 
     // Reset normal mode
     _startedAt = null;
@@ -364,7 +400,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // Reset pomodoro mode
     _pomodoroPhase = PomodoroPhase.focus;
     _pomodoroPhaseStartedAt = null;
-    _pomodoroElapsedBeforePause = 0;
+    _pomodoroElapsedBeforePause = Duration.zero;
 
     // Release lock task if active
     _releaseLockTask();
@@ -413,9 +449,10 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     // Reset phase timer
-    _pomodoroElapsedBeforePause = 0;
+    _pomodoroElapsedBeforePause = Duration.zero;
     _pomodoroPhaseStartedAt = null;
     _isRunning = false;
+    _lastObservedTime = null;
     _timer?.cancel();
 
     _persistState();
@@ -431,8 +468,10 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _mode == TimerMode.normal ? elapsedSeconds : pomodoroRemainingSeconds;
 
     await _notificationService.updateTimerState(
+      sessionId: _sessionId,
       mode: _mode,
       isRunning: _isRunning,
+      waitingToStart: waitingToStart,
       pomodoroPhase: _mode == TimerMode.pomodoro ? _pomodoroPhase : null,
       seconds: seconds,
     );
@@ -469,12 +508,14 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
       final phase = PomodoroPhase.values[state['pomodoroPhase'] as int];
       final cycles = state['pomodoroCompletedCycles'] as int;
       final pausedDurationMs = state['pausedDurationMs'] as int;
-      final elapsedBeforePause = state['pomodoroElapsedBeforePause'] as int;
+      final elapsedBeforePauseMs = state['pomodoroElapsedBeforePauseMs'] as int? ??
+          (state['pomodoroElapsedBeforePause'] as int) *
+              Duration.millisecondsPerSecond;
       final startedAtMs = state['startedAt'] as int?;
       final phaseStartedAtMs = state['pomodoroPhaseStartedAt'] as int?;
       if (cycles < 0 ||
           pausedDurationMs < 0 ||
-          elapsedBeforePause < 0 ||
+          elapsedBeforePauseMs < 0 ||
           (isRunning &&
               (mode == TimerMode.normal
                   ? startedAtMs == null
@@ -492,12 +533,13 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _finalizing = state['finalizing'] as bool? ?? false;
       _mode = mode;
       _isRunning = isRunning;
+      _lastObservedTime = null;
       _startedAt = isRunning ? startedAt : null;
       _pausedDuration = Duration(milliseconds: pausedDurationMs);
       _pomodoroPhase = phase;
       _pomodoroCompletedCycles = cycles;
       _pomodoroPhaseStartedAt = isRunning ? phaseStartedAt : null;
-      _pomodoroElapsedBeforePause = elapsedBeforePause;
+      _pomodoroElapsedBeforePause = Duration(milliseconds: elapsedBeforePauseMs);
       _sessionId = sessionId;
       _focusIntervals
         ..clear()
@@ -528,7 +570,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
           _focusOpenedAt = _now().toUtc();
           _focusOffset = _now().timeZoneOffset.inMinutes;
           _focusDeadline = _mode == TimerMode.pomodoro
-              ? _now().toUtc().add(Duration(seconds: pomodoroRemainingSeconds))
+              ? _now().toUtc().add(_pomodoroRemaining)
               : null;
         }
       }
@@ -567,7 +609,8 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
       'pomodoroPhase': _pomodoroPhase.index,
       'pomodoroCompletedCycles': _pomodoroCompletedCycles,
       'pomodoroPhaseStartedAt': _pomodoroPhaseStartedAt?.millisecondsSinceEpoch,
-      'pomodoroElapsedBeforePause': _pomodoroElapsedBeforePause,
+      'pomodoroElapsedBeforePause': _pomodoroElapsedBeforePause.inSeconds,
+      'pomodoroElapsedBeforePauseMs': _pomodoroElapsedBeforePause.inMilliseconds,
     }));
   }
 

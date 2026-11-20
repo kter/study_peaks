@@ -32,6 +32,11 @@ class _WeeklyStudyGoalDialogState extends State<WeeklyStudyGoalDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final inputHelp = l10n.weeklyGoalInputHelp(
+      WeeklyStudyGoals.minMinutes,
+      WeeklyStudyGoals.maxMinutes,
+      WeeklyStudyGoals.stepMinutes,
+    );
     return AlertDialog(
       scrollable: true,
       title: Text(
@@ -45,11 +50,7 @@ class _WeeklyStudyGoalDialogState extends State<WeeklyStudyGoalDialog> {
           textInputAction: TextInputAction.done,
           decoration: InputDecoration(
             labelText: l10n.weeklyGoalMinutes,
-            helperText: l10n.weeklyGoalInputHelp(
-              WeeklyStudyGoals.minMinutes,
-              WeeklyStudyGoals.maxMinutes,
-              WeeklyStudyGoals.stepMinutes,
-            ),
+            helperText: inputHelp,
             helperMaxLines: 3,
             errorMaxLines: 3,
           ),
@@ -57,7 +58,7 @@ class _WeeklyStudyGoalDialogState extends State<WeeklyStudyGoalDialog> {
             final minutes = int.tryParse(value?.trim() ?? '', radix: 10);
             return minutes != null && WeeklyStudyGoals.isValidMinutes(minutes)
                 ? null
-                : l10n.weeklyGoalInvalidMinutes;
+                : inputHelp;
           },
           onFieldSubmitted: (_) => _save(),
         ),

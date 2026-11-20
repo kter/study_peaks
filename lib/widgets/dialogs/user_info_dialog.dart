@@ -1,65 +1,57 @@
 import 'package:flutter/material.dart';
-import '../../models/models.dart';
 
-/// Modal bottom sheet displaying user information.
-/// 
-/// Shows user's display name, status message, and study duration
-/// when tapping on an occupied seat.
+import '../../l10n/app_localizations.dart';
+import '../../models/models.dart';
+import '../../utils/formatters.dart';
+import '../seat_elapsed_duration.dart';
+
+/// Shows the user and the time elapsed since they took the seat.
 void showUserInfoDialog({
   required BuildContext context,
   required Seat seat,
 }) {
-  if (seat.user == null) return;
-  final user = seat.user!;
-  
-  final duration = seat.elapsedAt(DateTime.now());
+  final user = seat.user;
+  if (user == null) return;
 
-  showModalBottomSheet(
+  showModalBottomSheet<void>(
     context: context,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
-    builder: (context) => Container(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            user.displayName,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF1A237E),
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (user.statusMessage.isNotEmpty)
-            Text(
-              '"${user.statusMessage}"',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.shade600,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+    builder: (context) {
+      final theme = Theme.of(context);
+      final l10n = AppLocalizations.of(context)!;
+      return SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.timer, color: Color(0xFF1A237E)),
-              const SizedBox(width: 8),
-              Text(
-                'Studying for ${duration.inHours}h ${duration.inMinutes.remainder(60)}m',
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: Color(0xFF1A237E),
-                ),
+              Text(user.displayName, style: theme.textTheme.titleLarge),
+              if (user.statusMessage.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(user.statusMessage, style: theme.textTheme.bodyMedium),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.timer, color: theme.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: SeatElapsedDuration(
+                      seat: seat,
+                      builder: (context, elapsed) {
+                        final seconds =
+                            elapsed.inMinutes * Duration.secondsPerMinute;
+                        return Text(l10n.seatedFor(
+                            Formatters.formatStudyDuration(seconds, l10n)));
+                      },
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 24),
-        ],
-      ),
-    ),
+        ),
+      );
+    },
   );
 }

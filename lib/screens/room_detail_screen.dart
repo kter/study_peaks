@@ -36,6 +36,7 @@ class RoomDetailScreen extends StatefulWidget {
 class _RoomDetailScreenState extends State<RoomDetailScreen>
     with WidgetsBindingObserver {
   bool _isTimerCollapsed = true;
+  bool _sitFlowActive = false;
   bool _leaveFlowActive = false;
   Timer? _seatRefreshTimer;
   SessionProvider? _sessionProvider;
@@ -125,7 +126,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     if (!mounted) return;
     await context.read<RoomProvider>().fetchSeats(widget.room.roomId);
     // 自分のセッションを再適用（サーバーのデータで上書きされないように）
-    _restoreUserSeat();
+    if (mounted) _restoreUserSeat();
   }
 
   void _onLockTaskExited() {
@@ -172,7 +173,9 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
             seatNumber: session.seatNumber!,
             isOccupied: true,
             user: SeatUser(
-              userId: session.sessionId ?? userSettings.iconSeed,
+              userId: authProvider.isSignedIn
+                  ? authProvider.userId
+                  : session.sessionId ?? userSettings.iconSeed,
               displayName: userSettings.displayName,
               countryCode: userSettings.countryCode,
               iconSeed: userSettings.iconSeed,
@@ -190,28 +193,24 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
 
   @override
   Widget build(BuildContext context) {
+    final seatGrid = SeatGrid(
+      roomId: widget.room.roomId,
+      onAlreadySeated: () => _showAlreadySeatedMessage(context),
+      onEmptySeatTap: (seat) => _handleSitRequest(context, seat),
+      onOccupiedSeatTap: (seat) => showUserInfoDialog(context: context, seat: seat),
+    );
+    final header = [_buildTimerSection(), _buildRoomInfoBar(), const SizedBox(height: 16)];
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: _buildAppBar(),
-      body: Column(
-        children: [
-          _buildTimerSection(),
-          // Persistent error banner removed
-          _buildRoomInfoBar(),
-          const SizedBox(height: 16),
-          Expanded(
-            child: SeatGrid(
-              roomId: widget.room.roomId,
-              onAlreadySeated: () => _showAlreadySeatedMessage(context),
-              onEmptySeatTap: (seat) => _handleSitRequest(context, seat),
-              onOccupiedSeatTap: (seat) => showUserInfoDialog(
-                context: context,
-                seat: seat,
-              ),
+      body: _isTimerCollapsed
+          ? Column(children: [...header, Expanded(child: seatGrid)])
+          : NestedScrollView(
+              headerSliverBuilder: (_, __) => [
+                SliverToBoxAdapter(child: Column(children: header)),
+              ],
+              body: seatGrid,
             ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -220,6 +219,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
       elevation: 0,
       leading: IconButton(
+        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
         icon: Icon(Icons.arrow_back, color: Theme.of(context).appBarTheme.foregroundColor),
         onPressed: () => Navigator.of(context).pop(),
       ),
@@ -228,11 +228,15 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
         children: [
           Icon(Icons.terrain, color: Theme.of(context).appBarTheme.foregroundColor, size: 24),
           const SizedBox(width: 8),
-          Text(
-            widget.room.name,
-            style: TextStyle(
-              color: Theme.of(context).appBarTheme.foregroundColor,
-              fontWeight: FontWeight.bold,
+          Flexible(
+            child: Text(
+              widget.room.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Theme.of(context).appBarTheme.foregroundColor,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],
@@ -240,6 +244,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       centerTitle: true,
       actions: [
         IconButton(
+          tooltip: AppLocalizations.of(context)!.roomInfo,
           icon: Icon(Icons.info_outline, color: Theme.of(context).appBarTheme.foregroundColor),
           onPressed: () => showRoomInfoDialog(
             context: context,
@@ -269,6 +274,10 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       builder: (context, roomProvider, _) {
         final seats = roomProvider.getSeats(widget.room.roomId);
         final occupiedCount = seats.where((s) => s.isOccupied).length;
+        final l10n = AppLocalizations.of(context)!;
+        final count = seats.isEmpty && roomProvider.seatError(widget.room.roomId) != null
+            ? l10n.seatCountUnavailable
+            : l10n.studyingCount(occupiedCount);
 
         final isDark = Theme.of(context).brightness == Brightness.dark;
         final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
@@ -292,15 +301,17 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
             children: [
               Icon(Icons.people_outline, color: primaryColor),
               const SizedBox(width: 8),
-              Text(
-                '$occupiedCount studying',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: primaryColor,
+              Expanded(
+                child: Text(
+                  count,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: primaryColor,
+                  ),
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               _buildSeatActionButton(),
             ],
           ),
@@ -337,11 +348,21 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
 
   void _showAlreadySeatedMessage(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('You are already seated!')),
+      SnackBar(content: Text(AppLocalizations.of(context)!.alreadySeated)),
     );
   }
 
   Future<void> _handleSitRequest(BuildContext context, Seat seat) async {
+    if (_sitFlowActive) return;
+    _sitFlowActive = true;
+    try {
+      await _confirmAndSit(context, seat);
+    } finally {
+      _sitFlowActive = false;
+    }
+  }
+
+  Future<void> _confirmAndSit(BuildContext context, Seat seat) async {
     // 着席前に最新の席データを取得（競合防止）
     await context.read<RoomProvider>().fetchSeats(widget.room.roomId);
     if (!context.mounted) return;
@@ -367,6 +388,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
 
     final userSettings = context.read<UserSettingsProvider>();
     final authProvider = context.read<AuthProvider>();
+    final signedInUserId = authProvider.isSignedIn ? authProvider.userId : null;
     final l10n = AppLocalizations.of(context)!;
 
     final photoUrl = googleAvatarUrl(authProvider, userSettings);
@@ -379,13 +401,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
           countryCode: userSettings.countryCode,
           iconSeed: userSettings.iconSeed,
           photoUrl: photoUrl,
-          notificationTitle: l10n.notificationStudyingAt(widget.room.name),
-          notificationSessionStarted: l10n.notificationSessionStarted,
-          notificationStudyingFormat: l10n.notificationStudying('{duration}'),
-          notificationFocusRemaining: l10n.notificationFocusRemaining('{duration}'),
-          notificationBreakRemaining: l10n.notificationBreakRemaining('{duration}'),
-          notificationFocusFinished: l10n.notificationFocusFinished,
-          notificationBreakFinished: l10n.notificationBreakFinished,
+
         );
 
     if (!context.mounted) return;
@@ -393,7 +409,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('You are now seated at seat ${seat.seatNumber}!'),
+          content: Text(l10n.sitSuccess(seat.seatNumber)),
           backgroundColor: Colors.green,
         ),
       );
@@ -403,7 +419,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
             seatNumber: seat.seatNumber,
             isOccupied: true,
             user: SeatUser(
-              userId: userSettings.iconSeed,
+              userId: signedInUserId ?? userSettings.iconSeed,
               displayName: userSettings.displayName,
               countryCode: userSettings.countryCode,
               iconSeed: userSettings.iconSeed,
@@ -411,11 +427,11 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
               statusMessage: '',
             ),
             sessionStartedAt: context.read<SessionProvider>().sessionStartedAt,
+            replacesUserSeat: signedInUserId != null,
           );
     } else {
-      final error = context.read<SessionProvider>().error;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to sit: $error'), backgroundColor: Colors.red),
+        SnackBar(content: Text(l10n.sitFailed), backgroundColor: Colors.red),
       );
     }
   }
@@ -425,7 +441,12 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     setState(() => _leaveFlowActive = true);
     try {
       if (!session.isFinalizing) {
-        final confirmed = await showLeaveConfirmationDialog(context: context);
+        final leavingOtherRoom = session.currentRoomId != widget.room.roomId;
+        final confirmed = await showLeaveConfirmationDialog(
+          context: context,
+          roomName: leavingOtherRoom ? session.currentRoomName ?? session.currentRoomId : null,
+          seatNumber: session.seatNumber,
+        );
         if (confirmed != true || !mounted) return;
       }
 
@@ -482,8 +503,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     };
     final messenger = ScaffoldMessenger.of(context)..clearSnackBars();
     final record = result.record;
-    if (record.durationSeconds == 0 ||
-        !record.isVisibleTo(session.historyOwnerId)) {
+    if (!result.showSummary || !record.isVisibleTo(session.historyOwnerId)) {
       messenger.showSnackBar(SnackBar(content: Text(warning ?? l10n.leftSeat)));
       return;
     }

@@ -310,7 +310,7 @@ void main() {
     expect(await session.sit('fuji', 1), true);
   });
 
-  test('network failure still saves locally and returns a distinct warning',
+  test('offline leave saves once and can retry after a restart',
       () async {
     final api = MockApiService();
     final history = History();
@@ -321,16 +321,29 @@ void main() {
     when(() => history.saveSession(any())).thenAnswer((_) async {});
     final session =
         SessionProvider(apiService: api, historyRepository: history);
-    addTearDown(session.dispose);
     expect(await session.sit('fuji', 1), true);
     session.updateDuration(12);
 
     final result = await session.leave() as LeaveCompleted;
     expect(result.record.durationSeconds, 12);
     expect(result.serverFailure, LeaveServerFailure.connection);
+    expect(result.showSummary, true);
+    expect(session.isFinalizing, true);
+    expect(await session.sit('fuji', 2), false);
+    session.dispose();
+
+    final recovered = SessionProvider(apiService: api, historyRepository: history);
+    addTearDown(recovered.dispose);
+    expect(await recovered.restoreSessionIfNeeded(), true);
+    expect(recovered.isFinalizing, true);
+    when(() => api.leave('fuji', 'offline', 12))
+        .thenAnswer((_) async => createMockLeaveResponse());
+    final retry = await recovered.leave() as LeaveCompleted;
+    expect(retry.serverFailure, isNull);
+    expect(retry.showSummary, false);
+    expect(recovered.state, SessionState.idle);
     verify(() => history.saveSession(result.record)).called(1);
-    expect(await session.leave(), LeaveFailure.unavailable);
-    expect(session.state, SessionState.idle);
+    verifyNoMoreInteractions(history);
   });
 
   test('sign-in does not transfer guest record and other owners cannot restore',

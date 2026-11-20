@@ -1,10 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:jdenticon_dart/jdenticon_dart.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:country_flags/country_flags.dart';
 import '../models/models.dart';
+import 'seat_elapsed_duration.dart';
 
 /// A widget that displays a single seat in the virtual study room.
 /// 
@@ -214,59 +213,21 @@ class SeatWidget extends StatelessWidget {
   }
 }
 
-class _DurationBadge extends StatefulWidget {
+class _DurationBadge extends StatelessWidget {
   const _DurationBadge({required this.seat, required this.now});
 
   final Seat seat;
   final DateTime Function() now;
 
   @override
-  State<_DurationBadge> createState() => _DurationBadgeState();
-}
+  Widget build(BuildContext context) => SeatElapsedDuration(
+        seat: seat,
+        now: now,
+        builder: _buildBadge,
+      );
 
-class _DurationBadgeState extends State<_DurationBadge> {
-  Timer? _refreshTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    _scheduleRefresh();
-  }
-
-  @override
-  void didUpdateWidget(_DurationBadge oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.seat.sessionStartedAt != widget.seat.sessionStartedAt ||
-        oldWidget.now != widget.now) {
-      _refreshTimer?.cancel();
-      _scheduleRefresh();
-    }
-  }
-
-  void _scheduleRefresh() {
-    if (widget.seat.sessionStartedAt == null) return;
-
-    final elapsed = widget.seat.elapsedAt(widget.now());
-    const minute = Duration.millisecondsPerMinute;
-    final remainder = elapsed.inMilliseconds.remainder(minute);
-    // Negative elapsed minutes truncate toward zero just after the boundary.
-    final delay = elapsed.inMinutes < 0 ? 1 - remainder : minute - remainder;
-    _refreshTimer = Timer(Duration(milliseconds: delay), () {
-      setState(() {});
-      _scheduleRefresh();
-    });
-  }
-
-  @override
-  void dispose() {
-    _refreshTimer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildBadge(BuildContext context, Duration duration) {
     final theme = Theme.of(context);
-    final duration = widget.seat.elapsedAt(widget.now());
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
 

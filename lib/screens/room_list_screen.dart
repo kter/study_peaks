@@ -1,14 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:jdenticon_dart/jdenticon_dart.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../l10n/app_localizations.dart';
+import '../models/room.dart';
 import '../providers/auth_provider.dart';
 import '../providers/room_provider.dart';
 import '../providers/session_provider.dart';
 import '../providers/timer_provider.dart';
 import '../providers/user_settings_provider.dart';
 import '../utils/error_localization.dart';
+import '../services/notification_service.dart';
 import '../widgets/room_card.dart';
 import 'room_detail_screen.dart';
 import 'study_history_screen.dart';
@@ -22,51 +26,79 @@ class RoomListScreen extends StatefulWidget {
   State<RoomListScreen> createState() => _RoomListScreenState();
 }
 
-class _RoomListScreenState extends State<RoomListScreen> {
+class _RoomListScreenState extends State<RoomListScreen>
+    with WidgetsBindingObserver {
+  late final StreamSubscription<void> _sessionTaps;
+
   @override
   void initState() {
     super.initState();
-    // Fetch rooms and restore session on init
+    WidgetsBinding.instance.addObserver(this);
+    _sessionTaps = NotificationService().sessionTaps.listen((_) => _openActiveRoom());
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final roomProvider = context.read<RoomProvider>();
-      final sessionProvider = context.read<SessionProvider>();
-      
-      // Fetch rooms first
-      await roomProvider.fetchRooms();
-      
-      
-      // Update TimerProvider with localized strings
-      if (mounted) {
-        final l10n = AppLocalizations.of(context)!;
-        context.read<TimerProvider>().updateLocalization(
-          focusFinishedTitle: l10n.notificationFocusFinished,
-          breakFinishedTitle: l10n.notificationBreakFinished,
-          focusFinishedBody: l10n.notificationTimeForBreak,
-          breakFinishedBody: l10n.notificationTimeToFocus,
-        );
-      }
-
-      // Recover the saved session before trying to navigate to its room.
-      final restored = await sessionProvider.restoreSessionIfNeeded();
-      if (restored && mounted) {
-        // Find the room the user was in and navigate to it
-        final roomId = sessionProvider.currentRoomId;
-        if (roomId != null) {
-          final room = roomProvider.rooms.where((r) => r.roomId == roomId).firstOrNull;
-          if (room != null) {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => RoomDetailScreen(room: room),
-              ),
-            );
-          }
-        }
-      }
+      if (!mounted) return;
+      final rooms = context.read<RoomProvider>();
+      final session = context.read<SessionProvider>();
+      await rooms.fetchRooms();
+      if (!mounted) return;
+      final restored = await session.restoreSessionIfNeeded();
+      if (restored && mounted) _openActiveRoom();
     });
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final l10n = AppLocalizations.of(context)!;
+    context.read<TimerProvider>().updateLocalization(
+      focusFinishedTitle: l10n.notificationFocusFinished,
+      breakFinishedTitle: l10n.notificationBreakFinished,
+      focusFinishedBody: l10n.notificationTimeForBreak,
+      breakFinishedBody: l10n.notificationTimeToFocus,
+    );
+    context.read<SessionProvider>().setNotificationLocale(Localizations.localeOf(context).languageCode);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(context.read<SessionProvider>().refreshStudyNotification());
+    }
+  }
+
+  @override
+  void dispose() {
+    _sessionTaps.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  String _roomRouteName(String roomId) => '/rooms/$roomId';
+
+  Route<void> _roomRoute(Room room) => MaterialPageRoute<void>(
+        settings: RouteSettings(name: _roomRouteName(room.roomId)),
+        builder: (_) => RoomDetailScreen(room: room),
+      );
+
+  void _openActiveRoom() {
+    if (!mounted) return;
+    final roomId = context.read<SessionProvider>().currentRoomId;
+    if (roomId == null) return;
+    final room = context.read<RoomProvider>().getRoom(roomId);
+    if (room == null) return;
+
+    final navigator = Navigator.of(context);
+    var roomOpened = false;
+    navigator.popUntil((route) {
+      roomOpened = route.settings.name == _roomRouteName(roomId);
+      return roomOpened || route.isFirst;
+    });
+    if (!roomOpened) navigator.push(_roomRoute(room));
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
@@ -81,11 +113,15 @@ class _RoomListScreenState extends State<RoomListScreen> {
               size: 28,
             ),
             const SizedBox(width: 8),
-            Text(
-              'Global Study Peaks',
+            Flexible(
+              child: Text(
+              l10n.appTitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: Theme.of(context).appBarTheme.foregroundColor,
                 fontWeight: FontWeight.bold,
+              ),
               ),
             ),
           ],
@@ -94,7 +130,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.history),
-            tooltip: AppLocalizations.of(context)!.studyHistory,
+            tooltip: l10n.studyHistory,
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
@@ -108,6 +144,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
               final photoUrl = googleAvatarUrl(auth, userSettings);
               
               return IconButton(
+                tooltip: l10n.profileSettings,
                 icon: photoUrl != null
                     ? CircleAvatar(
                         radius: 14,
@@ -142,7 +179,6 @@ class _RoomListScreenState extends State<RoomListScreen> {
             );
           }
 
-          final l10n = AppLocalizations.of(context)!;
           final roomsError = provider.roomsError;
           return RefreshIndicator(
             onRefresh: provider.fetchRooms,
@@ -189,7 +225,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Choose Your Peak',
+                          l10n.chooseYourPeak,
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -198,7 +234,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Join a virtual study room and start focusing',
+                          l10n.joinRoomSubtitle,
                           style: TextStyle(
                             fontSize: 14,
                             color: Theme.of(context).brightness == Brightness.dark 
@@ -213,29 +249,32 @@ class _RoomListScreenState extends State<RoomListScreen> {
                 // Room grid
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  sliver: SliverGrid(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: 0.9,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final room = provider.rooms[index];
-                        return RoomCard(
-                          room: room,
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) => RoomDetailScreen(room: room),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                      childCount: provider.rooms.length,
-                    ),
+                  sliver: SliverLayoutBuilder(
+                    builder: (context, constraints) {
+                      final cards = SliverChildBuilderDelegate(
+                        (context, index) {
+                          final room = provider.rooms[index];
+                          return RoomCard(
+                            room: room,
+                            onTap: () => Navigator.of(context).push(_roomRoute(room)),
+                          );
+                        },
+                        childCount: provider.rooms.length,
+                      );
+                      final textWidth = MediaQuery.textScalerOf(context).scale(16);
+                      if (constraints.crossAxisExtent < 350 || textWidth > 18) {
+                        return SliverList(delegate: cards);
+                      }
+                      return SliverGrid(
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          childAspectRatio: 0.9,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                        ),
+                        delegate: cards,
+                      );
+                    },
                   ),
                 ),
                 const SliverToBoxAdapter(

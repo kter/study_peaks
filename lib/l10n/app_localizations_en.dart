@@ -200,7 +200,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get lockTaskDialogBody =>
-      'To help you stay focused, other apps will be blocked.\nTo unpin, long-press the Back and Recent buttons together.\n\nNote: Android will ask for confirmation after this.';
+      'Screen pinning keeps this app in view while you focus. Android will ask for confirmation and show how to unpin.';
 
   @override
   String get lockTaskDialogPinAndStart => 'Pin & Start';
@@ -212,7 +212,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get lockTaskDialogCancel => 'Cancel';
 
   @override
-  String get lockTaskUnpinHint => 'Unpin: long-press Back + Recent';
+  String get lockTaskUnpinHint => 'To unpin, follow the Android instructions.';
 
   @override
   String get lockTaskExitedMessage => 'Screen pinning was released';
@@ -435,4 +435,191 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get weeklyGoalCorrectDateConfirm =>
       'Confirm that your device date is correct. This clears goal settings for later weeks on this device.';
+
+  @override
+  String get profileSettings => 'Profile Settings';
+
+  @override
+  String get account => 'Account';
+
+  @override
+  String get displayName => 'Display Name';
+
+  @override
+  String get displayNameHint => 'Enter your display name';
+
+  @override
+  String get saveDisplayName => 'Save display name';
+
+  @override
+  String get displayNameSaved => 'Name saved!';
+
+  @override
+  String get country => 'Country';
+
+  @override
+  String get regenerateIcon => 'Regenerate Icon';
+
+  @override
+  String get iconRegenerated => 'Icon regenerated!';
+
+  @override
+  String get signedInWithGoogle => 'Signed in with Google';
+
+  @override
+  String get signedOutSuccessfully => 'Signed out successfully';
+
+  @override
+  String get signingIn => 'Signing in…';
+
+  @override
+  String get joinRoom => 'Join';
+
+  @override
+  String roomOccupancy(int current, int total) {
+    return '$current / $total studying';
+  }
+
+  @override
+  String occupiedPercent(int percent) {
+    return '$percent% occupied';
+  }
+
+  @override
+  String get roomInfo => 'Room information';
+
+  @override
+  String roomCapacity(int count) {
+    return 'Capacity: $count seats';
+  }
+
+  @override
+  String roomCurrentOccupancy(int count) {
+    return 'Currently: $count studying';
+  }
+
+  @override
+  String studyingCount(int count) {
+    return '$count studying';
+  }
+
+  @override
+  String get noSeatsAvailable => 'No seats available';
+
+  @override
+  String get loadSeatsFailed => 'Could not load seats.';
+
+  @override
+  String get seatCountUnavailable => 'Seat count unavailable';
+
+  @override
+  String seatTitle(int number) {
+    return 'Seat $number';
+  }
+
+  @override
+  String get sitQuestion => 'Do you want to take this seat and start studying?';
+
+  @override
+  String sitSuccess(int number) {
+    return 'You are now seated at seat $number!';
+  }
+
+  @override
+  String get sitFailed => 'Could not take this seat.';
+
+  @override
+  String get alreadySeated => 'You are already seated!';
+
+  @override
+  String leaveSeatInRoom(int number, String roomName) {
+    return 'Leave seat $number in $roomName?';
+  }
+
+  @override
+  String leaveRoom(String roomName) {
+    return 'Leave your seat in $roomName?';
+  }
+
+  @override
+  String get expandTimer => 'Expand timer';
+
+  @override
+  String get collapseTimer => 'Collapse timer';
+
+  @override
+  String get focusTime => 'Focus Time';
+
+  @override
+  String get breakTime => 'Break Time';
+
+  @override
+  String cyclesCompleted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cycles completed',
+      one: '1 cycle completed',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String seatedFor(String duration) {
+    return 'Seated for $duration';
+  }
+
+  @override
+  String notificationPaused(String duration) {
+    return 'Paused · $duration';
+  }
+
+  @override
+  String notificationFocusReady(String duration) {
+    return 'Ready to focus · $duration';
+  }
+
+  @override
+  String notificationBreakReady(String duration) {
+    return 'Ready for a break · $duration';
+  }
+
+  @override
+  String countryName(String code) {
+    String _temp0 = intl.Intl.selectLogic(
+      code,
+      {
+        'JP': 'Japan',
+        'US': 'United States',
+        'GB': 'United Kingdom',
+        'CN': 'China',
+        'KR': 'South Korea',
+        'DE': 'Germany',
+        'FR': 'France',
+        'IT': 'Italy',
+        'ES': 'Spain',
+        'BR': 'Brazil',
+        'IN': 'India',
+        'AU': 'Australia',
+        'CA': 'Canada',
+        'MX': 'Mexico',
+        'RU': 'Russia',
+        'TW': 'Taiwan',
+        'SG': 'Singapore',
+        'TH': 'Thailand',
+        'VN': 'Vietnam',
+        'PH': 'Philippines',
+        'other': '$code',
+      },
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String notificationSessionAt(String roomName) {
+    return 'Study session at $roomName';
+  }
+
+  @override
+  String get notificationTimerReady => 'Ready to start';
 }

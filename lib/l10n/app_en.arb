@@ -90,11 +90,11 @@
   "notificationTimeToFocus": "Time to focus.",
   "lockScreenDuringFocus": "Lock screen during focus",
   "lockTaskDialogTitle": "Start Screen Pinning",
-  "lockTaskDialogBody": "To help you stay focused, other apps will be blocked.\nTo unpin, long-press the Back and Recent buttons together.\n\nNote: Android will ask for confirmation after this.",
+  "lockTaskDialogBody": "Screen pinning keeps this app in view while you focus. Android will ask for confirmation and show how to unpin.",
   "lockTaskDialogPinAndStart": "Pin & Start",
   "lockTaskDialogStartWithoutLock": "Start without Pinning",
   "lockTaskDialogCancel": "Cancel",
-  "lockTaskUnpinHint": "Unpin: long-press Back + Recent",
+  "lockTaskUnpinHint": "To unpin, follow the Android instructions.",
   "lockTaskExitedMessage": "Screen pinning was released",
   "studyHistory": "Study History",
   "historyToday": "Today",
@@ -167,5 +167,158 @@
   "weeklyGoalWeekChanged": "The week has changed. Open this week’s goal to edit it.",
   "weeklyGoalDateEarlier": "The device date is before the latest saved week. Editing is available from that week onward.",
   "weeklyGoalCorrectDate": "Use corrected date",
-  "weeklyGoalCorrectDateConfirm": "Confirm that your device date is correct. This clears goal settings for later weeks on this device."
+  "weeklyGoalCorrectDateConfirm": "Confirm that your device date is correct. This clears goal settings for later weeks on this device.",
+  "profileSettings": "Profile Settings",
+  "account": "Account",
+  "displayName": "Display Name",
+  "displayNameHint": "Enter your display name",
+  "saveDisplayName": "Save display name",
+  "displayNameSaved": "Name saved!",
+  "country": "Country",
+  "regenerateIcon": "Regenerate Icon",
+  "iconRegenerated": "Icon regenerated!",
+  "signedInWithGoogle": "Signed in with Google",
+  "signedOutSuccessfully": "Signed out successfully",
+  "signingIn": "Signing in…",
+  "joinRoom": "Join",
+  "roomOccupancy": "{current} / {total} studying",
+  "@roomOccupancy": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "occupiedPercent": "{percent}% occupied",
+  "@occupiedPercent": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "roomInfo": "Room information",
+  "roomCapacity": "Capacity: {count} seats",
+  "@roomCapacity": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "roomCurrentOccupancy": "Currently: {count} studying",
+  "@roomCurrentOccupancy": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "studyingCount": "{count} studying",
+  "@studyingCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "noSeatsAvailable": "No seats available",
+  "loadSeatsFailed": "Could not load seats.",
+  "seatCountUnavailable": "Seat count unavailable",
+  "seatTitle": "Seat {number}",
+  "@seatTitle": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "sitQuestion": "Do you want to take this seat and start studying?",
+  "sitSuccess": "You are now seated at seat {number}!",
+  "@sitSuccess": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "sitFailed": "Could not take this seat.",
+  "alreadySeated": "You are already seated!",
+  "leaveSeatInRoom": "Leave seat {number} in {roomName}?",
+  "@leaveSeatInRoom": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      },
+      "roomName": {
+        "type": "String"
+      }
+    }
+  },
+  "leaveRoom": "Leave your seat in {roomName}?",
+  "@leaveRoom": {
+    "placeholders": {
+      "roomName": {
+        "type": "String"
+      }
+    }
+  },
+  "expandTimer": "Expand timer",
+  "collapseTimer": "Collapse timer",
+  "focusTime": "Focus Time",
+  "breakTime": "Break Time",
+  "cyclesCompleted": "{count, plural, =1{1 cycle completed} other{{count} cycles completed}}",
+  "@cyclesCompleted": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seatedFor": "Seated for {duration}",
+  "@seatedFor": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "notificationPaused": "Paused · {duration}",
+  "@notificationPaused": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "notificationFocusReady": "Ready to focus · {duration}",
+  "@notificationFocusReady": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "notificationBreakReady": "Ready for a break · {duration}",
+  "@notificationBreakReady": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "countryName": "{code, select, JP{Japan} US{United States} GB{United Kingdom} CN{China} KR{South Korea} DE{Germany} FR{France} IT{Italy} ES{Spain} BR{Brazil} IN{India} AU{Australia} CA{Canada} MX{Mexico} RU{Russia} TW{Taiwan} SG{Singapore} TH{Thailand} VN{Vietnam} PH{Philippines} other{{code}}}",
+  "@countryName": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "notificationSessionAt": "Study session at {roomName}",
+  "@notificationSessionAt": {"placeholders": {"roomName": {"type": "String"}}},
+  "notificationTimerReady": "Ready to start"
 }

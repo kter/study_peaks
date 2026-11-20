@@ -148,6 +148,18 @@ void main() {
         session.dailySeconds);
   });
 
+  test('splitting a focus interval at midnight preserves its whole second', () {
+    final session = record(
+      'leap-day',
+      '2028-02-29T23:59:59.999500Z',
+      '2028-03-01T00:00:00.999900Z',
+    );
+
+    expect(session.durationSeconds, 1);
+    expect(session.dailySeconds[DateTime.utc(2028, 3, 1)], 1);
+    expect(StudyHistory([session]).totalSeconds, 1);
+  });
+
   test('empty history returns complete leap month of zeros', () async {
     final days = await repository.getMonth(
         ownerId: owner, containing: DateTime(2028, 2));
