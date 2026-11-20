@@ -96,8 +96,22 @@ void main() {
     });
   });
 
+  test('beginning finalization releases pinning before the leave request',
+      () async {
+    await timerProvider.startWithLock();
+    expect(timerProvider.isScreenLocked, true);
+
+    timerProvider.freezeForFinalization();
+
+    expect(timerProvider.isScreenLocked, false);
+    expect(timerProvider.isRunning, false);
+    verify(() => mockLockTaskService.stopLockTask()).called(1);
+    verify(() => mockLockTaskService.setKeepScreenOn(false)).called(1);
+  });
+
   group('TimerProvider - Start with Lock', () {
-    test('startWithLock calls LockTaskService.startLockTask and setKeepScreenOn',
+    test(
+        'startWithLock calls LockTaskService.startLockTask and setKeepScreenOn',
         () async {
       await timerProvider.startWithLock();
 
@@ -154,8 +168,7 @@ void main() {
   });
 
   group('TimerProvider - Manual Lock Task Exit', () {
-    test('onLockTaskExited callback is set up correctly',
-        () async {
+    test('onLockTaskExited callback is set up correctly', () async {
       var callbackCalled = false;
       timerProvider.onLockTaskExited = () => callbackCalled = true;
 

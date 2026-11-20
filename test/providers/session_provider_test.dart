@@ -200,7 +200,8 @@ void main() {
       provider.dispose();
     });
 
-    test('leave reports a request failure with mock fallback enabled', () async {
+    test('leave reports a request failure with mock fallback enabled',
+        () async {
       final provider = SessionProvider(
         apiService: mockApiService,
         useMockFallback: true,
@@ -215,6 +216,8 @@ void main() {
       final result = await provider.leave() as LeaveCompleted;
 
       expect(result.serverFailure, LeaveServerFailure.request);
+      expect(provider.isFinalizing, false);
+      expect(await provider.sit('room-1', 5), true);
     });
 
     test('leave reports unavailable when not seated', () async {

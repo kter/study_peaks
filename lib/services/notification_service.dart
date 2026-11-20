@@ -130,47 +130,50 @@ class NotificationService {
     required bool isRunning,
     required bool waitingToStart,
     required int seconds,
-  }) =>
-      _serialize(() async {
-        if (!_isInitialized || !isCurrentSession()) return;
-        final granted = requestPermissionIfNeeded
-            ? await requestPermission()
-            : await FlutterForegroundTask.checkNotificationPermission() ==
-                NotificationPermission.granted;
-        if (!granted || !isCurrentSession()) return;
+  }) {
+    final capturedAt = DateTime.now();
+    return _serialize(() async {
+      if (!_isInitialized || !isCurrentSession()) return;
+      final granted = requestPermissionIfNeeded
+          ? await requestPermission()
+          : await FlutterForegroundTask.checkNotificationPermission() ==
+              NotificationPermission.granted;
+      if (!granted || !isCurrentSession()) return;
 
-        final data = <String, Object?>{
-          'sessionId': sessionId,
-          'roomName': roomName,
-          'locale': locale,
-          ..._timerStateData(
-            mode: mode,
-            pomodoroPhase: pomodoroPhase,
-            isRunning: isRunning,
-            waitingToStart: waitingToStart,
-            seconds: seconds,
+      final data = <String, Object?>{
+        'sessionId': sessionId,
+        'roomName': roomName,
+        'locale': locale,
+        ..._timerStateData(
+          mode: mode,
+          pomodoroPhase: pomodoroPhase,
+          isRunning: isRunning,
+          waitingToStart: waitingToStart,
+          seconds: seconds,
+          capturedAt: capturedAt,
+        ),
+      };
+      final prefs = await SharedPreferences.getInstance();
+      if (!isCurrentSession()) return;
+      await prefs.setString(
+          StudyPersistenceKeys.notificationState, jsonEncode(data));
+      if (!isCurrentSession()) return;
+
+      if (await FlutterForegroundTask.isRunningService) {
+        FlutterForegroundTask.sendDataToTask(data);
+      } else {
+        final copy = studyNotificationCopy(data, DateTime.now());
+        await FlutterForegroundTask.startService(
+          notificationTitle: copy.title!,
+          notificationText: copy.body,
+          notificationIcon: const NotificationIcon(
+            metaDataName: AppConfig.notificationIconMetaDataName,
           ),
-        };
-        final prefs = await SharedPreferences.getInstance();
-        if (!isCurrentSession()) return;
-        await prefs.setString(
-            StudyPersistenceKeys.notificationState, jsonEncode(data));
-        if (!isCurrentSession()) return;
-
-        if (await FlutterForegroundTask.isRunningService) {
-          FlutterForegroundTask.sendDataToTask(data);
-        } else {
-          final copy = studyNotificationCopy(data, DateTime.now());
-          await FlutterForegroundTask.startService(
-            notificationTitle: copy.title!,
-            notificationText: copy.body,
-            notificationIcon: const NotificationIcon(
-              metaDataName: AppConfig.notificationIconMetaDataName,
-            ),
-            callback: _startCallback,
-          );
-        }
-      });
+          callback: _startCallback,
+        );
+      }
+    });
+  }
 
   /// Updates the snapshot consumed by the service's background isolate.
   Future<void> updateTimerState({
@@ -180,27 +183,30 @@ class NotificationService {
     bool waitingToStart = false,
     PomodoroPhase? pomodoroPhase,
     required int seconds,
-  }) =>
-      _serialize(() async {
-        final prefs = await SharedPreferences.getInstance();
-        final saved = prefs.getString(StudyPersistenceKeys.notificationState);
-        if (saved == null) return;
-        final state = jsonDecode(saved) as Map<String, dynamic>;
-        if (state['sessionId'] != sessionId) return;
-        final data = {
-          ...state,
-          ..._timerStateData(
-            mode: mode,
-            pomodoroPhase: pomodoroPhase,
-            isRunning: isRunning,
-            waitingToStart: waitingToStart,
-            seconds: seconds,
-          ),
-        };
-        await prefs.setString(
-            StudyPersistenceKeys.notificationState, jsonEncode(data));
-        FlutterForegroundTask.sendDataToTask(data);
-      });
+  }) {
+    final capturedAt = DateTime.now();
+    return _serialize(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString(StudyPersistenceKeys.notificationState);
+      if (saved == null) return;
+      final state = jsonDecode(saved) as Map<String, dynamic>;
+      if (state['sessionId'] != sessionId) return;
+      final data = {
+        ...state,
+        ..._timerStateData(
+          mode: mode,
+          pomodoroPhase: pomodoroPhase,
+          isRunning: isRunning,
+          waitingToStart: waitingToStart,
+          seconds: seconds,
+          capturedAt: capturedAt,
+        ),
+      };
+      await prefs.setString(
+          StudyPersistenceKeys.notificationState, jsonEncode(data));
+      FlutterForegroundTask.sendDataToTask(data);
+    });
+  }
 
   Map<String, Object?> _timerStateData({
     required TimerMode mode,
@@ -208,6 +214,7 @@ class NotificationService {
     required bool isRunning,
     required bool waitingToStart,
     required int seconds,
+    required DateTime capturedAt,
   }) =>
       {
         'mode': mode.index,
@@ -215,7 +222,7 @@ class NotificationService {
         'seconds': seconds,
         'isRunning': isRunning,
         'waitingToStart': waitingToStart,
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'timestamp': capturedAt.millisecondsSinceEpoch,
       };
 
   Future<void> stopStudySession() => _serialize(() async {

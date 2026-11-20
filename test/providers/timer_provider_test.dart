@@ -109,15 +109,25 @@ void main() {
     final timer = TimerProvider(now: () => now, notificationService: mockNotificationService);
     addTearDown(timer.dispose);
     timer.start();
+    now = initial.add(const Duration(seconds: 45));
+    expect(timer.formattedTime, '00:45');
     now = initial.subtract(const Duration(seconds: 30));
-    expect(timer.formattedTime, '00:00');
+    expect(timer.formattedTime, '00:45');
+    now = now.add(const Duration(seconds: 4));
+    expect(timer.formattedTime, '00:49');
+    expect(timer.totalStudySeconds, 49);
 
     timer.pause();
     timer.setMode(TimerMode.pomodoro);
     now = initial;
     timer.start();
+    now = initial.add(const Duration(minutes: 10));
+    expect(timer.formattedTime, '15:00');
     now = initial.subtract(const Duration(minutes: 5));
-    expect(timer.formattedTime, '25:00');
+    expect(timer.formattedTime, '15:00');
+    now = now.add(const Duration(seconds: 5));
+    expect(timer.formattedTime, '14:55');
+    expect(timer.totalStudySeconds, 654);
   });
 
   test('short focus periods accumulate across pause and resume', () {

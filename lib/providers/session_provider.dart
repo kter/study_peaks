@@ -325,14 +325,19 @@ class SessionProvider extends ChangeNotifier {
       await _persistSession();
 
       LeaveServerFailure? serverFailure;
+      var retryRelease = false;
       if (!_remoteLeaveCompleted) {
         try {
           await _leaveOnServer(record);
           _remoteLeaveCompleted = true;
         } catch (error) {
-          serverFailure = isTransportError(error)
+          final connectionFailure = isTransportError(error);
+          serverFailure = connectionFailure
               ? LeaveServerFailure.connection
               : LeaveServerFailure.request;
+          retryRelease = connectionFailure ||
+              (error is ApiException &&
+                  (error.statusCode >= 500 || error.statusCode == 408 || error.statusCode == 429));
         }
         if (_remoteLeaveCompleted) await _persistSession();
       }
@@ -342,7 +347,7 @@ class SessionProvider extends ChangeNotifier {
         await _historyRepository.saveSession(record);
         _historySaved = true;
       }
-      if (serverFailure != null) {
+      if (retryRelease) {
         // Retain the frozen session ID for an explicit, idempotent leave retry.
         _cancelSyncTimer();
         await _persistSession();
@@ -356,7 +361,7 @@ class SessionProvider extends ChangeNotifier {
       _reset();
       await _stopStudyNotification();
       if (seatAlreadyReleased) _error = seatReleasedMessageKey;
-      return LeaveCompleted(record, null, showSummary: showSummary);
+      return LeaveCompleted(record, serverFailure, showSummary: showSummary);
     } catch (error) {
       debugPrint('Could not finalize study record: ${error.runtimeType}');
       if (seatAlreadyReleased) _error = 'historySaveFailed';

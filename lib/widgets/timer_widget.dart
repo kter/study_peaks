@@ -271,7 +271,8 @@ class TimerWidget extends StatelessWidget {
         color: isDark ? Colors.grey.shade800.withValues(alpha: 0.5) : Colors.grey.shade50,
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Row(
+      child: MergeSemantics(
+        child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.lock_outline, size: 16, color: primaryColor),
@@ -288,16 +289,14 @@ class TimerWidget extends StatelessWidget {
           const SizedBox(width: 4),
           SizedBox(
             height: 32,
-            child: Semantics(
-              label: l10n.lockScreenDuringFocus,
-              child: Switch(
-                value: timer.screenLockEnabled,
-                onChanged: timer.isRunning ? null : timer.setScreenLockEnabled,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
+            child: Switch(
+              value: timer.screenLockEnabled,
+              onChanged: timer.isRunning ? null : timer.setScreenLockEnabled,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
           ),
         ],
+        ),
       ),
     );
   }

@@ -17,6 +17,7 @@ class MainActivity : FlutterActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var pendingPin: MethodChannel.Result? = null
     private var promptShown = false
+    private var focusReturnedAt: Long? = null
     private var promptDeadline = 0L
     private var pinned = false
 
@@ -25,8 +26,10 @@ class MainActivity : FlutterActivity() {
             val active = isInLockTaskModeCompat()
             val pending = pendingPin
             if (pending != null) {
-                val dismissed = promptShown && hasWindowFocus()
-                val noPrompt = !promptShown && SystemClock.elapsedRealtime() >= promptDeadline
+                val now = SystemClock.elapsedRealtime()
+                val dismissed = hasWindowFocus() &&
+                    focusReturnedAt?.let { now - it >= 500 } == true
+                val noPrompt = !promptShown && now >= promptDeadline
                 if (active || dismissed || noPrompt) {
                     pendingPin = null
                     pinned = active
@@ -71,7 +74,8 @@ class MainActivity : FlutterActivity() {
         }
         pendingPin = result
         promptShown = false
-        promptDeadline = SystemClock.elapsedRealtime() + 3_000L
+        focusReturnedAt = null
+        promptDeadline = SystemClock.elapsedRealtime() + 5_000L
         try {
             startLockTask()
             handler.removeCallbacks(monitorPinning)
@@ -98,7 +102,10 @@ class MainActivity : FlutterActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (pendingPin != null && !hasFocus) promptShown = true
+        if (pendingPin != null) {
+            if (!hasFocus) promptShown = true
+            focusReturnedAt = if (hasFocus && promptShown) SystemClock.elapsedRealtime() else null
+        }
     }
 
     private fun isInLockTaskModeCompat(): Boolean {
