@@ -26,6 +26,28 @@ void main() {
     expect(prefs.containsKey(key), isFalse);
   });
 
+  test('notification copy uses seconds, locale, and the stopped state', () {
+    final state = <String, dynamic>{
+      'roomName': 'Mt. Fuji',
+      'locale': 'ja',
+      'mode': TimerMode.pomodoro.index,
+      'phase': PomodoroPhase.focus.index,
+      'isRunning': true,
+      'seconds': 30,
+      'timestamp': reportedAt.millisecondsSinceEpoch,
+    };
+    final later = reportedAt.add(const Duration(seconds: 12));
+
+    expect(studyNotificationCopy(state, later).body, '集中: 残り18秒');
+    state['isRunning'] = false;
+    expect(studyNotificationCopy(state, later).body, '一時停止中（30秒）');
+    state['waitingToStart'] = true;
+    state['phase'] = PomodoroPhase.shortBreak.index;
+    state['locale'] = 'en';
+    state['seconds'] = 300;
+    expect(studyNotificationCopy(state, later).body, 'Ready for a break · 5m');
+  });
+
   test('elapsed notification time includes time between delayed events', () {
     final startedAt = reportedAt.subtract(const Duration(seconds: 12));
 

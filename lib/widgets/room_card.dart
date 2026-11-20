@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/models.dart';
+import '../l10n/app_localizations.dart';
 
 /// A card widget displaying room information.
 class RoomCard extends StatelessWidget {
@@ -14,6 +15,7 @@ class RoomCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context) ?? lookupAppLocalizations(const Locale('en'));
     final occupancyPercent = room.currentOccupancy / room.capacity;
 
     return Card(
@@ -38,6 +40,7 @@ class RoomCard extends StatelessWidget {
             ),
           ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Mountain icon and name
@@ -70,7 +73,7 @@ class RoomCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${room.currentOccupancy} / ${room.capacity} studying',
+                          l10n.roomOccupancy(room.currentOccupancy, room.capacity),
                           style: TextStyle(
                             fontSize: 13,
                             color: Theme.of(context).brightness == Brightness.dark 
@@ -105,11 +108,13 @@ class RoomCard extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        '${(occupancyPercent * 100).toInt()}% occupied',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade500,
+                      Flexible(
+                        child: Text(
+                          l10n.occupiedPercent((occupancyPercent * 100).toInt()),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade500,
+                          ),
                         ),
                       ),
                       Container(
@@ -122,7 +127,7 @@ class RoomCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          'Join',
+                          l10n.joinRoom,
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.onPrimary,
                             fontSize: 12,

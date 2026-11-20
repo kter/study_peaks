@@ -22,27 +22,9 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
   late TextEditingController _nameController;
   String? _selectedCountry;
 
-  static const List<Map<String, String>> _countries = [
-    {'code': 'JP', 'name': 'Japan'},
-    {'code': 'US', 'name': 'United States'},
-    {'code': 'GB', 'name': 'United Kingdom'},
-    {'code': 'CN', 'name': 'China'},
-    {'code': 'KR', 'name': 'South Korea'},
-    {'code': 'DE', 'name': 'Germany'},
-    {'code': 'FR', 'name': 'France'},
-    {'code': 'IT', 'name': 'Italy'},
-    {'code': 'ES', 'name': 'Spain'},
-    {'code': 'BR', 'name': 'Brazil'},
-    {'code': 'IN', 'name': 'India'},
-    {'code': 'AU', 'name': 'Australia'},
-    {'code': 'CA', 'name': 'Canada'},
-    {'code': 'MX', 'name': 'Mexico'},
-    {'code': 'RU', 'name': 'Russia'},
-    {'code': 'TW', 'name': 'Taiwan'},
-    {'code': 'SG', 'name': 'Singapore'},
-    {'code': 'TH', 'name': 'Thailand'},
-    {'code': 'VN', 'name': 'Vietnam'},
-    {'code': 'PH', 'name': 'Philippines'},
+  static const _countries = [
+    'JP', 'US', 'GB', 'CN', 'KR', 'DE', 'FR', 'IT', 'ES', 'BR',
+    'IN', 'AU', 'CA', 'MX', 'RU', 'TW', 'SG', 'TH', 'VN', 'PH',
   ];
 
   @override
@@ -61,17 +43,19 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         elevation: 0,
         leading: IconButton(
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
           icon: Icon(Icons.arrow_back, color: Theme.of(context).appBarTheme.foregroundColor),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          'Profile Settings',
+          l10n.profileSettings,
           style: TextStyle(
             color: Theme.of(context).appBarTheme.foregroundColor,
             fontWeight: FontWeight.bold,
@@ -91,13 +75,13 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                 const SizedBox(height: 32),
 
                 // Display name section
-                _buildSectionTitle('Display Name'),
+                _buildSectionTitle(l10n.displayName),
                 const SizedBox(height: 12),
                 _buildNameField(context, userSettings),
                 const SizedBox(height: 24),
 
                 // Country section
-                _buildSectionTitle('Country'),
+                _buildSectionTitle(l10n.country),
                 const SizedBox(height: 12),
                 _buildCountrySelector(context, userSettings),
                 const SizedBox(height: 32),
@@ -291,14 +275,14 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                 await context.read<SessionProvider>().forceSync();
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Icon regenerated!'),
-                    duration: Duration(seconds: 1),
+                  SnackBar(
+                    content: Text(AppLocalizations.of(context)!.iconRegenerated),
+                    duration: const Duration(seconds: 1),
                   ),
                 );
               },
               icon: const Icon(Icons.refresh),
-              label: const Text('Regenerate Icon'),
+              label: Text(AppLocalizations.of(context)!.regenerateIcon),
               style: OutlinedButton.styleFrom(
                 foregroundColor: Theme.of(context).colorScheme.primary,
                 side: BorderSide(color: Theme.of(context).colorScheme.primary),
@@ -341,7 +325,7 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
         controller: _nameController,
         style: TextStyle(color: isDark ? Colors.white : Colors.black),
         decoration: InputDecoration(
-          hintText: 'Enter your display name',
+          hintText: AppLocalizations.of(context)!.displayNameHint,
           hintStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -354,15 +338,16 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
             vertical: 14,
           ),
           suffixIcon: IconButton(
+            tooltip: AppLocalizations.of(context)!.saveDisplayName,
             icon: Icon(Icons.check, color: primaryColor),
             onPressed: () async {
               await userSettings.setDisplayName(_nameController.text);
               if (context.mounted) {
                 FocusScope.of(context).unfocus();
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Name saved!'),
-                    duration: Duration(seconds: 1),
+                  SnackBar(
+                    content: Text(AppLocalizations.of(context)!.displayNameSaved),
+                    duration: const Duration(seconds: 1),
                   ),
                 );
               }
@@ -373,9 +358,9 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
           await userSettings.setDisplayName(value);
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Name saved!'),
-                duration: Duration(seconds: 1),
+              SnackBar(
+                content: Text(AppLocalizations.of(context)!.displayNameSaved),
+                duration: const Duration(seconds: 1),
               ),
             );
           }
@@ -419,21 +404,22 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
           color: isDark ? Colors.white : Colors.black,
           fontSize: 16,
         ),
+        isExpanded: true,
         items: _countries.map((country) {
           return DropdownMenuItem<String>(
-            value: country['code'],
+            value: country,
             child: Row(
               children: [
                 Container(
                   color: Colors.white,
                   child: CountryFlag.fromCountryCode(
-                    country['code']!,
+                    country,
                     height: 20,
                     width: 28,
                   ),
                 ),
                 const SizedBox(width: 12),
-                Text(country['name']!),
+                Expanded(child: Text(AppLocalizations.of(context)!.countryName(country))),
               ],
             ),
           );
@@ -532,7 +518,7 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Account',
+            AppLocalizations.of(context)!.account,
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -545,23 +531,22 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
               children: [
                 const Icon(Icons.check_circle, color: Colors.green, size: 20),
                 const SizedBox(width: 8),
-                Text(
-                  'Signed in with Google',
+                Expanded(child: Text(
+                  AppLocalizations.of(context)!.signedInWithGoogle,
                   style: TextStyle(
                      color: isDark ? Colors.white : Colors.black,
                   ),
-                ),
-                const Spacer(),
+                )),
                 TextButton(
                   onPressed: () async {
                     await auth.signOut();
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Signed out successfully')),
+                        SnackBar(content: Text(AppLocalizations.of(context)!.signedOutSuccessfully)),
                       );
                     }
                   },
-                  child: const Text('Sign Out'),
+                  child: Text(AppLocalizations.of(context)!.signOut),
                 ),
               ],
             ),
@@ -584,8 +569,8 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                         if (context.mounted) {
                           if (success) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Signed in successfully!'),
+                              SnackBar(
+                                content: Text(AppLocalizations.of(context)!.signedInSuccess),
                                 backgroundColor: Colors.green,
                               ),
                             );
@@ -609,7 +594,9 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.login),
-                label: Text(auth.isLoading ? 'Signing in...' : 'Sign in with Google'),
+                label: Text(auth.isLoading
+                    ? AppLocalizations.of(context)!.signingIn
+                    : AppLocalizations.of(context)!.signInWithGoogle),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
                   foregroundColor: Colors.white,

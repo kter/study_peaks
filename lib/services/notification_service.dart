@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
+import '../l10n/app_localizations.dart';
 import '../utils/formatters.dart';
 import '../models/timer_mode.dart';
 import 'study_persistence_keys.dart';
@@ -24,6 +27,19 @@ class NotificationService {
   }
 
   bool _isInitialized = false;
+  Future<void> _pendingOperation = Future.value();
+  final _sessionTaps = StreamController<void>.broadcast();
+
+  Stream<void> get sessionTaps => _sessionTaps.stream;
+
+  Future<void> _serialize(Future<void> Function() run) {
+    _pendingOperation =
+        _pendingOperation.then((_) => run()).catchError((Object error) {
+      debugPrint(
+          'Could not update the study notification: ${error.runtimeType}');
+    });
+    return _pendingOperation;
+  }
 
   /// Initialize the notification service.
   Future<void> initialize() async {
@@ -31,13 +47,18 @@ class NotificationService {
 
     await _setupLocalNotifications();
     _setupForegroundTask();
+    FlutterForegroundTask.initCommunicationPort();
+    FlutterForegroundTask.addTaskDataCallback((data) {
+      if (data == _openStudySession) _sessionTaps.add(null);
+    });
 
     _isInitialized = true;
     debugPrint('📢 NotificationService initialized');
   }
 
   Future<void> _setupLocalNotifications() async {
-    const androidSettings = AndroidInitializationSettings(AppConfig.notificationIconRes);
+    const androidSettings =
+        AndroidInitializationSettings(AppConfig.notificationIconRes);
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -66,7 +87,8 @@ class NotificationService {
         playSound: false,
       ),
       foregroundTaskOptions: ForegroundTaskOptions(
-        eventAction: ForegroundTaskEventAction.repeat(1000), // Update every second
+        eventAction:
+            ForegroundTaskEventAction.repeat(1000), // Update every second
         autoRunOnBoot: false,
         allowWakeLock: true,
         allowWifiLock: false,
@@ -77,11 +99,12 @@ class NotificationService {
   /// Request notification permission (required for Android 13+).
   Future<bool> requestPermission() async {
     try {
-      final notificationPermission = 
+      final notificationPermission =
           await FlutterForegroundTask.checkNotificationPermission();
       if (notificationPermission != NotificationPermission.granted) {
         debugPrint('📢 Requesting notification permission...');
-        final result = await FlutterForegroundTask.requestNotificationPermission();
+        final result =
+            await FlutterForegroundTask.requestNotificationPermission();
         debugPrint('📢 Notification permission result: $result');
         return result == NotificationPermission.granted;
       }
@@ -94,100 +117,96 @@ class NotificationService {
     }
   }
 
-  /// Start the foreground service for a study session.
-  /// 
-  /// [notificationTitle] - Localized title, e.g. "Studying at Denali"
-  /// [notificationText] - Localized text, e.g. "Session started - 0m"
-  Future<void> startStudySession({
-    required String notificationTitle,
-    required String notificationText,
-    required String studyingFormat,
+  /// Starts or refreshes the notification for the active seat session.
+  /// Resuming the app never prompts again for permission.
+  Future<void> ensureStudySession({
+    required String sessionId,
+    required String roomName,
+    required String locale,
+    required bool requestPermissionIfNeeded,
+    required bool Function() isCurrentSession,
+    required TimerMode mode,
+    required PomodoroPhase? pomodoroPhase,
     required bool isRunning,
-    TimerMode mode = TimerMode.normal,
-    PomodoroPhase? pomodoroPhase,
-    int? remainingSeconds,
-    String? focusRemainingFormat,
-    String? breakRemainingFormat,
-    String? focusFinishedText,
-    String? breakFinishedText,
-  }) async {
-    debugPrint('📢 Starting foreground service: $notificationTitle');
-    
-    // Request permission first (Android 13+)
-    final hasPermission = await requestPermission();
-    if (!hasPermission) {
-      debugPrint('📢 Notification permission denied, cannot start foreground service');
-      return;
-    }
-    
-    try {
-      // The task runs in a separate isolate. Save its state before starting it
-      // so it can initialize even if it isn't ready to receive messages yet.
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        StudyPersistenceKeys.notificationState,
-        jsonEncode({
+    required bool waitingToStart,
+    required int seconds,
+  }) =>
+      _serialize(() async {
+        if (!_isInitialized || !isCurrentSession()) return;
+        final granted = requestPermissionIfNeeded
+            ? await requestPermission()
+            : await FlutterForegroundTask.checkNotificationPermission() ==
+                NotificationPermission.granted;
+        if (!granted || !isCurrentSession()) return;
+
+        final data = <String, Object?>{
+          'sessionId': sessionId,
+          'roomName': roomName,
+          'locale': locale,
           ..._timerStateData(
             mode: mode,
             pomodoroPhase: pomodoroPhase,
-            seconds: remainingSeconds ?? 0,
             isRunning: isRunning,
+            waitingToStart: waitingToStart,
+            seconds: seconds,
           ),
-          'studyingFormat': studyingFormat,
-          'focusRemainingFormat': focusRemainingFormat,
-          'breakRemainingFormat': breakRemainingFormat,
-          'focusFinishedText': focusFinishedText,
-          'breakFinishedText': breakFinishedText,
-        }),
-      );
+        };
+        final prefs = await SharedPreferences.getInstance();
+        if (!isCurrentSession()) return;
+        await prefs.setString(
+            StudyPersistenceKeys.notificationState, jsonEncode(data));
+        if (!isCurrentSession()) return;
 
-      if (await FlutterForegroundTask.isRunningService) {
-        await FlutterForegroundTask.restartService();
-      } else {
-        await FlutterForegroundTask.startService(
-          notificationTitle: notificationTitle,
-          notificationText: notificationText,
-          notificationIcon: const NotificationIcon(
-            metaDataName: AppConfig.notificationIconMetaDataName,
-          ),
-          callback: _startCallback,
-        );
-      }
-    } catch (e) {
-      debugPrint('📢 Error starting foreground service: $e');
-    }
-  }
+        if (await FlutterForegroundTask.isRunningService) {
+          FlutterForegroundTask.sendDataToTask(data);
+        } else {
+          final copy = studyNotificationCopy(data, DateTime.now());
+          await FlutterForegroundTask.startService(
+            notificationTitle: copy.title!,
+            notificationText: copy.body,
+            notificationIcon: const NotificationIcon(
+              metaDataName: AppConfig.notificationIconMetaDataName,
+            ),
+            callback: _startCallback,
+          );
+        }
+      });
 
-  /// Update the timer state in the background task.
+  /// Updates the snapshot consumed by the service's background isolate.
   Future<void> updateTimerState({
+    String? sessionId,
     required TimerMode mode,
     required bool isRunning,
+    bool waitingToStart = false,
     PomodoroPhase? pomodoroPhase,
-    required int seconds, // Elapsed for Normal, Remaining for Pomodoro
-  }) async {
-    final data = _timerStateData(
-      mode: mode,
-      isRunning: isRunning,
-      pomodoroPhase: pomodoroPhase,
-      seconds: seconds,
-    );
-    final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString(StudyPersistenceKeys.notificationState);
-    // An update already in flight when the session stops can arrive late.
-    if (saved == null) return;
-    final state = jsonDecode(saved) as Map<String, dynamic>;
-    final saving = prefs.setString(
-      StudyPersistenceKeys.notificationState,
-      jsonEncode({...state, ...data}),
-    );
-    FlutterForegroundTask.sendDataToTask(data);
-    await saving;
-  }
+    required int seconds,
+  }) =>
+      _serialize(() async {
+        final prefs = await SharedPreferences.getInstance();
+        final saved = prefs.getString(StudyPersistenceKeys.notificationState);
+        if (saved == null) return;
+        final state = jsonDecode(saved) as Map<String, dynamic>;
+        if (state['sessionId'] != sessionId) return;
+        final data = {
+          ...state,
+          ..._timerStateData(
+            mode: mode,
+            pomodoroPhase: pomodoroPhase,
+            isRunning: isRunning,
+            waitingToStart: waitingToStart,
+            seconds: seconds,
+          ),
+        };
+        await prefs.setString(
+            StudyPersistenceKeys.notificationState, jsonEncode(data));
+        FlutterForegroundTask.sendDataToTask(data);
+      });
 
   Map<String, Object?> _timerStateData({
     required TimerMode mode,
-    required bool isRunning,
     required PomodoroPhase? pomodoroPhase,
+    required bool isRunning,
+    required bool waitingToStart,
     required int seconds,
   }) =>
       {
@@ -195,18 +214,18 @@ class NotificationService {
         'phase': pomodoroPhase?.index,
         'seconds': seconds,
         'isRunning': isRunning,
+        'waitingToStart': waitingToStart,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       };
 
-  /// Stop the foreground service.
-  Future<void> stopStudySession() async {
-    try {
-      await FlutterForegroundTask.stopService();
-    } finally {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(StudyPersistenceKeys.notificationState);
-    }
-  }
+  Future<void> stopStudySession() => _serialize(() async {
+        try {
+          await FlutterForegroundTask.stopService();
+        } finally {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove(StudyPersistenceKeys.notificationState);
+        }
+      });
 
   /// Check if the foreground service is running.
   Future<bool> isRunning() async {
@@ -233,7 +252,7 @@ class NotificationService {
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
-      sound: 'default', 
+      sound: 'default',
     );
 
     const platformChannelSpecifics = NotificationDetails(
@@ -267,116 +286,101 @@ int notificationElapsedSeconds({
   return elapsed < 0 ? 0 : elapsed;
 }
 
+const _openStudySession = 'openStudySession';
+
+@visibleForTesting
+({String? title, String body}) studyNotificationCopy(
+    Map<String, dynamic> state, DateTime now) {
+  final locale =
+      state['locale'] == 'ja' ? const Locale('ja') : const Locale('en');
+  final l10n = lookupAppLocalizations(locale);
+  final mode = TimerMode.values[state['mode'] as int];
+  final phase = PomodoroPhase.values[state['phase'] as int? ?? 0];
+  final isRunning = state['isRunning'] as bool;
+  final waitingToStart = state['waitingToStart'] == true;
+  final roomName = state['roomName'] as String?;
+  final seconds = state['seconds'] as int;
+  final timestamp =
+      DateTime.fromMillisecondsSinceEpoch(state['timestamp'] as int);
+  final onBreak =
+      mode == TimerMode.pomodoro && phase == PomodoroPhase.shortBreak;
+  final title = roomName == null
+      ? null
+      : isRunning && !onBreak
+          ? l10n.notificationStudyingAt(roomName)
+          : l10n.notificationSessionAt(roomName);
+  final elapsed = now.difference(timestamp);
+  final int shownSeconds;
+  if (!isRunning) {
+    shownSeconds = seconds;
+  } else if (mode == TimerMode.normal) {
+    shownSeconds = notificationElapsedSeconds(
+      now: now,
+      startedAt: timestamp.subtract(Duration(seconds: seconds)),
+      pausedSeconds: seconds,
+    );
+  } else {
+    shownSeconds = (seconds - elapsed.inSeconds).clamp(0, seconds);
+  }
+  final duration = Formatters.formatStudyDuration(shownSeconds, l10n);
+  final body = switch ((mode, isRunning, waitingToStart, onBreak)) {
+    (_, false, false, _) => l10n.notificationPaused(duration),
+    (TimerMode.normal, false, true, _) => l10n.notificationTimerReady,
+    (TimerMode.normal, _, _, _) => l10n.notificationStudying(duration),
+    (_, false, true, true) => l10n.notificationBreakReady(duration),
+    (_, false, true, false) => l10n.notificationFocusReady(duration),
+    (_, true, _, true) => shownSeconds == 0
+        ? l10n.notificationBreakFinished
+        : l10n.notificationBreakRemaining(duration),
+    (_, true, _, false) => shownSeconds == 0
+        ? l10n.notificationFocusFinished
+        : l10n.notificationFocusRemaining(duration),
+  };
+  return (title: title, body: body);
+}
+
 /// Task handler for the foreground service.
 class _StudySessionHandler extends TaskHandler {
-  TimerMode _mode = TimerMode.normal;
-  PomodoroPhase _phase = PomodoroPhase.focus;
-
-  DateTime? _normalStartedAt;
-  int _pausedSeconds = 0;
-  late DateTime _pomodoroEndTime;
-
-  bool _isRunning = false;
-  bool _initialized = false;
-  bool _receivedTimerState = false;
-
-  String _studyingFormat = 'Studying - {duration}';
-  String _focusRemainingFormat = 'Focus: {duration} remaining';
-  String _breakRemainingFormat = 'Break: {duration} remaining';
-  String _focusFinishedText = 'Focus Finished!';
-  String _breakFinishedText = 'Break Finished!';
+  Map<String, dynamic>? _state;
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getString(StudyPersistenceKeys.notificationState);
-    if (saved != null) {
-      final state = jsonDecode(saved) as Map<String, dynamic>;
-      _studyingFormat = state['studyingFormat'] as String? ?? _studyingFormat;
-      _focusRemainingFormat =
-          state['focusRemainingFormat'] as String? ?? _focusRemainingFormat;
-      _breakRemainingFormat =
-          state['breakRemainingFormat'] as String? ?? _breakRemainingFormat;
-      _focusFinishedText =
-          state['focusFinishedText'] as String? ?? _focusFinishedText;
-      _breakFinishedText =
-          state['breakFinishedText'] as String? ?? _breakFinishedText;
-
-      // A live update may have arrived while the saved state was loading.
-      if (!_receivedTimerState) _applyTimerState(state);
-    }
-    _initialized = true;
-    if ((saved != null || _receivedTimerState) &&
-        (_mode == TimerMode.normal || _isRunning)) {
+    if (saved != null && _state == null) {
+      _state = jsonDecode(saved) as Map<String, dynamic>;
       _updateNotification(DateTime.now());
     }
   }
 
   @override
   void onRepeatEvent(DateTime timestamp) {
-    if (_isRunning) _updateNotification(timestamp);
+    if (_state?['isRunning'] == true) _updateNotification(timestamp);
   }
 
   void _updateNotification(DateTime now) {
-    String notificationText;
-    if (_mode == TimerMode.normal) {
-      final seconds = notificationElapsedSeconds(
-        now: now,
-        startedAt: _normalStartedAt,
-        pausedSeconds: _pausedSeconds,
-      );
-      final durationText = Formatters.formatDuration(seconds);
-      notificationText = _studyingFormat.replaceAll('{duration}', durationText);
-    } else {
-      final remainingSeconds = _pomodoroEndTime.difference(now).inSeconds;
-      if (remainingSeconds <= 0) {
-        notificationText = _phase == PomodoroPhase.focus
-            ? _focusFinishedText
-            : _breakFinishedText;
-      } else {
-        final durationText = Formatters.formatDuration(remainingSeconds);
-        final format = _phase == PomodoroPhase.focus
-            ? _focusRemainingFormat
-            : _breakRemainingFormat;
-        notificationText = format.replaceAll('{duration}', durationText);
-      }
-    }
-
+    final state = _state;
+    if (state == null) return;
+    final copy = studyNotificationCopy(state, now);
     FlutterForegroundTask.updateService(
-      notificationText: notificationText,
+      notificationTitle: copy.title,
+      notificationText: copy.body,
     );
   }
 
   @override
-  Future<void> onDestroy(DateTime timestamp) async {
-    // Cleanup if needed
-  }
+  Future<void> onDestroy(DateTime timestamp) async {}
 
   @override
   void onReceiveData(Object data) {
     if (data is! Map<String, dynamic> || !data.containsKey('mode')) return;
-    _receivedTimerState = true;
-    _applyTimerState(data);
-    if (_initialized && (_mode == TimerMode.normal || _isRunning)) {
-      _updateNotification(DateTime.now());
-    }
+    _state = data;
+    _updateNotification(DateTime.now());
   }
 
-  void _applyTimerState(Map<String, dynamic> data) {
-    _mode = TimerMode.values[data['mode'] as int];
-    final phaseIndex = data['phase'] as int?;
-    _phase = phaseIndex == null
-        ? PomodoroPhase.focus
-        : PomodoroPhase.values[phaseIndex];
-    _isRunning = data['isRunning'] as bool;
-    final duration = Duration(seconds: data['seconds'] as int);
-    final reportedAt =
-        DateTime.fromMillisecondsSinceEpoch(data['timestamp'] as int);
-    if (_mode == TimerMode.normal) {
-      _pausedSeconds = duration.inSeconds;
-      _normalStartedAt = _isRunning ? reportedAt.subtract(duration) : null;
-    } else {
-      _pomodoroEndTime = reportedAt.add(duration);
-    }
+  @override
+  void onNotificationPressed() {
+    FlutterForegroundTask.launchApp();
+    FlutterForegroundTask.sendDataToMain(_openStudySession);
   }
 }

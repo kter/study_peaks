@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/models.dart';
 
 /// Dialog to confirm sitting in a seat.
-/// 
+///
 /// Shows a confirmation dialog when user attempts to take a seat.
 /// Returns true if user confirmed, false if cancelled.
 Future<bool?> showSitConfirmationDialog({
@@ -11,22 +12,27 @@ Future<bool?> showSitConfirmationDialog({
 }) {
   return showDialog<bool>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text('Seat ${seat.seatNumber}'),
-      content: const Text('Do you want to take this seat and start studying?'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.of(dialogContext).pop(true),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF1A237E),
+    builder: (dialogContext) {
+      final l10n = AppLocalizations.of(dialogContext)!;
+      return AlertDialog(
+        title: Text(l10n.seatTitle(seat.seatNumber)),
+        content: Text(l10n.sitQuestion),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child:
+                Text(MaterialLocalizations.of(dialogContext).cancelButtonLabel),
           ),
-          child: const Text('Sit Down', style: TextStyle(color: Colors.white)),
-        ),
-      ],
-    ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1A237E),
+            ),
+            child:
+                Text(l10n.sitDown, style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      );
+    },
   );
 }

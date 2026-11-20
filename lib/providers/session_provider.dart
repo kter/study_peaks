@@ -33,10 +33,11 @@ enum LeaveFailure implements LeaveResult {
 enum LeaveServerFailure { connection, request }
 
 final class LeaveCompleted extends LeaveResult {
-  const LeaveCompleted(this.record, this.serverFailure);
+  const LeaveCompleted(this.record, this.serverFailure, {required this.showSummary});
 
   final StudySession record;
   final LeaveServerFailure? serverFailure;
+  final bool showSummary;
 }
 
 /// Provider for managing study session state.
@@ -63,7 +64,9 @@ class SessionProvider extends ChangeNotifier {
   String? _ownerId;
   StudySession? _pendingRecord;
   bool _leaving = false;
+  bool _sitting = false;
   bool _remoteLeaveCompleted = false;
+  bool _historySaved = false;
   bool _disposed = false;
   Future<bool>? _restoreOperation;
   static const _keyActive = StudyPersistenceKeys.activeSession;
@@ -85,9 +88,39 @@ class SessionProvider extends ChangeNotifier {
     }
   }
 
-  // Stored localized notification strings
-  String? _notificationTitle;
-  String _studyingFormat = 'Studying - {duration}'; // Default fallback
+  String _notificationLocale = 'en';
+
+  void setNotificationLocale(String languageCode) {
+    if (_notificationLocale == languageCode) return;
+    _notificationLocale = languageCode;
+    unawaited(refreshStudyNotification());
+  }
+
+  Future<void> refreshStudyNotification({bool requestPermission = false}) async {
+    final id = _sessionId;
+    final room = _currentRoomName ?? _currentRoomId;
+    if (id == null || room == null || id.startsWith(_mockSessionPrefix)) return;
+    bool isCurrent() => !_disposed && _sessionId == id && !_leaving && _pendingRecord == null;
+    if (!isCurrent()) return;
+
+    final timer = _timerProvider;
+    final boundTimer = timer?.sessionId == id ? timer : null;
+    final mode = timer?.mode ?? TimerMode.normal;
+    await _notificationService.ensureStudySession(
+      sessionId: id,
+      roomName: room,
+      locale: _notificationLocale,
+      requestPermissionIfNeeded: requestPermission,
+      isCurrentSession: isCurrent,
+      mode: mode,
+      pomodoroPhase: boundTimer?.pomodoroPhase,
+      isRunning: boundTimer?.isRunning ?? false,
+      waitingToStart: boundTimer?.waitingToStart ?? true,
+      seconds: mode == TimerMode.normal
+          ? boundTimer?.elapsedSeconds ?? 0
+          : boundTimer?.pomodoroRemainingSeconds ?? timer!.pomodoroFocusDuration,
+    );
+  }
 
   // SharedPreferences keys for session persistence
   static const _keySessionId = StudyPersistenceKeys.legacySessionId;
@@ -161,6 +194,7 @@ class SessionProvider extends ChangeNotifier {
 
   SessionState get state => _state;
   String? get currentRoomId => _currentRoomId;
+  String? get currentRoomName => _currentRoomName;
   String? get sessionId => _sessionId;
   int? get seatNumber => _seatNumber;
   DateTime? get sessionStartedAt => _sessionStartedAt;
@@ -185,24 +219,18 @@ class SessionProvider extends ChangeNotifier {
     String? countryCode,
     String? iconSeed,
     String? photoUrl,
-    String? notificationTitle,
-    String? notificationSessionStarted,
-    String? notificationStudyingFormat,
-    String? notificationFocusRemaining,
-    String? notificationBreakRemaining,
-    String? notificationFocusFinished,
-    String? notificationBreakFinished,
   }) async {
-    if (_sessionId != null || _leaving) return false;
+    if (_sessionId != null || _leaving || _sitting) return false;
+    _sitting = true;
     final ownerAtStart = historyOwnerId;
-    final prefs = await SharedPreferences.getInstance();
-    if (prefs.getString(_keyActive) != null) {
-      _timerProvider?.setRecoveryBlocked(true);
-      _error = 'historyOtherOwnerActive';
-      notifyListeners();
-      return false;
-    }
     try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getString(_keyActive) != null) {
+        _timerProvider?.setRecoveryBlocked(true);
+        _error = 'historyOtherOwnerActive';
+        notifyListeners();
+        return false;
+      }
       _error = null;
       await _ensureAuthToken();
       final sitDisplayName = displayName ?? _authProvider?.displayName;
@@ -227,33 +255,11 @@ class SessionProvider extends ChangeNotifier {
       _state = SessionState.seated;
       await _persistSession();
 
-      // Store notification strings for later updates
-      _notificationTitle =
-          notificationTitle ?? 'Studying at ${roomName ?? roomId}';
-      _studyingFormat = notificationStudyingFormat ?? 'Studying - {duration}';
-
-      // Start sync timer (every 5 minutes)
       _startSyncTimer();
-
-      // Start foreground notification
-      final timer = _timerProvider;
-      final mode = timer?.mode ?? TimerMode.normal;
-      await _notificationService.startStudySession(
-        notificationTitle: _notificationTitle!,
-        notificationText: notificationSessionStarted ?? 'Session started - 0m',
-        mode: mode,
-        // The timer starts after the foreground service is initialized.
-        isRunning: false,
-        remainingSeconds: mode == TimerMode.pomodoro
-            ? timer?.pomodoroFocusDuration
-            : null,
-        studyingFormat: _studyingFormat,
-        focusRemainingFormat: notificationFocusRemaining,
-        breakRemainingFormat: notificationBreakRemaining,
-        focusFinishedText: notificationFocusFinished,
-        breakFinishedText: notificationBreakFinished,
-      );
-      timer?.start(sessionId: _sessionId);
+      await refreshStudyNotification(requestPermission: true);
+      if (!_disposed && _sessionId == response.sessionId && _pendingRecord == null) {
+        _timerProvider?.start(sessionId: response.sessionId);
+      }
 
       notifyListeners();
       return true;
@@ -283,6 +289,8 @@ class SessionProvider extends ChangeNotifier {
       _error = errorKey;
       notifyListeners();
       return false;
+    } finally {
+      _sitting = false;
     }
   }
 
@@ -329,20 +337,26 @@ class SessionProvider extends ChangeNotifier {
         if (_remoteLeaveCompleted) await _persistSession();
       }
 
-      if (record.durationSeconds > 0) {
+      final showSummary = !_historySaved && record.durationSeconds > 0;
+      if (showSummary) {
         await _historyRepository.saveSession(record);
+        _historySaved = true;
       }
+      if (serverFailure != null) {
+        // Retain the frozen session ID for an explicit, idempotent leave retry.
+        _cancelSyncTimer();
+        await _persistSession();
+        await _stopStudyNotification();
+        return LeaveCompleted(record, serverFailure, showSummary: showSummary);
+      }
+
       await _clearPersistedSession();
       _cancelSyncTimer();
       _timerProvider?.endSession();
       _reset();
-      try {
-        await _notificationService.stopStudySession();
-      } catch (error) {
-        debugPrint('Could not stop study notification: ${error.runtimeType}');
-      }
+      await _stopStudyNotification();
       if (seatAlreadyReleased) _error = seatReleasedMessageKey;
-      return LeaveCompleted(record, serverFailure);
+      return LeaveCompleted(record, null, showSummary: showSummary);
     } catch (error) {
       debugPrint('Could not finalize study record: ${error.runtimeType}');
       if (seatAlreadyReleased) _error = 'historySaveFailed';
@@ -353,6 +367,14 @@ class SessionProvider extends ChangeNotifier {
       if (_state == SessionState.syncing) _state = SessionState.seated;
       _leaving = false;
       if (!_disposed) notifyListeners();
+    }
+  }
+
+  Future<void> _stopStudyNotification() async {
+    try {
+      await _notificationService.stopStudySession();
+    } catch (error) {
+      debugPrint('Could not stop study notification: ${error.runtimeType}');
     }
   }
 
@@ -484,6 +506,7 @@ class SessionProvider extends ChangeNotifier {
   void _reset() {
     _pendingRecord = null;
     _remoteLeaveCompleted = false;
+    _historySaved = false;
     _ownerId = null;
     _state = SessionState.idle;
     _currentRoomId = null;
@@ -511,6 +534,7 @@ class SessionProvider extends ChangeNotifier {
           'ownerId': _ownerId,
           'pending': _pendingRecord?.toMap(),
           'remoteLeaveCompleted': _remoteLeaveCompleted,
+          'historySaved': _historySaved,
         }));
     if (!saved) throw StateError('Session write failed');
     // Compatibility keys for notifications and diagnostics.
@@ -542,7 +566,7 @@ class SessionProvider extends ChangeNotifier {
   }
 
   Future<bool> _restoreLocalSession() async {
-    if (_sessionId != null) return false;
+    if (_sessionId != null || _sitting) return false;
     try {
       final prefs = await SharedPreferences.getInstance();
       var saved = prefs.getString(_keyActive);
@@ -583,6 +607,7 @@ class SessionProvider extends ChangeNotifier {
           : StudySession.fromMap(
               Map<String, dynamic>.from(data['pending'] as Map));
       _remoteLeaveCompleted = data['remoteLeaveCompleted'] == true;
+      _historySaved = _pendingRecord != null && data['historySaved'] == true;
       _currentDuration = _pendingRecord?.durationSeconds ?? 0;
       // Restore the timer before announcing the session. This also supports
       // owner changes without requiring a screen recreation or an app restart.
@@ -595,7 +620,10 @@ class SessionProvider extends ChangeNotifier {
       }
       if (_disposed) return false;
       _state = SessionState.seated;
-      if (_pendingRecord == null) _startSyncTimer();
+      if (_pendingRecord == null) {
+        _startSyncTimer();
+        unawaited(refreshStudyNotification());
+      }
       notifyListeners();
       return true;
     } catch (e) {

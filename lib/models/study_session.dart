@@ -114,16 +114,22 @@ class StudySession {
     final result = <DateTime, int>{};
     var cumulativeMs = 0;
     for (final interval in intervals!) {
-      var cursor =
+      final start =
           interval.start.add(Duration(minutes: interval.offsetMinutes));
       final end = interval.end.add(Duration(minutes: interval.offsetMinutes));
+      var cursor = start;
+      var allocatedMs = 0;
       while (cursor.isBefore(end)) {
         final day = DateTime.utc(cursor.year, cursor.month, cursor.day);
         final midnight =
             DateTime.utc(cursor.year, cursor.month, cursor.day + 1);
         final stop = end.isBefore(midnight) ? end : midnight;
         final before = cumulativeMs ~/ 1000;
-        cumulativeMs += stop.difference(cursor).inMilliseconds;
+        // Round from the start of the interval so a midnight split does not
+        // truncate the sub-millisecond remainder twice.
+        final elapsedMs = stop.difference(start).inMilliseconds;
+        cumulativeMs += elapsedMs - allocatedMs;
+        allocatedMs = elapsedMs;
         result[day] = (result[day] ?? 0) + cumulativeMs ~/ 1000 - before;
         cursor = stop;
       }

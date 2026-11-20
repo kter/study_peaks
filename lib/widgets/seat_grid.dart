@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../l10n/app_localizations.dart';
 import '../models/models.dart';
 import '../providers/room_provider.dart';
 import '../providers/session_provider.dart';
+import '../utils/error_localization.dart';
 import 'seat_widget.dart';
 
 /// A widget that displays when the user is already seated and taps another seat.
@@ -41,8 +43,27 @@ class SeatGrid extends StatelessWidget {
         }
 
         final seats = roomProvider.getSeats(roomId);
+        final l10n = AppLocalizations.of(context)!;
         if (seats.isEmpty) {
-          return const Center(child: Text('No seats available'));
+          final error = roomProvider.seatError(roomId);
+          if (error == null) {
+            return Center(child: Text(l10n.noSeatsAvailable));
+          }
+          return Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(localizeErrorKey(l10n, error, fallback: l10n.loadSeatsFailed)),
+                  TextButton(
+                    onPressed: () => roomProvider.fetchSeats(roomId),
+                    child: Text(l10n.retry),
+                  ),
+                ],
+              ),
+            ),
+          );
         }
 
         return Padding(

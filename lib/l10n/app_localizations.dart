@@ -443,7 +443,7 @@ abstract class AppLocalizations {
   /// No description provided for @lockTaskDialogBody.
   ///
   /// In en, this message translates to:
-  /// **'To help you stay focused, other apps will be blocked.\nTo unpin, long-press the Back and Recent buttons together.\n\nNote: Android will ask for confirmation after this.'**
+  /// **'Screen pinning keeps this app in view while you focus. Android will ask for confirmation and show how to unpin.'**
   String get lockTaskDialogBody;
 
   /// No description provided for @lockTaskDialogPinAndStart.
@@ -467,7 +467,7 @@ abstract class AppLocalizations {
   /// No description provided for @lockTaskUnpinHint.
   ///
   /// In en, this message translates to:
-  /// **'Unpin: long-press Back + Recent'**
+  /// **'To unpin, follow the Android instructions.'**
   String get lockTaskUnpinHint;
 
   /// No description provided for @lockTaskExitedMessage.
@@ -811,6 +811,252 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Confirm that your device date is correct. This clears goal settings for later weeks on this device.'**
   String get weeklyGoalCorrectDateConfirm;
+
+  /// No description provided for @profileSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile Settings'**
+  String get profileSettings;
+
+  /// No description provided for @account.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get account;
+
+  /// No description provided for @displayName.
+  ///
+  /// In en, this message translates to:
+  /// **'Display Name'**
+  String get displayName;
+
+  /// No description provided for @displayNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your display name'**
+  String get displayNameHint;
+
+  /// No description provided for @saveDisplayName.
+  ///
+  /// In en, this message translates to:
+  /// **'Save display name'**
+  String get saveDisplayName;
+
+  /// No description provided for @displayNameSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Name saved!'**
+  String get displayNameSaved;
+
+  /// No description provided for @country.
+  ///
+  /// In en, this message translates to:
+  /// **'Country'**
+  String get country;
+
+  /// No description provided for @regenerateIcon.
+  ///
+  /// In en, this message translates to:
+  /// **'Regenerate Icon'**
+  String get regenerateIcon;
+
+  /// No description provided for @iconRegenerated.
+  ///
+  /// In en, this message translates to:
+  /// **'Icon regenerated!'**
+  String get iconRegenerated;
+
+  /// No description provided for @signedInWithGoogle.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in with Google'**
+  String get signedInWithGoogle;
+
+  /// No description provided for @signedOutSuccessfully.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed out successfully'**
+  String get signedOutSuccessfully;
+
+  /// No description provided for @signingIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Signing in…'**
+  String get signingIn;
+
+  /// No description provided for @joinRoom.
+  ///
+  /// In en, this message translates to:
+  /// **'Join'**
+  String get joinRoom;
+
+  /// No description provided for @roomOccupancy.
+  ///
+  /// In en, this message translates to:
+  /// **'{current} / {total} studying'**
+  String roomOccupancy(int current, int total);
+
+  /// No description provided for @occupiedPercent.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% occupied'**
+  String occupiedPercent(int percent);
+
+  /// No description provided for @roomInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Room information'**
+  String get roomInfo;
+
+  /// No description provided for @roomCapacity.
+  ///
+  /// In en, this message translates to:
+  /// **'Capacity: {count} seats'**
+  String roomCapacity(int count);
+
+  /// No description provided for @roomCurrentOccupancy.
+  ///
+  /// In en, this message translates to:
+  /// **'Currently: {count} studying'**
+  String roomCurrentOccupancy(int count);
+
+  /// No description provided for @studyingCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} studying'**
+  String studyingCount(int count);
+
+  /// No description provided for @noSeatsAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No seats available'**
+  String get noSeatsAvailable;
+
+  /// No description provided for @loadSeatsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load seats.'**
+  String get loadSeatsFailed;
+
+  /// No description provided for @seatCountUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Seat count unavailable'**
+  String get seatCountUnavailable;
+
+  /// No description provided for @seatTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Seat {number}'**
+  String seatTitle(int number);
+
+  /// No description provided for @sitQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Do you want to take this seat and start studying?'**
+  String get sitQuestion;
+
+  /// No description provided for @sitSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'You are now seated at seat {number}!'**
+  String sitSuccess(int number);
+
+  /// No description provided for @sitFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not take this seat.'**
+  String get sitFailed;
+
+  /// No description provided for @alreadySeated.
+  ///
+  /// In en, this message translates to:
+  /// **'You are already seated!'**
+  String get alreadySeated;
+
+  /// No description provided for @leaveSeatInRoom.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave seat {number} in {roomName}?'**
+  String leaveSeatInRoom(int number, String roomName);
+
+  /// No description provided for @leaveRoom.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave your seat in {roomName}?'**
+  String leaveRoom(String roomName);
+
+  /// No description provided for @expandTimer.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand timer'**
+  String get expandTimer;
+
+  /// No description provided for @collapseTimer.
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse timer'**
+  String get collapseTimer;
+
+  /// No description provided for @focusTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Focus Time'**
+  String get focusTime;
+
+  /// No description provided for @breakTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Break Time'**
+  String get breakTime;
+
+  /// No description provided for @cyclesCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 cycle completed} other{{count} cycles completed}}'**
+  String cyclesCompleted(int count);
+
+  /// No description provided for @seatedFor.
+  ///
+  /// In en, this message translates to:
+  /// **'Seated for {duration}'**
+  String seatedFor(String duration);
+
+  /// No description provided for @notificationPaused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused · {duration}'**
+  String notificationPaused(String duration);
+
+  /// No description provided for @notificationFocusReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready to focus · {duration}'**
+  String notificationFocusReady(String duration);
+
+  /// No description provided for @notificationBreakReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready for a break · {duration}'**
+  String notificationBreakReady(String duration);
+
+  /// No description provided for @countryName.
+  ///
+  /// In en, this message translates to:
+  /// **'{code, select, JP{Japan} US{United States} GB{United Kingdom} CN{China} KR{South Korea} DE{Germany} FR{France} IT{Italy} ES{Spain} BR{Brazil} IN{India} AU{Australia} CA{Canada} MX{Mexico} RU{Russia} TW{Taiwan} SG{Singapore} TH{Thailand} VN{Vietnam} PH{Philippines} other{{code}}}'**
+  String countryName(String code);
+
+  /// No description provided for @notificationSessionAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Study session at {roomName}'**
+  String notificationSessionAt(String roomName);
+
+  /// No description provided for @notificationTimerReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready to start'**
+  String get notificationTimerReady;
 }
 
 class _AppLocalizationsDelegate

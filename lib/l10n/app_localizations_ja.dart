@@ -193,7 +193,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get lockTaskDialogBody =>
-      '集中を助けるため、他のアプリを開けないようにします。解除するには「戻るボタンと履歴ボタンを同時に長押し」してください。\n\n※この後、Androidシステムから最終確認の許可を求められます。';
+      '集中しやすいように、このアプリの画面を固定します。Android の確認画面に固定の解除方法が表示されます。';
 
   @override
   String get lockTaskDialogPinAndStart => '固定して開始';
@@ -205,7 +205,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get lockTaskDialogCancel => 'キャンセル';
 
   @override
-  String get lockTaskUnpinHint => '解除：戻る＋履歴ボタン長押し';
+  String get lockTaskUnpinHint => '解除するには、Android が表示する案内に従ってください。';
 
   @override
   String get lockTaskExitedMessage => '画面固定が解除されました';
@@ -417,4 +417,185 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get weeklyGoalCorrectDateConfirm =>
       '端末の日付が正しいことを確認してください。この端末にある翌週以降の目標設定を解除します。';
+
+  @override
+  String get profileSettings => 'プロフィール設定';
+
+  @override
+  String get account => 'アカウント';
+
+  @override
+  String get displayName => '表示名';
+
+  @override
+  String get displayNameHint => '表示名を入力';
+
+  @override
+  String get saveDisplayName => '表示名を保存';
+
+  @override
+  String get displayNameSaved => '表示名を保存しました。';
+
+  @override
+  String get country => '国・地域';
+
+  @override
+  String get regenerateIcon => 'アイコンを作り直す';
+
+  @override
+  String get iconRegenerated => 'アイコンを作り直しました。';
+
+  @override
+  String get signedInWithGoogle => 'Google でサインイン済み';
+
+  @override
+  String get signedOutSuccessfully => 'サインアウトしました。';
+
+  @override
+  String get signingIn => 'サインイン中…';
+
+  @override
+  String get joinRoom => '入室';
+
+  @override
+  String roomOccupancy(int current, int total) {
+    return '$current / $total人が学習中';
+  }
+
+  @override
+  String occupiedPercent(int percent) {
+    return '使用率 $percent%';
+  }
+
+  @override
+  String get roomInfo => '自習室の情報';
+
+  @override
+  String roomCapacity(int count) {
+    return '定員 $count席';
+  }
+
+  @override
+  String roomCurrentOccupancy(int count) {
+    return '現在 $count人が学習中';
+  }
+
+  @override
+  String studyingCount(int count) {
+    return '$count人が学習中';
+  }
+
+  @override
+  String get noSeatsAvailable => '表示できる座席がありません。';
+
+  @override
+  String get loadSeatsFailed => '座席を読み込めませんでした。';
+
+  @override
+  String get seatCountUnavailable => '着席人数を取得できませんでした。';
+
+  @override
+  String seatTitle(int number) {
+    return '座席 $number';
+  }
+
+  @override
+  String get sitQuestion => 'この席に着席して学習を始めますか？';
+
+  @override
+  String sitSuccess(int number) {
+    return '座席 $number に着席しました。';
+  }
+
+  @override
+  String get sitFailed => '着席できませんでした。';
+
+  @override
+  String get alreadySeated => 'すでに着席しています。';
+
+  @override
+  String leaveSeatInRoom(int number, String roomName) {
+    return '$roomName の座席 $number から離席しますか？';
+  }
+
+  @override
+  String leaveRoom(String roomName) {
+    return '$roomName の席から離席しますか？';
+  }
+
+  @override
+  String get expandTimer => 'タイマーを展開';
+
+  @override
+  String get collapseTimer => 'タイマーを折りたたむ';
+
+  @override
+  String get focusTime => '集中時間';
+
+  @override
+  String get breakTime => '休憩時間';
+
+  @override
+  String cyclesCompleted(int count) {
+    return '完了 $countセット';
+  }
+
+  @override
+  String seatedFor(String duration) {
+    return '着席してから$duration';
+  }
+
+  @override
+  String notificationPaused(String duration) {
+    return '一時停止中（$duration）';
+  }
+
+  @override
+  String notificationFocusReady(String duration) {
+    return '集中の開始待ち（$duration）';
+  }
+
+  @override
+  String notificationBreakReady(String duration) {
+    return '休憩の開始待ち（$duration）';
+  }
+
+  @override
+  String countryName(String code) {
+    String _temp0 = intl.Intl.selectLogic(
+      code,
+      {
+        'JP': '日本',
+        'US': 'アメリカ',
+        'GB': 'イギリス',
+        'CN': '中国',
+        'KR': '韓国',
+        'DE': 'ドイツ',
+        'FR': 'フランス',
+        'IT': 'イタリア',
+        'ES': 'スペイン',
+        'BR': 'ブラジル',
+        'IN': 'インド',
+        'AU': 'オーストラリア',
+        'CA': 'カナダ',
+        'MX': 'メキシコ',
+        'RU': 'ロシア',
+        'TW': '台湾',
+        'SG': 'シンガポール',
+        'TH': 'タイ',
+        'VN': 'ベトナム',
+        'PH': 'フィリピン',
+        'other': '$code',
+      },
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String notificationSessionAt(String roomName) {
+    return '$roomNameでの学習セッション';
+  }
+
+  @override
+  String get notificationTimerReady => 'タイマーの開始待ち';
 }

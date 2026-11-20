@@ -27,6 +27,8 @@ void main() {
     when(() => mockNotificationService.isRunning())
         .thenAnswer((_) async => true);
     when(() => mockNotificationService.updateTimerState(
+          sessionId: any(named: 'sessionId'),
+          waitingToStart: any(named: 'waitingToStart'),
           mode: any(named: 'mode'),
           isRunning: any(named: 'isRunning'),
           pomodoroPhase: any(named: 'pomodoroPhase'),

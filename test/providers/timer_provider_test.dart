@@ -25,6 +25,8 @@ void main() {
     // Default mock behavior
     when(() => mockNotificationService.isRunning()).thenAnswer((_) async => true);
     when(() => mockNotificationService.updateTimerState(
+      sessionId: any(named: 'sessionId'),
+      waitingToStart: any(named: 'waitingToStart'),
       mode: any(named: 'mode'),
       isRunning: any(named: 'isRunning'),
       pomodoroPhase: any(named: 'pomodoroPhase'),
@@ -101,6 +103,39 @@ void main() {
     });
   });
 
+  test('correcting the clock backwards keeps timer displays within bounds', () {
+    final initial = DateTime.utc(2026, 11, 19);
+    var now = initial;
+    final timer = TimerProvider(now: () => now, notificationService: mockNotificationService);
+    addTearDown(timer.dispose);
+    timer.start();
+    now = initial.subtract(const Duration(seconds: 30));
+    expect(timer.formattedTime, '00:00');
+
+    timer.pause();
+    timer.setMode(TimerMode.pomodoro);
+    now = initial;
+    timer.start();
+    now = initial.subtract(const Duration(minutes: 5));
+    expect(timer.formattedTime, '25:00');
+  });
+
+  test('short focus periods accumulate across pause and resume', () {
+    var now = DateTime.utc(2026, 11, 19);
+    final timer = TimerProvider(now: () => now, notificationService: mockNotificationService);
+    addTearDown(timer.dispose);
+    timer.setMode(TimerMode.pomodoro);
+    for (var repeat = 0; repeat < 12; repeat++) {
+      timer.start();
+      now = now.add(const Duration(milliseconds: 900));
+      timer.pause();
+      now = now.add(const Duration(seconds: 1));
+    }
+
+    expect(timer.totalStudySeconds, 10);
+    expect(timer.formattedTime, '24:50');
+  });
+
   group('TimerProvider - Normal Mode', () {
     test('Initial state should be correct', () {
       expect(timerProvider.mode, TimerMode.normal);
@@ -115,6 +150,8 @@ void main() {
       expect(timerProvider.isRunning, true);
       // Verify notification update called
       verify(() => mockNotificationService.updateTimerState(
+        sessionId: any(named: 'sessionId'),
+        waitingToStart: any(named: 'waitingToStart'),
         mode: TimerMode.normal,
         isRunning: true,
         pomodoroPhase: null,
@@ -131,6 +168,8 @@ void main() {
       
       expect(timerProvider.isRunning, false);
       verify(() => mockNotificationService.updateTimerState(
+        sessionId: any(named: 'sessionId'),
+        waitingToStart: any(named: 'waitingToStart'),
         mode: TimerMode.normal,
         isRunning: false,
         pomodoroPhase: null, // explicit null
@@ -171,6 +210,8 @@ void main() {
       
       expect(timerProvider.isRunning, true);
       verify(() => mockNotificationService.updateTimerState(
+        sessionId: any(named: 'sessionId'),
+        waitingToStart: any(named: 'waitingToStart'),
         mode: TimerMode.pomodoro,
         isRunning: true,
         pomodoroPhase: PomodoroPhase.focus,
@@ -193,6 +234,8 @@ void main() {
       expect(timerProvider.isRunning, false);
       
       verify(() => mockNotificationService.updateTimerState(
+        sessionId: any(named: 'sessionId'),
+        waitingToStart: true,
         mode: TimerMode.pomodoro,
         isRunning: false,
         pomodoroPhase: PomodoroPhase.focus,

@@ -10,7 +10,9 @@ class RoomProvider extends ChangeNotifier {
   final MockDataRepository? _mockDataRepository;
 
   List<Room> _rooms = [];
-  bool _isLoading = false;
+  bool _loadingRooms = false;
+  int _pendingSeatLoads = 0;
+  int _nextSeatRequest = 0;
   String? _error;
   String? _roomsError;
 
@@ -21,14 +23,18 @@ class RoomProvider extends ChangeNotifier {
         _mockDataRepository = mockDataRepository;
 
   final Map<String, List<Seat>> _roomSeats = {};
+  final Map<String, String> _seatErrors = {};
+  final Map<String, int> _seatRequests = {};
 
   List<Room> get rooms => _rooms;
-  bool get isLoading => _isLoading;
+  bool get isLoading => _loadingRooms || _pendingSeatLoads > 0;
   String? get error => _error;
   String? get roomsError => _roomsError;
 
   /// Get seats for a specific room
   List<Seat> getSeats(String roomId) => _roomSeats[roomId] ?? [];
+
+  String? seatError(String roomId) => _seatErrors[roomId];
 
   /// Get the latest known room data (falls back to null if not loaded).
   Room? getRoom(String roomId) =>
@@ -62,6 +68,7 @@ class RoomProvider extends ChangeNotifier {
     required bool isOccupied,
     SeatUser? user,
     DateTime? sessionStartedAt,
+    bool replacesUserSeat = false,
   }) {
     final seats = _roomSeats[roomId];
     if (seats == null) return;
@@ -69,7 +76,11 @@ class RoomProvider extends ChangeNotifier {
     final index = seats.indexWhere((s) => s.seatNumber == seatNumber);
     if (index == -1) return;
 
-    _roomSeats[roomId] = List.from(seats)
+    if (replacesUserSeat && isOccupied && user != null) {
+      _clearUserSeats(user.userId);
+    }
+    _seatRequests.remove(roomId);
+    _roomSeats[roomId] = List.of(_roomSeats[roomId]!)
       ..[index] = Seat(
         seatId: seats[index].seatId,
         seatNumber: seatNumber,
@@ -80,6 +91,23 @@ class RoomProvider extends ChangeNotifier {
       );
     _syncRoomOccupancy(roomId);
     notifyListeners();
+  }
+
+  void _clearUserSeats(String userId) {
+    for (final roomId in _roomSeats.keys) {
+      final seats = _roomSeats[roomId]!;
+      if (seats.any((seat) => seat.user?.userId == userId)) {
+        _seatRequests.remove(roomId);
+        _roomSeats[roomId] = [
+          for (final seat in seats)
+            if (seat.user?.userId == userId)
+              Seat(seatId: seat.seatId, seatNumber: seat.seatNumber, isOccupied: false)
+            else
+              seat,
+        ];
+        _syncRoomOccupancy(roomId);
+      }
+    }
   }
 
   /// Clear seat occupancy (when user leaves)
@@ -93,7 +121,7 @@ class RoomProvider extends ChangeNotifier {
 
   /// Fetch rooms from API.
   Future<void> fetchRooms() async {
-    _isLoading = true;
+    _loadingRooms = true;
     _error = null;
     _roomsError = null;
     notifyListeners();
@@ -106,19 +134,23 @@ class RoomProvider extends ChangeNotifier {
       // Use mock data for development (if repository provided)
       _rooms = _mockDataRepository?.getMockRooms() ?? [];
     } finally {
-      _isLoading = false;
+      _loadingRooms = false;
       notifyListeners();
     }
   }
 
   /// Fetch seats for a specific room
   Future<void> fetchSeats(String roomId) async {
-    _isLoading = true;
+    final request = ++_nextSeatRequest;
+    _seatRequests[roomId] = request;
+    _pendingSeatLoads++;
     _error = null;
     notifyListeners();
 
     try {
       final seats = await _apiService.getRoomSeats(roomId);
+      if (_seatRequests[roomId] != request) return;
+      _seatErrors.remove(roomId);
       // Use mock data if API returns empty seats (backend not configured yet)
       if (seats.isEmpty) {
         _roomSeats[roomId] = _mockDataRepository?.getMockSeats(roomId) ?? [];
@@ -127,13 +159,16 @@ class RoomProvider extends ChangeNotifier {
       }
       _syncRoomOccupancy(roomId);
     } catch (e) {
-      _error = errorKeyFor(e, e.toString());
+      if (_seatRequests[roomId] != request) return;
+      final error = errorKeyFor(e, e.toString());
+      _error = error;
+      _seatErrors[roomId] = error;
       // Preserve existing seat data on network error; fall back to mock only if no existing data
       if (!_roomSeats.containsKey(roomId) || _roomSeats[roomId]!.isEmpty) {
         _roomSeats[roomId] = _mockDataRepository?.getMockSeats(roomId) ?? [];
       }
     } finally {
-      _isLoading = false;
+      _pendingSeatLoads--;
       notifyListeners();
     }
   }
