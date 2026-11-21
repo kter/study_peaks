@@ -17,6 +17,7 @@ import '../widgets/dialogs/room_info_dialog.dart';
 import '../widgets/dialogs/sit_confirmation_dialog.dart';
 import '../widgets/dialogs/user_info_dialog.dart';
 import '../widgets/seat_grid.dart';
+import '../widgets/study_bgm_button.dart';
 import '../widgets/timer_widget.dart';
 import 'study_history_screen.dart';
 
@@ -263,6 +264,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       child: TimerWidget(
         isCollapsed: _isTimerCollapsed,
         onToggleCollapsed: _toggleTimerCollapsed,
+        bgmButton: const StudyBgmButton(),
       ),
     );
   }

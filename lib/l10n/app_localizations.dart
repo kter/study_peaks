@@ -1081,6 +1081,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Ready to start'**
   String get notificationTimerReady;
+
+  /// No description provided for @studyBgm.
+  ///
+  /// In en, this message translates to:
+  /// **'Background audio'**
+  String get studyBgm;
+
+  /// No description provided for @studyBgmPlay.
+  ///
+  /// In en, this message translates to:
+  /// **'Play background audio'**
+  String get studyBgmPlay;
+
+  /// No description provided for @studyBgmDuringTimer.
+  ///
+  /// In en, this message translates to:
+  /// **'Plays while the study timer is running.'**
+  String get studyBgmDuringTimer;
+
+  /// No description provided for @studyBgmTrack.
+  ///
+  /// In en, this message translates to:
+  /// **'Sound'**
+  String get studyBgmTrack;
+
+  /// No description provided for @studyBgmVolume.
+  ///
+  /// In en, this message translates to:
+  /// **'BGM volume'**
+  String get studyBgmVolume;
+
+  /// No description provided for @studyBgmInterrupted.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio was interrupted. Turn it on to resume.'**
+  String get studyBgmInterrupted;
+
+  /// No description provided for @studyBgmFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not play audio. Try turning it on again.'**
+  String get studyBgmFailed;
+
+  /// No description provided for @studyBgmRain.
+  ///
+  /// In en, this message translates to:
+  /// **'Nature · Rain'**
+  String get studyBgmRain;
+
+  /// No description provided for @studyBgmWaves.
+  ///
+  /// In en, this message translates to:
+  /// **'Nature · Waves'**
+  String get studyBgmWaves;
+
+  /// No description provided for @studyBgmMusicBox.
+  ///
+  /// In en, this message translates to:
+  /// **'Music box'**
+  String get studyBgmMusicBox;
+
+  /// No description provided for @studyBgmDreamy.
+  ///
+  /// In en, this message translates to:
+  /// **'Dreamy ambient'**
+  String get studyBgmDreamy;
+
+  /// No description provided for @studyBgmPiano.
+  ///
+  /// In en, this message translates to:
+  /// **'Piano'**
+  String get studyBgmPiano;
+
+  /// No description provided for @studyBgmOrchestra.
+  ///
+  /// In en, this message translates to:
+  /// **'Orchestral strings'**
+  String get studyBgmOrchestra;
+
+  /// No description provided for @studyBgmLoFi.
+  ///
+  /// In en, this message translates to:
+  /// **'Lo-fi'**
+  String get studyBgmLoFi;
+
+  /// No description provided for @studyBgmJazz.
+  ///
+  /// In en, this message translates to:
+  /// **'Jazz'**
+  String get studyBgmJazz;
+
+  /// No description provided for @studyBgmBrownNoise.
+  ///
+  /// In en, this message translates to:
+  /// **'Brown noise'**
+  String get studyBgmBrownNoise;
 }
 
 class _AppLocalizationsDelegate

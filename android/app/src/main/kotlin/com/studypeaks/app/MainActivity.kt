@@ -14,6 +14,9 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val channel = "com.studypeaks.app/lock_task"
     private var methodChannel: MethodChannel? = null
+    private var bgmChannel: MethodChannel? = null
+    private var bgmPlayer: StudyBgmPlayer? = null
+    private var visible = false
     private val handler = Handler(Looper.getMainLooper())
     private var pendingPin: MethodChannel.Result? = null
     private var promptShown = false
@@ -45,6 +48,26 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        val messenger = flutterEngine.dartExecutor.binaryMessenger
+        val playbackChannel = MethodChannel(messenger, "com.studypeaks.app/study_bgm")
+        bgmChannel = playbackChannel
+        bgmPlayer = StudyBgmPlayer(this) { event, attempt ->
+            playbackChannel.invokeMethod(event, attempt)
+        }
+        playbackChannel.setMethodCallHandler { call, result ->
+            if (call.method != "updatePlayback") {
+                result.notImplemented()
+            } else {
+                bgmPlayer?.update(
+                    track = call.argument<String>("track"),
+                    volume = (call.argument<Double>("volume") ?: 0.35).coerceIn(0.0, 1.0).toFloat(),
+                    enabled = call.argument<Boolean>("enabled") == true,
+                    playing = visible && call.argument<Boolean>("playing") == true,
+                    attempt = call.argument<Int>("attempt") ?: 0,
+                )
+                result.success(null)
+            }
+        }
         methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel)
         methodChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
@@ -118,7 +141,22 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        visible = true
+    }
+
+    override fun onStop() {
+        visible = false
+        bgmPlayer?.suspendPlayback()
+        super.onStop()
+    }
+
     override fun onDestroy() {
+        bgmChannel?.setMethodCallHandler(null)
+        bgmChannel = null
+        bgmPlayer?.dispose()
+        bgmPlayer = null
         releasePin()
         methodChannel?.setMethodCallHandler(null)
         methodChannel = null

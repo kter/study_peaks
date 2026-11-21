@@ -324,5 +324,21 @@
   },
   "notificationSessionAt": "Study session at {roomName}",
   "@notificationSessionAt": {"placeholders": {"roomName": {"type": "String"}}},
-  "notificationTimerReady": "Ready to start"
+  "notificationTimerReady": "Ready to start",
+  "studyBgm": "Background audio",
+  "studyBgmPlay": "Play background audio",
+  "studyBgmDuringTimer": "Plays while the study timer is running.",
+  "studyBgmTrack": "Sound",
+  "studyBgmVolume": "BGM volume",
+  "studyBgmInterrupted": "Audio was interrupted. Turn it on to resume.",
+  "studyBgmFailed": "Could not play audio. Try turning it on again.",
+  "studyBgmRain": "Nature · Rain",
+  "studyBgmWaves": "Nature · Waves",
+  "studyBgmMusicBox": "Music box",
+  "studyBgmDreamy": "Dreamy ambient",
+  "studyBgmPiano": "Piano",
+  "studyBgmOrchestra": "Orchestral strings",
+  "studyBgmLoFi": "Lo-fi",
+  "studyBgmJazz": "Jazz",
+  "studyBgmBrownNoise": "Brown noise"
 }
