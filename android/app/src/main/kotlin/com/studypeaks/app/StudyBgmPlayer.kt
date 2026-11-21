@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioAttributes
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
@@ -23,10 +25,12 @@ internal class StudyBgmPlayer(
         .build()
     private var focusListener: AudioManager.OnAudioFocusChangeListener? = null
     private var focusRequest: AudioFocusRequest? = null
+    private var focusSuspended = false
     private var player: MediaPlayer? = null
     private var prepared = false
     private var track: String? = null
     private var volume = 0.35f
+    private var enabled = false
     private var playing = false
     private var attempt = 0
     private var interruptedAttempt: Int? = null
@@ -34,12 +38,33 @@ internal class StudyBgmPlayer(
     private val noisyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
-                interrupt()
+                finishAttempt("interrupted")
             }
         }
     }
 
+    // The noisy broadcast can be suppressed while no media is playing.
+    // Watch output removal during breaks and pauses as well.
+    private val outputCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) {
+            if (removedDevices.any { it.isSink && isHeadphone(it.type) }) {
+                finishAttempt("interrupted")
+            }
+        }
+    }
+
+    private fun isHeadphone(type: Int): Boolean = when (type) {
+        AudioDeviceInfo.TYPE_WIRED_HEADSET,
+        AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+        AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+        AudioDeviceInfo.TYPE_BLE_HEADSET,
+        AudioDeviceInfo.TYPE_HEARING_AID,
+        AudioDeviceInfo.TYPE_USB_HEADSET -> true
+        else -> false
+    }
+
     init {
+        audio.registerAudioDeviceCallback(outputCallback, null)
         val filter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.registerReceiver(noisyReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -48,25 +73,25 @@ internal class StudyBgmPlayer(
         }
     }
 
-    fun update(track: String?, volume: Float, playing: Boolean, attempt: Int) {
+    fun update(track: String?, volume: Float, enabled: Boolean, playing: Boolean, attempt: Int) {
         this.attempt = attempt
         this.volume = volume
-        this.playing = playing && attempt != interruptedAttempt
+        this.enabled = enabled && attempt != interruptedAttempt
+        this.playing = this.enabled && playing
         if (this.track != track) {
             releasePlayer()
             this.track = track
         }
-        if (track == null) return
-        if (player == null && this.playing) {
-            prepare(track)
-        } else if (prepared) {
-            applyPlayback()
+        when {
+            track != null && player == null && this.playing -> prepare(track)
+            prepared -> applyPlayback()
+            !this.playing -> releaseAudioFocus()
         }
     }
 
     fun suspendPlayback() {
         playing = false
-        if (prepared) applyPlayback()
+        if (prepared) applyPlayback() else releaseAudioFocus()
     }
 
     private fun prepare(track: String) {
@@ -98,7 +123,7 @@ internal class StudyBgmPlayer(
         try {
             current.isLooping = true
             current.setVolume(volume, volume)
-            if (playing) {
+            if (playing && !focusSuspended) {
                 if (!current.isPlaying) {
                     if (!requestAudioFocus()) {
                         fail("Audio focus denied")
@@ -108,7 +133,7 @@ internal class StudyBgmPlayer(
                 }
             } else {
                 if (current.isPlaying) current.pause()
-                releaseAudioFocus()
+                if (!playing) releaseAudioFocus()
             }
         } catch (error: IllegalStateException) {
             fail("Unable to change audio playback", error)
@@ -120,8 +145,18 @@ internal class StudyBgmPlayer(
         if (focusListener != null) return true
         val listener = object : AudioManager.OnAudioFocusChangeListener {
             override fun onAudioFocusChange(change: Int) {
-                if (focusListener === this && change < AudioManager.AUDIOFOCUS_GAIN) {
-                    interrupt()
+                if (focusListener !== this) return
+                when (change) {
+                    AudioManager.AUDIOFOCUS_LOSS -> finishAttempt("interrupted")
+                    AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+                    AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                        focusSuspended = true
+                        if (prepared) applyPlayback()
+                    }
+                    AudioManager.AUDIOFOCUS_GAIN -> {
+                        focusSuspended = false
+                        if (prepared) applyPlayback()
+                    }
                 }
             }
         }
@@ -146,6 +181,7 @@ internal class StudyBgmPlayer(
 
     @Suppress("DEPRECATION")
     private fun releaseAudioFocus() {
+        focusSuspended = false
         val listener = focusListener ?: return
         focusListener = null
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -156,20 +192,19 @@ internal class StudyBgmPlayer(
         }
     }
 
-    private fun interrupt() {
-        if (!playing && player == null) return
-        playing = false
-        interruptedAttempt = attempt
-        releasePlayer()
-        report("interrupted", attempt)
-    }
-
     private fun fail(message: String, error: Exception? = null) {
         Log.w("StudyBgmPlayer", message, error)
+        finishAttempt("failed")
+    }
+
+    private fun finishAttempt(event: String) {
+        if (!enabled) return
+        enabled = false
         playing = false
         interruptedAttempt = attempt
         releasePlayer()
-        report("failed", attempt)
+        releaseAudioFocus()
+        report(event, attempt)
     }
 
     private fun releasePlayer() {
@@ -177,11 +212,12 @@ internal class StudyBgmPlayer(
         player = null
         prepared = false
         previous?.release()
-        releaseAudioFocus()
     }
 
     fun dispose() {
         releasePlayer()
+        releaseAudioFocus()
+        audio.unregisterAudioDeviceCallback(outputCallback)
         context.unregisterReceiver(noisyReceiver)
     }
 }

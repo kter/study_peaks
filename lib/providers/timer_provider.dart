@@ -334,8 +334,11 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
           _finalizing ||
           _recoveryBlocked ||
           sessionId != _sessionId) {
-        _releaseLockTask();
-        if (pinned) await _lockTaskService.stopLockTask();
+        if (_pinRequested) {
+          _releaseLockTask();
+        } else if (pinned) {
+          await _lockTaskService.stopLockTask();
+        }
         return;
       }
       _isScreenLocked = pinned;

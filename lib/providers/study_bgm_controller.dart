@@ -26,6 +26,7 @@ enum StudyBgmMessage { interrupted, failed }
 
 typedef _Playback = ({
   StudyBgmTrack? track,
+  bool enabled,
   bool playing,
   double volume,
   int attempt,
@@ -168,11 +169,12 @@ class StudyBgmController extends ChangeNotifier {
     final track = retainTrack ? _track : null;
     final next = (
       track: track,
+      enabled: _enabled,
       playing: playing,
       volume: track == null ? 0.0 : _volume,
       attempt: _attempt,
     );
-    if (next == _sent || (_sent == null && !playing)) return false;
+    if (next == _sent || (_sent == null && !_enabled)) return false;
     _sent = next;
     unawaited(_send(next));
     return true;
@@ -182,6 +184,7 @@ class StudyBgmController extends ChangeNotifier {
     try {
       await _channel.invokeMethod<void>('updatePlayback', {
         'track': command.track?.asset,
+        'enabled': command.enabled,
         'playing': command.playing,
         'volume': command.volume,
         'attempt': command.attempt,

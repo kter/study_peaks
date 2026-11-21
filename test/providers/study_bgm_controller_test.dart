@@ -55,10 +55,10 @@ void main() {
     timer.dispose();
   });
 
-  Future<void> sendInterruption(int attempt) async {
+  Future<void> sendPlayerEvent(String event, int attempt) async {
     await messenger.handlePlatformMessage(
       channel.name,
-      channel.codec.encodeMethodCall(MethodCall('interrupted', attempt)),
+      channel.codec.encodeMethodCall(MethodCall(event, attempt)),
       (_) {},
     );
   }
@@ -73,7 +73,8 @@ void main() {
     expect(calls, isEmpty);
 
     bgm.setEnabled(true);
-    expect(calls, isEmpty);
+    expect(calls.last.arguments, containsPair('enabled', true));
+    expect(calls.last.arguments, containsPair('playing', false));
     timer.change(running: true);
     expect(calls.last.arguments, containsPair('track', 'rain'));
     expect(calls.last.arguments, containsPair('playing', true));
@@ -133,16 +134,51 @@ void main() {
     bgm.selectTrack(StudyBgmTrack.jazz);
     bgm.setVolume(0.5);
 
-    await sendInterruption(attempt);
+    await sendPlayerEvent('interrupted', attempt);
     expect(bgm.enabled, isFalse);
     expect(bgm.message, StudyBgmMessage.interrupted);
     expect(calls.last.arguments, containsPair('track', null));
 
     bgm.setEnabled(true);
-    await sendInterruption(attempt);
+    await sendPlayerEvent('interrupted', attempt);
     expect(bgm.enabled, isTrue);
     expect(calls.last.arguments, containsPair('track', 'jazz'));
     expect(calls.last.arguments, containsPair('volume', 0.5));
+  });
+
+  testWidgets('a headphone disconnect during a break disables the next play',
+      (tester) async {
+    final bgm = StudyBgmController(timer);
+    addTearDown(bgm.dispose);
+    await tester.pump();
+    timer.change(running: true);
+    bgm.setEnabled(true);
+
+    timer.change(onBreak: true);
+    expect(calls.last.arguments, containsPair('enabled', true));
+    expect(calls.last.arguments, containsPair('track', null));
+    final attempt = calls.last.arguments['attempt'] as int;
+
+    await sendPlayerEvent('interrupted', attempt);
+    timer.change(running: true);
+
+    expect(bgm.enabled, isFalse);
+    expect(calls.last.arguments, containsPair('enabled', false));
+    expect(calls.last.arguments, containsPair('playing', false));
+  });
+
+  testWidgets('a failed audio load does not stop the timer', (tester) async {
+    final bgm = StudyBgmController(timer);
+    addTearDown(bgm.dispose);
+    await tester.pump();
+    timer.change(running: true);
+    bgm.setEnabled(true);
+
+    await sendPlayerEvent('failed', calls.last.arguments['attempt'] as int);
+
+    expect(bgm.enabled, isFalse);
+    expect(bgm.message, StudyBgmMessage.failed);
+    expect(timer.isRunning, isTrue);
   });
 
   testWidgets('restores the track and volume with playback off',

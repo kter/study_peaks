@@ -61,6 +61,7 @@ class MainActivity : FlutterActivity() {
                 bgmPlayer?.update(
                     track = call.argument<String>("track"),
                     volume = (call.argument<Double>("volume") ?: 0.35).coerceIn(0.0, 1.0).toFloat(),
+                    enabled = call.argument<Boolean>("enabled") == true,
                     playing = visible && call.argument<Boolean>("playing") == true,
                     attempt = call.argument<Int>("attempt") ?: 0,
                 )
