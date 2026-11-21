@@ -7,6 +7,7 @@ import 'l10n/app_localizations.dart';
 import 'providers/auth_provider.dart';
 import 'providers/room_provider.dart';
 import 'providers/session_provider.dart';
+import 'providers/study_bgm_controller.dart';
 import 'providers/timer_provider.dart';
 import 'providers/user_settings_provider.dart';
 import 'repositories/mock_data_repository.dart';
@@ -47,6 +48,9 @@ class StudyPeaksApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: userSettingsProvider),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => TimerProvider()),
+        ChangeNotifierProvider(
+          create: (context) => StudyBgmController(context.read<TimerProvider>()),
+        ),
         Provider<StudyHistoryRepository>(
           create: (_) => StudyHistoryRepository(),
         ),

@@ -108,6 +108,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _screenLockEnabled = false;
   bool _isScreenLocked = false;
   bool _pinning = false;
+  bool _pinRequested = false;
   StreamSubscription<bool>? _lockTaskExitedSubscription;
 
   /// Callback invoked when lock task mode is exited by the user.
@@ -324,16 +325,22 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> startWithLock() async {
     if (_disposed || _finalizing || _recoveryBlocked || _isRunning || _pinning) return;
     _pinning = true;
+    _pinRequested = true;
     final sessionId = _sessionId;
     try {
       final pinned = await _lockTaskService.startLockTask();
-      if (_disposed || _finalizing || _recoveryBlocked || sessionId != _sessionId) {
+      if (!_pinRequested ||
+          _disposed ||
+          _finalizing ||
+          _recoveryBlocked ||
+          sessionId != _sessionId) {
+        _releaseLockTask();
         if (pinned) await _lockTaskService.stopLockTask();
         return;
       }
       _isScreenLocked = pinned;
       if (pinned) await _lockTaskService.setKeepScreenOn(true);
-      start();
+      if (_pinRequested) start();
     } finally {
       _pinning = false;
     }
@@ -479,11 +486,13 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Release lock task mode and keep-screen-on flag.
   void _releaseLockTask() {
-    if (_isScreenLocked) {
-      _lockTaskService.stopLockTask();
-      _lockTaskService.setKeepScreenOn(false);
-      _isScreenLocked = false;
-    }
+    // Android can accept its confirmation after the native polling timeout.
+    // Release a requested pin even if Flutter never observed it become active.
+    if (!_pinRequested) return;
+    _pinRequested = false;
+    _isScreenLocked = false;
+    _lockTaskService.stopLockTask();
+    _lockTaskService.setKeepScreenOn(false);
   }
 
   /// Restore saved timestamps and restart UI updates for a running timer.
@@ -661,6 +670,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Handle when the user manually exits lock task mode.
   void _handleLockTaskExited() {
+    _pinRequested = false;
     _isScreenLocked = false;
     _lockTaskService.setKeepScreenOn(false);
     // Notify UI to show a message, but DON'T stop the timer

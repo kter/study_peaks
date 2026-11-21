@@ -109,6 +109,20 @@ void main() {
     verify(() => mockLockTaskService.setKeepScreenOn(false)).called(1);
   });
 
+  test('leaving releases a pin accepted after the request timed out', () async {
+    when(() => mockLockTaskService.startLockTask())
+        .thenAnswer((_) async => false);
+
+    await timerProvider.startWithLock();
+    expect(timerProvider.isScreenLocked, false);
+    expect(timerProvider.isRunning, true);
+
+    timerProvider.freezeForFinalization();
+
+    verify(() => mockLockTaskService.stopLockTask()).called(1);
+    verify(() => mockLockTaskService.setKeepScreenOn(false)).called(1);
+  });
+
   group('TimerProvider - Start with Lock', () {
     test(
         'startWithLock calls LockTaskService.startLockTask and setKeepScreenOn',

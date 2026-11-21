@@ -8,11 +8,13 @@ import 'dialogs/lock_task_dialog.dart';
 class TimerWidget extends StatelessWidget {
   final bool isCollapsed;
   final VoidCallback? onToggleCollapsed;
+  final Widget? bgmButton;
 
   const TimerWidget({
     super.key,
     this.isCollapsed = false,
     this.onToggleCollapsed,
+    this.bgmButton,
   });
 
   @override
@@ -97,7 +99,7 @@ class TimerWidget extends StatelessWidget {
                     constraints: const BoxConstraints(),
                   ),
                 ),
-                const SizedBox(width: 8),
+                if (bgmButton != null) bgmButton! else const SizedBox(width: 8),
                 IconButton(
                   tooltip: l10n.expandTimer,
                   onPressed: onToggleCollapsed,
@@ -219,10 +221,10 @@ class TimerWidget extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Collapse button row
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
+              if (bgmButton != null) bgmButton!,
               IconButton(
                 onPressed: onToggleCollapsed,
                 icon: const Icon(Icons.expand_less),

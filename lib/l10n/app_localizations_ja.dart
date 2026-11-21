@@ -610,4 +610,52 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get notificationTimerReady => 'タイマーの開始待ち';
+
+  @override
+  String get studyBgm => 'BGM';
+
+  @override
+  String get studyBgmPlay => 'BGMを流す';
+
+  @override
+  String get studyBgmDuringTimer => '学習タイマーの動作中に流れます。';
+
+  @override
+  String get studyBgmTrack => '音源';
+
+  @override
+  String get studyBgmVolume => 'BGMの音量';
+
+  @override
+  String get studyBgmInterrupted => 'BGMが中断されました。スイッチをオンにすると再生できます。';
+
+  @override
+  String get studyBgmFailed => 'BGMを再生できませんでした。もう一度スイッチをオンにしてください。';
+
+  @override
+  String get studyBgmRain => '自然音・雨';
+
+  @override
+  String get studyBgmWaves => '自然音・波';
+
+  @override
+  String get studyBgmMusicBox => 'オルゴール';
+
+  @override
+  String get studyBgmDreamy => 'ドリーミー';
+
+  @override
+  String get studyBgmPiano => 'ピアノ';
+
+  @override
+  String get studyBgmOrchestra => 'オーケストラ';
+
+  @override
+  String get studyBgmLoFi => 'Lo-Fi';
+
+  @override
+  String get studyBgmJazz => 'ジャズ';
+
+  @override
+  String get studyBgmBrownNoise => 'ブラウンノイズ';
 }

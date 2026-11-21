@@ -635,4 +635,53 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get notificationTimerReady => 'Ready to start';
+
+  @override
+  String get studyBgm => 'Background audio';
+
+  @override
+  String get studyBgmPlay => 'Play background audio';
+
+  @override
+  String get studyBgmDuringTimer => 'Plays while the study timer is running.';
+
+  @override
+  String get studyBgmTrack => 'Sound';
+
+  @override
+  String get studyBgmVolume => 'BGM volume';
+
+  @override
+  String get studyBgmInterrupted =>
+      'Audio was interrupted. Turn it on to resume.';
+
+  @override
+  String get studyBgmFailed => 'Could not play audio. Try turning it on again.';
+
+  @override
+  String get studyBgmRain => 'Nature · Rain';
+
+  @override
+  String get studyBgmWaves => 'Nature · Waves';
+
+  @override
+  String get studyBgmMusicBox => 'Music box';
+
+  @override
+  String get studyBgmDreamy => 'Dreamy ambient';
+
+  @override
+  String get studyBgmPiano => 'Piano';
+
+  @override
+  String get studyBgmOrchestra => 'Orchestral strings';
+
+  @override
+  String get studyBgmLoFi => 'Lo-fi';
+
+  @override
+  String get studyBgmJazz => 'Jazz';
+
+  @override
+  String get studyBgmBrownNoise => 'Brown noise';
 }
