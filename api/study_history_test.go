@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/firestore"
+	"firebase.google.com/go/v4/auth"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -25,19 +26,29 @@ func TestRequireStudyHistoryOwner(t *testing.T) {
 			w.WriteHeader(http.StatusNoContent)
 		})
 	for _, test := range []struct {
-		uid  string
-		want int
+		uid      string
+		provider string
+		want     int
 	}{
-		{"", http.StatusUnauthorized},
-		{"other", http.StatusForbidden},
-		{"owner", http.StatusNoContent},
+		{"", "", http.StatusUnauthorized},
+		{"other", "google.com", http.StatusForbidden},
+		{"owner", "google.com", http.StatusNoContent},
+		{"owner", "anonymous", http.StatusForbidden},
 	} {
 		request := httptest.NewRequest(http.MethodGet, "/users/owner/study-history", nil)
-		request = request.WithContext(context.WithValue(request.Context(), userIdKey, test.uid))
+		if test.uid != "" {
+			request = request.WithContext(withAuthToken(request.Context(), &auth.Token{
+				UID:      test.uid,
+				Firebase: auth.FirebaseInfo{SignInProvider: test.provider},
+			}))
+		}
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, request)
 		if response.Code != test.want {
-			t.Errorf("UID %q received %d, want %d", test.uid, response.Code, test.want)
+			t.Errorf("UID %q with provider %q received %d, want %d", test.uid, test.provider, response.Code, test.want)
+		}
+		if test.provider == "anonymous" && response.Body.String() != "{\"error\":{\"code\":\"FORBIDDEN\",\"message\":\"Study history access denied\"}}\n" {
+			t.Errorf("anonymous response body = %s, want FORBIDDEN with Study history access denied", response.Body)
 		}
 	}
 }

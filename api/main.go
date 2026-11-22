@@ -27,11 +27,14 @@ import (
 
 type ctxKey int
 
-const userIdKey ctxKey = iota
+const (
+	userIdKey ctxKey = iota
+	anonymousAuthKey
+)
 
 const (
 	anonymousPrefix = "anon_"
-	sessionTTL      = 24 * time.Hour
+	sessionTTL      = 30 * time.Minute
 )
 
 var (
@@ -193,8 +196,7 @@ func optionalAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), userIdKey, decoded.UID)
-		next.ServeHTTP(w, r.WithContext(ctx))
+		next.ServeHTTP(w, r.WithContext(withAuthToken(r.Context(), decoded)))
 	})
 }
 
@@ -473,6 +475,9 @@ func sitHandler(w http.ResponseWriter, r *http.Request) {
 			"countryCode":            req.CountryCode,
 			"statusMessage":          "",
 		}
+		if isAnonymousAuth(ctx) {
+			updateMap["ownerAnonymous"] = true
+		}
 
 		// Only save if provided
 		if req.IconSeed != "" {
@@ -502,9 +507,19 @@ func validSeatNumber(seatNumber, capacity int) bool {
 	return seatNumber >= 1 && seatNumber <= capacity
 }
 
+func withAuthToken(ctx context.Context, token *auth.Token) context.Context {
+	ctx = context.WithValue(ctx, userIdKey, token.UID)
+	return context.WithValue(ctx, anonymousAuthKey, token.Firebase.SignInProvider == "anonymous")
+}
+
 func authenticatedUserId(ctx context.Context) string {
 	userId, _ := ctx.Value(userIdKey).(string)
 	return userId
+}
+
+func isAnonymousAuth(ctx context.Context) bool {
+	anonymous, _ := ctx.Value(anonymousAuthKey).(bool)
+	return anonymous
 }
 
 func canMoveSeat(userId string) bool {
@@ -515,8 +530,8 @@ func canTakeSeat(occupied bool, ownerId, callerId string) bool {
 	return !occupied || (canMoveSeat(callerId) && ownerId == callerId)
 }
 
-func canModifySession(ownerId, callerId string) bool {
-	return strings.HasPrefix(ownerId, anonymousPrefix) || (callerId != "" && callerId == ownerId)
+func canModifySession(ownerId, callerId string, ownerAnonymous bool) bool {
+	return strings.HasPrefix(ownerId, anonymousPrefix) || ownerAnonymous || (callerId != "" && callerId == ownerId)
 }
 
 func mutateSession(ctx context.Context, roomId, sessionId string, mutate func(*firestore.DocumentRef, firestore.Precondition) error) error {
@@ -528,7 +543,8 @@ func mutateSession(ctx context.Context, roomId, sessionId string, mutate func(*f
 		if lookupErr != nil {
 			return lookupErr
 		}
-		if !canModifySession(getString(doc.Data(), "userId"), userId) {
+		data := doc.Data()
+		if !canModifySession(getString(data, "userId"), userId, getBool(data, "ownerAnonymous")) {
 			return &AppError{Code: "FORBIDDEN", Message: "Session belongs to another user", Status: http.StatusForbidden}
 		}
 

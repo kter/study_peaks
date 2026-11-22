@@ -49,12 +49,13 @@ type studyHistoryPage struct {
 
 func requireStudyHistoryOwner(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		uid := authenticatedUserId(r.Context())
+		ctx := r.Context()
+		uid := authenticatedUserId(ctx)
 		if uid == "" {
 			writeError(w, http.StatusUnauthorized, "SIGN_IN_REQUIRED", "Sign in to sync study history")
 			return
 		}
-		if uid != chi.URLParam(r, "userId") {
+		if isAnonymousAuth(ctx) || uid != chi.URLParam(r, "userId") {
 			writeError(w, http.StatusForbidden, "FORBIDDEN", "Study history access denied")
 			return
 		}
