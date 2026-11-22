@@ -17,6 +17,43 @@ void main() {
     );
   }
 
+  test('display start uses the earliest focus start and preserves seat time',
+      () {
+    final seatStart = DateTime.utc(2027, 1, 5, 10);
+    final focusStart = seatStart.add(const Duration(minutes: 5));
+    final nextFocus = focusStart.add(const Duration(minutes: 10));
+    final session = StudySession(
+      roomId: 'fuji',
+      startTime: seatStart,
+      durationSeconds: 120,
+      intervals: [
+        for (final start in [focusStart, nextFocus])
+          FocusInterval(
+            start: start,
+            end: start.add(const Duration(minutes: 1)),
+            offsetMinutes: 0,
+          ),
+      ],
+    );
+
+    expect(session.displayStartTime, focusStart);
+    expect(session.startTime, seatStart);
+  });
+
+  test('display start falls back to seat time for missing or empty intervals',
+      () {
+    final seatStart = DateTime.utc(2027, 1, 5, 10);
+    for (final intervals in [null, <FocusInterval>[]]) {
+      final session = StudySession(
+        roomId: 'fuji',
+        startTime: seatStart,
+        durationSeconds: 0,
+        intervals: intervals,
+      );
+      expect(session.displayStartTime, seatStart);
+    }
+  });
+
   test('navigation ceiling is the later of today and the last study day', () {
     final studyDay = DateTime.utc(2027, 1, 5);
     final history = StudyHistory([

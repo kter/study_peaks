@@ -30,6 +30,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signInWithGoogle => 'Sign in with Google';
 
   @override
+  String get signInGuestSessionConfirmation =>
+      'The current study session will be saved to the guest history on this device, not to your account. Sign in anyway?';
+
+  @override
+  String get signOutLeaveConfirmation =>
+      'Signing out will leave your seat. Continue?';
+
+  @override
+  String get signOutLeaveFailed =>
+      'Could not leave your seat. Please try again.';
+
+  @override
   String get signInPrompt =>
       'Sign in to save your study progress and sync across devices.';
 
@@ -78,6 +90,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sitDown => 'Sit Down';
 
   @override
+  String get sitAndPin => 'Pin screen & sit';
+
+  @override
   String get leave => 'Leave';
 
   @override
@@ -108,6 +123,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get leaveSummaryTitle => 'Study time recorded';
+
+  @override
+  String get leaveSummarySavedToGuest =>
+      'Saved to the guest history on this device.';
 
   @override
   String get leaveSummarySession => 'This session';

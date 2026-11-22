@@ -51,6 +51,9 @@ class StudySession {
   /// Null means timing is unavailable: attribute to start day, explicitly legacy.
   final List<FocusInterval>? intervals;
 
+  /// The first device-clock focus start, with seat time as a fallback.
+  DateTime get displayStartTime => intervals?.firstOrNull?.start ?? startTime;
+
   StudySession(
       {this.id,
       String? sessionId,

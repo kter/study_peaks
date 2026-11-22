@@ -4,6 +4,7 @@ import 'package:jdenticon_dart/jdenticon_dart.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:country_flags/country_flags.dart';
 import '../l10n/app_localizations.dart';
+import '../models/study_session.dart';
 import '../providers/auth_provider.dart';
 import '../providers/session_provider.dart';
 import '../providers/user_settings_provider.dart';
@@ -21,6 +22,7 @@ class UserSettingsScreen extends StatefulWidget {
 class _UserSettingsScreenState extends State<UserSettingsScreen> {
   late TextEditingController _nameController;
   String? _selectedCountry;
+  bool _signOutInProgress = false;
 
   static const _countries = [
     'JP', 'US', 'GB', 'CN', 'KR', 'DE', 'FR', 'IT', 'ES', 'BR',
@@ -502,6 +504,62 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
     );
   }
 
+  Future<bool?> _confirmAuthChange(String message, String action) {
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child:
+                Text(MaterialLocalizations.of(dialogContext).cancelButtonLabel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(action),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _signOut(AuthProvider auth) async {
+    if (_signOutInProgress) return;
+    setState(() => _signOutInProgress = true);
+    final session = context.read<SessionProvider>();
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      if (session.state != SessionState.idle) {
+        final confirmed =
+            await _confirmAuthChange(l10n.signOutLeaveConfirmation, l10n.signOut);
+        if (confirmed != true || !mounted) return;
+      }
+      if (session.state != SessionState.idle) {
+        final released = switch (await session.leave()) {
+          LeaveCompleted(serverFailure: null) || LeaveFailure.storageAfterRelease => true,
+          _ => false,
+        };
+        if (!released) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(l10n.signOutLeaveFailed)),
+            );
+          }
+          return;
+        }
+      }
+      await auth.signOut();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.signedOutSuccessfully)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _signOutInProgress = false);
+    }
+  }
+
   Widget _buildAuthSection(BuildContext context, AuthProvider auth) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
@@ -544,14 +602,9 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                   ),
                 )),
                 TextButton(
-                  onPressed: () async {
-                    await auth.signOut();
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(AppLocalizations.of(context)!.signedOutSuccessfully)),
-                      );
-                    }
-                  },
+                  onPressed: auth.isLoading || _signOutInProgress
+                      ? null
+                      : () => _signOut(auth),
                   child: Text(AppLocalizations.of(context)!.signOut),
                 ),
               ],
@@ -571,6 +624,17 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                 onPressed: auth.isLoading
                     ? null
                     : () async {
+                        final session = context.read<SessionProvider>();
+                        if (session.state != SessionState.idle &&
+                            !session.isFinalizing &&
+                            session.sessionOwnerId == StudySession.guestOwner) {
+                          final l10n = AppLocalizations.of(context)!;
+                          final confirmed = await _confirmAuthChange(
+                            l10n.signInGuestSessionConfirmation,
+                            l10n.signIn,
+                          );
+                          if (confirmed != true || !context.mounted) return;
+                        }
                         final success = await auth.signInWithGoogle();
                         if (context.mounted) {
                           if (success) {

@@ -343,7 +343,7 @@ class _StudyHistoryCalendarState extends State<StudyHistoryCalendar> {
               children: [
                 Text(
                   l10n.historySessionStart(
-                    startFormat.format(session.startTime.toLocal()),
+                    startFormat.format(session.displayStartTime.toLocal()),
                   ),
                 ),
                 Text(

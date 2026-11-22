@@ -204,6 +204,7 @@ class SessionProvider extends ChangeNotifier {
   String? get currentRoomId => _currentRoomId;
   String? get currentRoomName => _currentRoomName;
   String? get sessionId => _sessionId;
+  String? get sessionOwnerId => _ownerId;
   int? get seatNumber => _seatNumber;
   DateTime? get sessionStartedAt => _sessionStartedAt;
   int get currentDuration => _currentDuration;
@@ -218,7 +219,8 @@ class SessionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Sit down on a seat.
+  /// Sit down on a seat. Set [startTimer] to false to start the timer and
+  /// request notification permission separately after taking the seat.
   Future<bool> sit(
     String roomId,
     int seatNumber, {
@@ -227,6 +229,7 @@ class SessionProvider extends ChangeNotifier {
     String? countryCode,
     String? iconSeed,
     String? photoUrl,
+    bool startTimer = true,
   }) async {
     // A duplicate call while a sit is in flight stays silent; the first
     // call reports its own result.
@@ -272,8 +275,10 @@ class SessionProvider extends ChangeNotifier {
 
       if (!_disposed && _sessionId == response.sessionId && _pendingRecord == null) {
         _startSyncTimer();
-        _timerProvider?.start(sessionId: response.sessionId);
-        await refreshStudyNotification(requestPermission: true);
+        if (startTimer) {
+          _timerProvider?.start(sessionId: response.sessionId);
+          await refreshStudyNotification(requestPermission: true);
+        }
       }
 
       if (!_disposed) notifyListeners();
@@ -302,7 +307,7 @@ class SessionProvider extends ChangeNotifier {
         _ownerId = ownerAtStart;
         await _persistSession();
         _state = SessionState.seated;
-        _timerProvider?.start(sessionId: _sessionId);
+        if (startTimer) _timerProvider?.start(sessionId: _sessionId);
         notifyListeners();
         return true;
       }

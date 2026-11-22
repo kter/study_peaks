@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/models.dart';
 
-/// Dialog to confirm sitting in a seat.
-///
-/// Shows a confirmation dialog when user attempts to take a seat.
-/// Returns true if user confirmed, false if cancelled.
-Future<bool?> showSitConfirmationDialog({
+enum SitConfirmationResult { cancel, sit, sitAndPin }
+
+/// Confirms sitting in a seat, optionally with screen pinning.
+Future<SitConfirmationResult> showSitConfirmationDialog({
   required BuildContext context,
   required Seat seat,
-}) {
-  return showDialog<bool>(
+  bool offerScreenPin = false,
+}) async {
+  final result = await showDialog<SitConfirmationResult>(
     context: context,
     builder: (dialogContext) {
       final l10n = AppLocalizations.of(dialogContext)!;
@@ -19,20 +19,35 @@ Future<bool?> showSitConfirmationDialog({
         content: Text(l10n.sitQuestion),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(SitConfirmationResult.cancel),
             child:
                 Text(MaterialLocalizations.of(dialogContext).cancelButtonLabel),
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1A237E),
+          if (offerScreenPin) ...[
+            TextButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(SitConfirmationResult.sit),
+              child: Text(l10n.sitDown),
             ),
-            child:
-                Text(l10n.sitDown, style: const TextStyle(color: Colors.white)),
-          ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext)
+                  .pop(SitConfirmationResult.sitAndPin),
+              child: Text(l10n.sitAndPin),
+            ),
+          ] else
+            ElevatedButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(SitConfirmationResult.sit),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A237E),
+              ),
+              child: Text(l10n.sitDown,
+                  style: const TextStyle(color: Colors.white)),
+            ),
         ],
       );
     },
   );
+  return result ?? SitConfirmationResult.cancel;
 }

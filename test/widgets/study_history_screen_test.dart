@@ -4,6 +4,7 @@ import 'dart:ui' show SemanticsAction;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/intl.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:provider/provider.dart';
 import 'package:study_peaks/l10n/app_localizations.dart';
@@ -178,7 +179,9 @@ void main() {
 
   testWidgets('a summary hides an earlier owner’s record after auth changes',
       (tester) async {
+    auth.changeUser('original-owner');
     final record = StudySession(
+      ownerId: StudySession.ownerFor('original-owner'),
       roomId: 'fuji',
       startTime: today,
       durationSeconds: 20,
@@ -255,11 +258,13 @@ void main() {
       final semantics = tester.ensureSemantics();
       today = DateTime(2028, 3, 1);
       final lateFebruary = DateTime.utc(2028, 2, 29, 14, 59, 47);
+      final serverStart = lateFebruary.subtract(const Duration(minutes: 5));
+      final legacyStart = DateTime(2028, 2, 29, 12);
       query().thenAnswer(
         (_) async => StudyHistory([
           StudySession(
             roomId: 'fuji',
-            startTime: lateFebruary,
+            startTime: serverStart,
             durationSeconds: 37,
             intervals: [
               FocusInterval(
@@ -271,7 +276,7 @@ void main() {
           ),
           StudySession(
             roomId: 'fuji',
-            startTime: DateTime(2028, 2, 29, 12),
+            startTime: legacyStart,
             durationSeconds: 8,
           ),
           StudySession(
@@ -309,7 +314,12 @@ void main() {
       expect(find.text('Total for this day: 21s'), findsOneWidget);
       expect(find.text('13s'), findsOneWidget);
       expect(find.text('8s'), findsOneWidget);
-      expect(find.textContaining('Started '), findsNWidgets(2));
+      final startFormat = DateFormat.yMMMd('en').add_jm();
+      String started(DateTime time) =>
+          'Started ${startFormat.format(time.toLocal())}';
+      expect(find.text(started(lateFebruary)), findsOneWidget);
+      expect(find.text(started(legacyStart)), findsOneWidget);
+      expect(find.text(started(serverStart)), findsNothing);
       expect(
         tester
             .getSemantics(

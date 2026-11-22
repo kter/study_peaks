@@ -37,7 +37,10 @@ class _LeaveSummaryDialogState extends State<LeaveSummaryDialog> {
       (auth) => auth.historyOwnerId,
     );
     final record = widget.record;
-    final canShowRecord = record.isVisibleTo(currentOwner);
+    final canOpenHistory = record.isVisibleTo(currentOwner);
+    final savedToGuestHistory =
+        record.ownerId == StudySession.guestOwner && !canOpenHistory;
+    final canShowRecord = canOpenHistory || savedToGuestHistory;
     final warning = widget.warning;
     return AlertDialog(
       title: Text(canShowRecord ? l10n.leaveSummaryTitle : l10n.leftSeat),
@@ -56,6 +59,7 @@ class _LeaveSummaryDialogState extends State<LeaveSummaryDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (warning != null) Text(warning),
+                    if (savedToGuestHistory) Text(l10n.leaveSummarySavedToGuest),
                     StudyDurationRow(
                       label: l10n.leaveSummarySession,
                       seconds: record.durationSeconds,
@@ -93,7 +97,7 @@ class _LeaveSummaryDialogState extends State<LeaveSummaryDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: Text(l10n.close),
         ),
-        if (canShowRecord)
+        if (canOpenHistory)
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
             child: Text(l10n.studyHistory),

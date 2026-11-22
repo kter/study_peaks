@@ -2,16 +2,20 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:firebase_auth/firebase_auth.dart' show User;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:study_peaks/models/study_session.dart';
 import 'package:study_peaks/providers/auth_provider.dart';
 import 'package:study_peaks/repositories/study_history_repository.dart';
 import 'package:study_peaks/services/api_service.dart';
 import 'package:study_peaks/services/study_history_sync.dart';
+
+import '../helpers/test_helpers.dart';
 
 class _Auth extends ChangeNotifier implements AuthProvider {
   _Auth(this.userId);
@@ -116,6 +120,35 @@ void main() {
     expect(original.toSyncJson(), wireRecord);
     expect(StudySession.fromSyncJson(wireRecord, 'user:A').dailySeconds,
         {DateTime.utc(2026, 11, 20): 1, DateTime.utc(2026, 11, 21): 2});
+  });
+
+  test('history sync never requests a guest Firebase token', () async {
+    final events = StreamController<User?>();
+    addTearDown(events.close);
+    final firebase = MockFirebaseAuth();
+    when(() => firebase.authStateChanges()).thenAnswer((_) => events.stream);
+    final auth = AuthProvider(auth: firebase, googleSignIn: MockGoogleSignIn());
+    addTearDown(auth.dispose);
+    final api = MockApiService();
+    final sync = StudyHistorySync(auth, StudyHistoryRepository(), api);
+    addTearDown(sync.dispose);
+    sync.requestSync();
+
+    final guest = MockUser();
+    when(() => guest.isAnonymous).thenReturn(true);
+    when(() => guest.getIdToken(false)).thenAnswer((_) async => 'guest-token');
+    events.add(guest);
+    await Future<void>.delayed(Duration.zero);
+    expect(auth.user, same(guest));
+    sync.recordSaved(StudySession.guestOwner);
+    sync.requestSync();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(sync.revision, 0);
+    expect(sync.statusFor(StudySession.guestOwner), StudyHistorySyncStatus.idle);
+    verifyNever(() => firebase.signInAnonymously());
+    verifyNever(() => guest.getIdToken(any()));
+    verifyZeroInteractions(api);
   });
 
   test('two devices merge completed records across pages after a failed upload',

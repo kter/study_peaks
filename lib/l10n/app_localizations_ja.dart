@@ -30,6 +30,16 @@ class AppLocalizationsJa extends AppLocalizations {
   String get signInWithGoogle => 'Googleでサインイン';
 
   @override
+  String get signInGuestSessionConfirmation =>
+      '着席中の学習はアカウントではなく、この端末のゲストの履歴に保存されます。サインインしますか？';
+
+  @override
+  String get signOutLeaveConfirmation => 'サインアウトすると離席します。続けますか？';
+
+  @override
+  String get signOutLeaveFailed => '離席できませんでした。もう一度お試しください。';
+
+  @override
   String get signInPrompt => 'サインインして学習の進捗を保存し、デバイス間で同期しよう。';
 
   @override
@@ -77,6 +87,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get sitDown => '着席';
 
   @override
+  String get sitAndPin => '画面を固定して着席';
+
+  @override
   String get leave => '離席';
 
   @override
@@ -102,6 +115,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get leaveSummaryTitle => '学習時間を記録しました';
+
+  @override
+  String get leaveSummarySavedToGuest => 'この端末のゲストの履歴に保存しました。';
 
   @override
   String get leaveSummarySession => '今回';

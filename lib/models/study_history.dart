@@ -25,9 +25,12 @@ enum StudyHistoryPeriod {
 
 /// The portion of a completed session credited to one civil date.
 class DailyStudySession {
-  const DailyStudySession(this.startTime, this.seconds);
+  const DailyStudySession(this.startTime, this.seconds,
+      {DateTime? displayStartTime})
+      : displayStartTime = displayStartTime ?? startTime;
 
   final DateTime startTime;
+  final DateTime displayStartTime;
   final int seconds;
 }
 
@@ -41,9 +44,9 @@ class StudyHistory {
         final day = entry.key;
         final seconds = entry.value;
         if (seconds == 0) continue;
-        _sessionsByDay
-            .putIfAbsent(day, () => [])
-            .add(DailyStudySession(session.startTime, seconds));
+        _sessionsByDay.putIfAbsent(day, () => []).add(DailyStudySession(
+            session.startTime, seconds,
+            displayStartTime: session.displayStartTime));
         _dailySeconds.update(day, (total) => total + seconds,
             ifAbsent: () => seconds);
         final latest = _latestStudyDay;

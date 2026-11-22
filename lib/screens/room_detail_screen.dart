@@ -42,6 +42,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
   Timer? _seatRefreshTimer;
   SessionProvider? _sessionProvider;
   TimerProvider? _timerProvider;
+  NavigatorState? _navigator;
 
   @override
   void initState() {
@@ -53,6 +54,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     _sessionProvider?.addListener(_onErrorChanged);
 
     _timerProvider = context.read<TimerProvider>();
+    _navigator = Navigator.maybeOf(context);
 
     // Set up lock task exit callback
     _timerProvider?.onLockTaskExited = _onLockTaskExited;
@@ -172,6 +174,22 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     _sessionProvider?.removeListener(_onErrorChanged);
     _timerProvider?.onLockTaskExited = null;
     WidgetsBinding.instance.removeObserver(this);
+
+    final session = _sessionProvider;
+    final timer = _timerProvider;
+    final navigator = _navigator;
+    // Defer provider notifications until Flutter unlocks the widget tree.
+    if (session != null && timer != null && navigator != null) {
+      scheduleMicrotask(() {
+        if (navigator.mounted &&
+            session.state == SessionState.idle &&
+            session.sessionId == null &&
+            !session.isFinalizing &&
+            timer.sessionId == null) {
+          timer.endSession();
+        }
+      });
+    }
     super.dispose();
   }
 
@@ -413,9 +431,15 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       return;
     }
 
-    final confirmed = await showSitConfirmationDialog(context: context, seat: seat);
-    if (confirmed != true || !context.mounted) return;
+    final timer = context.read<TimerProvider>();
+    final choice = await showSitConfirmationDialog(
+      context: context,
+      seat: seat,
+      offerScreenPin: timer.screenLockEnabled,
+    );
+    if (choice == SitConfirmationResult.cancel || !context.mounted) return;
 
+    final session = context.read<SessionProvider>();
     final userSettings = context.read<UserSettingsProvider>();
     final authProvider = context.read<AuthProvider>();
     final signedInUserId = authProvider.isSignedIn ? authProvider.userId : null;
@@ -423,16 +447,25 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
 
     final photoUrl = googleAvatarUrl(authProvider, userSettings);
 
-    final success = await context.read<SessionProvider>().sit(
-          widget.room.roomId,
-          seat.seatNumber,
-          roomName: widget.room.name,
-          displayName: userSettings.displayName,
-          countryCode: userSettings.countryCode,
-          iconSeed: userSettings.iconSeed,
-          photoUrl: photoUrl,
+    final pinScreen = choice == SitConfirmationResult.sitAndPin;
+    final success = await session.sit(
+      widget.room.roomId,
+      seat.seatNumber,
+      roomName: widget.room.name,
+      displayName: userSettings.displayName,
+      countryCode: userSettings.countryCode,
+      iconSeed: userSettings.iconSeed,
+      photoUrl: photoUrl,
+      startTimer: !pinScreen,
+    );
 
-        );
+    final sessionId = session.sessionId;
+    if (success && pinScreen && sessionId != null && !session.isFinalizing) {
+      await timer.startWithLock(sessionId: sessionId);
+      if (session.sessionId == sessionId && timer.sessionId == sessionId) {
+        await session.refreshStudyNotification(requestPermission: true);
+      }
+    }
 
     if (!context.mounted) return;
 
@@ -456,7 +489,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
               photoUrl: photoUrl,
               statusMessage: '',
             ),
-            sessionStartedAt: context.read<SessionProvider>().sessionStartedAt,
+            sessionStartedAt: session.sessionStartedAt,
             replacesUserSeat: signedInUserId != null,
           );
     }
@@ -529,7 +562,9 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     };
     final messenger = ScaffoldMessenger.of(context)..clearSnackBars();
     final record = result.record;
-    if (!result.showSummary || !record.isVisibleTo(session.historyOwnerId)) {
+    final canShowRecord = record.ownerId == StudySession.guestOwner ||
+        record.isVisibleTo(session.historyOwnerId);
+    if (!result.showSummary || !canShowRecord) {
       messenger.showSnackBar(SnackBar(content: Text(warning ?? l10n.leftSeat)));
       return;
     }
