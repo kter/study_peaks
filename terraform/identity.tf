@@ -17,7 +17,7 @@ resource "google_identity_platform_config" "main" {
     allow_duplicate_emails = false
 
     anonymous {
-      enabled = false
+      enabled = true
     }
 
     email {
@@ -37,12 +37,12 @@ resource "google_identity_platform_config" "main" {
 
 # OAuth Client for Identity Platform (Web)
 resource "google_identity_platform_default_supported_idp_config" "google" {
-  provider       = google-beta
-  project        = var.project_id
-  enabled        = true
-  idp_id         = "google.com"
-  client_id      = var.google_oauth_client_id
-  client_secret  = var.google_oauth_client_secret
+  provider      = google-beta
+  project       = var.project_id
+  enabled       = true
+  idp_id        = "google.com"
+  client_id     = var.google_oauth_client_id
+  client_secret = var.google_oauth_client_secret
 
   depends_on = [google_identity_platform_config.main]
 

@@ -25,7 +25,7 @@ locals {
 resource "google_cloud_run_v2_service" "api" {
   name     = local.api_service_name
   location = var.region
-  
+
   depends_on = [
     google_project_service.run,
     google_artifact_registry_repository.api,
@@ -112,11 +112,11 @@ resource "google_cloud_run_v2_service_iam_member" "public" {
   member   = "allUsers"
 }
 
-# Cloud Scheduler for auto-logout (24h inactive sessions)
+# Cloud Scheduler for auto-logout (30 minutes of inactivity)
 resource "google_cloud_scheduler_job" "auto_logout" {
   name        = "study-peaks-auto-logout-${local.environment}"
-  description = "Force logout inactive sessions (24h without activity)"
-  schedule    = "0 * * * *" # Every hour
+  description = "Force logout inactive sessions (30 minutes without a sync)"
+  schedule    = "*/10 * * * *"
   time_zone   = "UTC"
   region      = var.region
 

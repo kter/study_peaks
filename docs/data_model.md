@@ -80,14 +80,15 @@ Study room definitions.
 
 Individual seat state within a room.
 
-When a signed-in user takes a seat, the API looks up all seat documents for that `userId` across rooms, deletes them, and writes the new seat in one transaction. Taking the same seat replaces its session ID. If someone else occupies the requested seat, the transaction leaves the user's existing seats in place.
+When a user with a verified Firebase UID takes a seat, including a user signed in anonymously, the API looks up all seat documents for that `userId` across rooms, deletes them, and writes the new seat in one transaction. Taking the same seat replaces its session ID. If someone else occupies the requested seat, the transaction leaves the user's existing seats in place.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `seatId` | string | Document ID (e.g., "seat-001") |
 | `seatNumber` | number | Visual seat number (1-100) |
 | `isOccupied` | boolean | Occupation status |
-| `userId` | string \| null | Occupying user's ID |
+| `userId` | string \| null | Occupying user's Firebase UID or an `anon_<uuid>` ID for guests without a token |
+| `ownerAnonymous` | boolean (optional) | True if the seat was created using a Firebase anonymous token |
 | `sessionId` | string \| null | Current session identifier |
 | `sessionStartedAt` | timestamp \| null | When user sat down (server timestamp) |
 | `lastSyncAt` | timestamp \| null | Last 5-min sync (server timestamp) |
@@ -134,7 +135,7 @@ Apply this index with Terraform and wait until it is `READY` before deploying an
 1. **Inactive Session Cleanup**
    - Collection: `seats`
    - Fields: `isOccupied` (ASC), `lastSyncAt` (ASC)
-   - Purpose: Query sessions for 24h auto-logout
+   - Purpose: Query sessions for auto-logout after 30 minutes of inactivity
 
 2. **Room Seats Query**
    - Collection: `seats` (collection group)
@@ -145,11 +146,11 @@ Apply this index with Terraform and wait until it is `READY` before deploying an
 
 ## Auto-Logout Logic
 
-The Cloud Scheduler job runs every hour and queries:
+The Cloud Scheduler job runs every 10 minutes and queries:
 
 ```
 WHERE isOccupied == true
-AND lastSyncAt < (now - 24 hours)
+AND lastSyncAt < (now - 30 minutes)
 ```
 
 Matching seats are force-vacated:

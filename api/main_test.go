@@ -9,6 +9,7 @@ import (
 	"time"
 
 	firebase "firebase.google.com/go/v4"
+	"firebase.google.com/go/v4/auth"
 	"google.golang.org/api/idtoken"
 )
 
@@ -80,6 +81,8 @@ func TestCanTakeSeat(t *testing.T) {
 		{"guest takes empty seat", false, "", "anon_guest", true},
 		{"signed-in user takes empty seat", false, "", "uid-1", true},
 		{"signed-in user retakes own seat", true, "uid-1", "uid-1", true},
+		{"Firebase anonymous user retakes own seat", true, "guest-uid", "guest-uid", true},
+		{"Firebase anonymous user cannot take another user's seat", true, "uid-1", "guest-uid", false},
 		{"signed-in user cannot take another user's seat", true, "uid-2", "uid-1", false},
 		{"signed-in user cannot take a guest's seat", true, "anon_guest", "uid-1", false},
 		{"guest cannot retake an occupied seat", true, "anon_guest", "anon_guest", false},
@@ -97,25 +100,59 @@ func TestCanTakeSeat(t *testing.T) {
 
 func TestCanModifySession(t *testing.T) {
 	cases := []struct {
-		name     string
-		ownerId  string
-		callerId string
-		want     bool
+		name           string
+		ownerId        string
+		callerId       string
+		ownerAnonymous bool
+		want           bool
 	}{
-		{"guest session, guest caller", "anon_guest", "", true},
-		{"guest session, signed-in caller", "anon_guest", "uid-1", true},
-		{"matching authenticated user", "uid-1", "uid-1", true},
-		{"different authenticated user", "uid-1", "uid-2", false},
-		{"missing authentication", "uid-1", "", false},
-		{"missing owner and authentication", "", "", false},
+		{"legacy guest session, tokenless caller", "anon_guest", "", false, true},
+		{"legacy guest session, signed-in caller", "anon_guest", "uid-1", false, true},
+		{"Firebase anonymous session, same UID", "guest-uid", "guest-uid", true, true},
+		{"Firebase anonymous session, signed-in caller", "guest-uid", "uid-1", true, true},
+		{"Firebase anonymous session, tokenless caller", "guest-uid", "", true, true},
+		{"matching authenticated user", "uid-1", "uid-1", false, true},
+		{"different authenticated user", "uid-1", "uid-2", false, false},
+		{"missing authentication", "uid-1", "", false, false},
+		{"missing owner and authentication", "", "", false, false},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := canModifySession(c.ownerId, c.callerId); got != c.want {
-				t.Errorf("canModifySession(%q, %q) = %t, want %t", c.ownerId, c.callerId, got, c.want)
+			if got := canModifySession(c.ownerId, c.callerId, c.ownerAnonymous); got != c.want {
+				t.Errorf("canModifySession(%q, %q, %t) = %t, want %t", c.ownerId, c.callerId, c.ownerAnonymous, got, c.want)
 			}
 		})
+	}
+}
+
+func TestWithAuthToken(t *testing.T) {
+	const uid = "firebase-uid"
+	for _, c := range []struct {
+		provider  string
+		anonymous bool
+	}{
+		{"anonymous", true},
+		{"google.com", false},
+	} {
+		t.Run(c.provider, func(t *testing.T) {
+			ctx := withAuthToken(context.Background(), &auth.Token{
+				UID:      uid,
+				Firebase: auth.FirebaseInfo{SignInProvider: c.provider},
+			})
+			if got := authenticatedUserId(ctx); got != uid {
+				t.Errorf("stored UID = %q, want %q", got, uid)
+			}
+			if got := isAnonymousAuth(ctx); got != c.anonymous {
+				t.Errorf("stored anonymous flag = %t, want %t", got, c.anonymous)
+			}
+		})
+	}
+}
+
+func TestSessionTTL(t *testing.T) {
+	if sessionTTL != 30*time.Minute {
+		t.Errorf("sessionTTL = %v, want 30 minutes", sessionTTL)
 	}
 }
 
@@ -136,6 +173,9 @@ func TestOptionalAuthMiddleware(t *testing.T) {
 	t.Cleanup(func() { authClient = previousAuthClient })
 
 	handler := optionalAuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if authenticatedUserId(r.Context()) != "" || isAnonymousAuth(r.Context()) {
+			t.Error("request without an Authorization header received a Firebase identity")
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
