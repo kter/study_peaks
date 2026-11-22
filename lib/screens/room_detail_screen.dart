@@ -105,7 +105,9 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
         'historySaveFailed' => l10n.historySaveFailed,
         'historyOtherOwnerActive' => l10n.historyOtherOwnerActive,
         SessionProvider.seatReleasedMessageKey => l10n.sessionSeatReleased,
-        final key => localizeErrorKey(l10n, key),
+        SessionProvider.seatTakenErrorKey => l10n.seatTaken,
+        SessionProvider.syncFailedErrorKey => l10n.sessionSyncFailed,
+        final key => localizeErrorKey(l10n, key, fallback: l10n.sitFailed),
       };
       final seatReleased = errorKey == SessionProvider.seatReleasedMessageKey;
 
@@ -118,15 +120,38 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
 
       // Clear error immediately after showing SnackBar so it doesn't persist
       session.clearError();
-      if (seatReleased) unawaited(_refreshSeats());
+      if (seatReleased || errorKey == SessionProvider.seatTakenErrorKey) {
+        unawaited(_refreshSeats());
+      }
     }
   }
 
   /// 席データをサーバーから再取得
   Future<void> _refreshSeats() async {
     if (!mounted) return;
-    await context.read<RoomProvider>().fetchSeats(widget.room.roomId);
-    // 自分のセッションを再適用（サーバーのデータで上書きされないように）
+    final rooms = context.read<RoomProvider>();
+    final roomId = widget.room.roomId;
+    await rooms.fetchSeats(roomId);
+    if (!mounted || rooms.seatError(roomId) != null) return;
+
+    final session = context.read<SessionProvider>();
+    final seatNumber = session.seatNumber;
+    if (session.isSeated &&
+        !session.isFinalizing &&
+        !session.hasReleasedSeat &&
+        session.currentRoomId == roomId &&
+        seatNumber != null) {
+      final seat = rooms.getSeats(roomId)
+          .where((seat) => seat.seatNumber == seatNumber)
+          .firstOrNull;
+      final localStartedAt = session.sessionStartedAt;
+      final serverStartedAt = seat?.sessionStartedAt;
+      if (seat == null || !seat.isOccupied ||
+          (localStartedAt != null && serverStartedAt != null &&
+              !serverStartedAt.isAtSameMomentAs(localStartedAt))) {
+        await session.forceSync();
+      }
+    }
     if (mounted) _restoreUserSeat();
   }
 
@@ -198,7 +223,10 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
       roomId: widget.room.roomId,
       onAlreadySeated: () => _showAlreadySeatedMessage(context),
       onEmptySeatTap: (seat) => _handleSitRequest(context, seat),
-      onOccupiedSeatTap: (seat) => showUserInfoDialog(context: context, seat: seat),
+      onOccupiedSeatTap: (seat) {
+        if (_sitFlowActive) return;
+        showUserInfoDialog(context: context, seat: seat);
+      },
     );
     final header = [_buildTimerSection(), _buildRoomInfoBar(), const SizedBox(height: 16)];
     return Scaffold(
@@ -431,10 +459,6 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
             sessionStartedAt: context.read<SessionProvider>().sessionStartedAt,
             replacesUserSeat: signedInUserId != null,
           );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.sitFailed), backgroundColor: Colors.red),
-      );
     }
   }
 

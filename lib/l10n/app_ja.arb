@@ -9,6 +9,7 @@
   "signInWithGoogle": "Googleでサインイン",
   "signInPrompt": "サインインして学習の進捗を保存し、デバイス間で同期しよう。",
   "signedInSuccess": "サインインしました！",
+  "signInFailed": "サインインできませんでした。もう一度お試しください。",
   "close": "閉じる",
   "seat": "座席",
   "occupancy": "{current}/{total}",
@@ -28,6 +29,7 @@
   "leaveRequestFailed": "座席が空いたことを確認できませんでした。",
   "leftSeat": "離席しました。",
   "sessionSeatReleased": "別の場所で着席したか、セッションの期限が切れたため、席が解放されました。",
+  "sessionSyncFailed": "席の状態を同期できませんでした。自動で再試行します。",
   "leaveSummaryTitle": "学習時間を記録しました",
   "leaveSummarySession": "今回",
   "leaveRetry": "離席を再試行",
@@ -156,6 +158,42 @@
   "loadSeatsFailed": "座席を読み込めませんでした。",
   "seatCountUnavailable": "着席人数を取得できませんでした。",
   "seatTitle": "座席 {number}",
+  "emptySeatSemantics": "座席{number}、空席。タップして着席します。",
+  "@emptySeatSemantics": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "occupiedSeatSemantics": "座席{number}、{name}、{country}、{duration}",
+  "@occupiedSeatSemantics": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      },
+      "name": {
+        "type": "String"
+      },
+      "country": {
+        "type": "String"
+      },
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "ownSeatSemantics": "座席{number}、あなたの席、{duration}",
+  "@ownSeatSemantics": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      },
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
   "sitQuestion": "この席に着席して学習を始めますか？",
   "sitSuccess": "座席 {number} に着席しました。",
   "sitFailed": "着席できませんでした。",

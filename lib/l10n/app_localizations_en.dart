@@ -37,6 +37,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signedInSuccess => 'Signed in successfully!';
 
   @override
+  String get signInFailed => 'Could not sign in. Please try again.';
+
+  @override
   String get close => 'Close';
 
   @override
@@ -98,6 +101,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get sessionSeatReleased =>
       'Your seat was released because you sat down elsewhere or the session expired.';
+
+  @override
+  String get sessionSyncFailed =>
+      'Could not sync your seat. It will retry automatically.';
 
   @override
   String get leaveSummaryTitle => 'Study time recorded';
@@ -528,6 +535,22 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String seatTitle(int number) {
     return 'Seat $number';
+  }
+
+  @override
+  String emptySeatSemantics(int number) {
+    return 'Seat $number, empty. Tap to sit down.';
+  }
+
+  @override
+  String occupiedSeatSemantics(
+      int number, String name, String country, String duration) {
+    return 'Seat $number, $name, $country, $duration';
+  }
+
+  @override
+  String ownSeatSemantics(int number, String duration) {
+    return 'Seat $number, your seat, $duration';
   }
 
   @override

@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:study_peaks/models/study_session.dart';
 import 'package:study_peaks/providers/auth_provider.dart';
 import 'package:study_peaks/providers/session_provider.dart';
+import 'package:study_peaks/providers/timer_provider.dart';
 import 'package:study_peaks/services/api_service.dart';
 import 'package:study_peaks/services/network_exception.dart';
 
@@ -98,7 +101,68 @@ void main() {
       expect(provider.seatNumber, 5);
       expect(provider.currentRoomId, 'room-1');
       expect(provider.isSeated, true);
+      expect(await provider.sit('room-1', 6), isFalse);
+      expect(provider.error, SessionProvider.sitFailedErrorKey);
       provider.dispose();
+    });
+
+    test('the persisted seat timer runs while notification permission is pending',
+        () async {
+      final permissionRequested = Completer<bool>();
+      final permissionAnswered = Completer<void>();
+      final notifications = mockStudyNotifications();
+      when(() => notifications.ensureStudySession(
+            sessionId: 'test-session-id',
+            roomName: 'room-1',
+            locale: 'en',
+            requestPermissionIfNeeded: true,
+            isCurrentSession: any(named: 'isCurrentSession'),
+            mode: TimerMode.normal,
+            pomodoroPhase: any(named: 'pomodoroPhase'),
+            isRunning: any(named: 'isRunning'),
+            waitingToStart: any(named: 'waitingToStart'),
+            seconds: 0,
+          )).thenAnswer((invocation) {
+        permissionRequested.complete(
+          invocation.namedArguments[#isRunning] as bool,
+        );
+        return permissionAnswered.future;
+      });
+      final provider = SessionProvider(
+        apiService: mockApiService,
+        notificationService: notifications,
+        useMockFallback: false,
+      );
+      var now = DateTime.utc(2026, 11, 22);
+      final timer = TimerProvider(
+        now: () => now,
+        notificationService: notifications,
+      );
+      provider.setTimerProvider(timer);
+      addTearDown(() {
+        provider.dispose();
+        timer.dispose();
+      });
+      when(() => mockApiService.sit('room-1', 5)).thenAnswer(
+        (_) async => createMockSitResponse(seatNumber: 5, sessionStartedAt: now),
+      );
+
+      final sit = provider.sit('room-1', 5);
+      try {
+        expect(
+          await Future.any([permissionRequested.future, sit.then((_) => false)]),
+          isTrue,
+        );
+        expect(permissionAnswered.isCompleted, isFalse);
+        expect(timer.sessionId, provider.sessionId);
+        expect(timer.isRunning, isTrue);
+        now = now.add(const Duration(minutes: 2));
+        expect(timer.totalStudySeconds, 120);
+      } finally {
+        permissionAnswered.complete();
+        await sit;
+      }
+      expect(await sit, isTrue);
     });
 
     test('sit falls back to mock mode on a network error', () async {
@@ -131,7 +195,7 @@ void main() {
       expect(await provider.sit('room-1', 5), false);
       expect(provider.sessionId, isNull);
       expect(provider.state, SessionState.idle);
-      expect(provider.error, contains('SEAT_OCCUPIED'));
+      expect(provider.error, SessionProvider.seatTakenErrorKey);
     });
 
     test('sit returns false and sets error in production mode', () async {
@@ -149,7 +213,7 @@ void main() {
       expect(result, false);
       expect(provider.state, SessionState.idle);
       expect(provider.isSeated, false);
-      expect(provider.error, contains('Failed to sit'));
+      expect(provider.error, SessionProvider.sitFailedErrorKey);
       provider.dispose();
     });
 

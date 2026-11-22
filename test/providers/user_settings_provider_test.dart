@@ -131,6 +131,16 @@ void main() {
         expect(provider.countryCode, 'US');
       });
 
+      test('loads a long saved display name without truncating it', () async {
+        final savedName = 'a' * 40;
+        await setupMockSharedPreferences({'user_display_name': savedName});
+        final provider = UserSettingsProvider();
+        addTearDown(provider.dispose);
+        await provider.init();
+
+        expect(provider.displayName, savedName);
+      });
+
       test('loads saved iconSeed from preferences', () async {
         await setupMockSharedPreferences({
           'user_icon_seed': 'custom-seed-123',
@@ -180,6 +190,37 @@ void main() {
         await provider.setDisplayName('  Trimmed Name  ');
 
         expect(provider.displayName, 'Trimmed Name');
+      });
+
+      test('truncates new names after 30 grapheme clusters', () async {
+        await setupMockSharedPreferences();
+        final provider = UserSettingsProvider();
+        addTearDown(provider.dispose);
+        await provider.init();
+
+        await provider.setDisplayName('  ${'a' * 40}  ');
+        expect(provider.displayName, 'a' * 30);
+
+        const family = '👨‍👩‍👧‍👦';
+        await provider.setDisplayName(family * 31);
+        expect(provider.displayName, family * 30);
+
+        final reloaded = UserSettingsProvider();
+        addTearDown(reloaded.dispose);
+        await reloaded.init();
+        expect(reloaded.displayName, family * 30);
+      });
+
+      test('keeps short display names as entered', () async {
+        await setupMockSharedPreferences();
+        final provider = UserSettingsProvider();
+        addTearDown(provider.dispose);
+        await provider.init();
+
+        await provider.setDisplayName('高橋');
+        expect(provider.displayName, '高橋');
+        await provider.setDisplayName('Anonymous');
+        expect(provider.displayName, 'Anonymous');
       });
 
       test('falls back to Anonymous for whitespace-only string', () async {

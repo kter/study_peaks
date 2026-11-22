@@ -17,6 +17,8 @@ String? googleAvatarUrl(AuthProvider? auth, UserSettingsProvider settings) {
 /// IMPORTANT: [init] must be called before any setter methods.
 /// Getters return default values before initialization for UI loading states.
 class UserSettingsProvider extends ChangeNotifier {
+  static const int maxDisplayNameLength = 30;
+
   static const _keyDisplayName = 'user_display_name';
   static const _keyIconSeed = 'user_icon_seed';
   static const _keyCountryCode = 'user_country_code';
@@ -84,7 +86,10 @@ class UserSettingsProvider extends ChangeNotifier {
   /// Throws [StateError] if [init] has not been called.
   Future<void> setDisplayName(String name) async {
     _ensureInitialized();
-    _displayName = name.trim().isEmpty ? 'Anonymous' : name.trim();
+    final trimmedName = name.trim();
+    _displayName = trimmedName.isEmpty
+        ? 'Anonymous'
+        : trimmedName.characters.take(maxDisplayNameLength).toString();
     await _prefs!.setString(_keyDisplayName, _displayName);
     notifyListeners();
   }

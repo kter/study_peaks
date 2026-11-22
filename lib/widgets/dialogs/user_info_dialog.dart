@@ -24,7 +24,12 @@ void showUserInfoDialog({
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(user.displayName, style: theme.textTheme.titleLarge),
+              Text(
+                user.displayName,
+                style: theme.textTheme.titleLarge,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
               if (user.statusMessage.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(user.statusMessage, style: theme.textTheme.bodyMedium),

@@ -1,17 +1,24 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:provider/provider.dart';
 import 'package:study_peaks/l10n/app_localizations.dart';
+import 'package:study_peaks/models/models.dart';
 import 'package:study_peaks/providers/auth_provider.dart';
 import 'package:study_peaks/providers/room_provider.dart';
 import 'package:study_peaks/providers/session_provider.dart';
+import 'package:study_peaks/providers/study_bgm_controller.dart';
 import 'package:study_peaks/providers/timer_provider.dart';
 import 'package:study_peaks/providers/user_settings_provider.dart';
 import 'package:study_peaks/repositories/mock_data_repository.dart';
+import 'package:study_peaks/screens/room_detail_screen.dart';
 import 'package:study_peaks/screens/room_list_screen.dart';
 import 'package:study_peaks/services/api_service.dart';
 import 'package:study_peaks/services/network_exception.dart';
+import 'package:study_peaks/services/study_persistence_keys.dart';
 import 'package:study_peaks/widgets/room_card.dart';
 
 import '../helpers/test_helpers.dart';
@@ -46,7 +53,7 @@ void main() {
     when(() => settings.iconSeed).thenReturn('test');
     final session = _MockSessionProvider();
     when(() => session.restoreSessionIfNeeded()).thenAnswer((_) async => true);
-    when(() => session.currentRoomId).thenReturn(null);
+    when(() => session.state).thenReturn(SessionState.idle);
     final timer = _MockTimerProvider();
     _stubLocalization(timer);
 
@@ -74,6 +81,75 @@ void main() {
     verifyNever(() => timer.start(sessionId: any(named: 'sessionId')));
   });
 
+  for (final pending in [false, true]) {
+    testWidgets('opens the room when restore beats room loading (pending: $pending)',
+        (tester) async {
+      const room = Room(roomId: 'fuji', name: 'Mt. Fuji', capacity: 1, currentOccupancy: 1);
+      final record = StudySession(
+        sessionId: 'restored-seat',
+        roomId: room.roomId,
+        startTime: DateTime.utc(2026, 11, 22),
+        durationSeconds: 120,
+      );
+      await setupMockSharedPreferences({
+        StudyPersistenceKeys.activeSession: jsonEncode({
+          'ownerId': record.ownerId,
+          'sessionId': record.sessionId,
+          'roomId': record.roomId,
+          'seatNumber': 1,
+          'startedAt': record.startTime.toIso8601String(),
+          if (pending) 'pending': record.toMap(),
+        }),
+      });
+      final roomsResponse = Completer<List<Room>>();
+      final api = MockApiService();
+      when(() => api.getRooms()).thenAnswer((_) => roomsResponse.future);
+      when(() => api.getRoomSeats(room.roomId)).thenAnswer((_) async => [Seat.empty(1)]);
+      final notifications = mockStudyNotifications();
+      final session = SessionProvider(apiService: api, notificationService: notifications);
+      final timer = TimerProvider(notificationService: notifications);
+      session.setTimerProvider(timer);
+      final auth = _MockAuthProvider();
+      when(() => auth.isSignedIn).thenReturn(false);
+
+      await tester.pumpWidget(MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => RoomProvider(apiService: api)),
+          ChangeNotifierProvider<AuthProvider>.value(value: auth),
+          ChangeNotifierProvider(create: (_) => UserSettingsProvider()),
+          ChangeNotifierProvider(create: (_) => timer),
+          ChangeNotifierProvider(create: (_) => session),
+          ChangeNotifierProvider(create: (_) => StudyBgmController(timer)),
+        ],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: RoomListScreen(),
+        ),
+      ));
+      final restored = session.restoreSessionIfNeeded();
+      await tester.pump();
+      expect(await restored, isTrue);
+      expect(find.byType(RoomDetailScreen), findsNothing);
+
+      roomsResponse.complete([room]);
+      await tester.pumpAndSettle();
+
+      final detail = find.byType(RoomDetailScreen);
+      expect(detail, findsOneWidget);
+      expect(ModalRoute.of(tester.element(detail))?.settings.name, '/rooms/fuji');
+      expect(timer.isRunning, !pending);
+      if (pending) expect(find.text('Retry leaving'), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.byType(RoomListScreen), findsOneWidget);
+      expect(detail, findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
+
   for (final useMockRooms in [false, true]) {
     for (final networkError in [false, true]) {
       testWidgets(
@@ -97,6 +173,7 @@ void main() {
           final session = _MockSessionProvider();
           when(() => session.restoreSessionIfNeeded())
               .thenAnswer((_) async => false);
+          when(() => session.state).thenReturn(SessionState.idle);
           final timer = _MockTimerProvider();
           _stubLocalization(timer);
 

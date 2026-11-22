@@ -41,8 +41,8 @@ class _RoomListScreenState extends State<RoomListScreen>
       final session = context.read<SessionProvider>();
       await rooms.fetchRooms();
       if (!mounted) return;
-      final restored = await session.restoreSessionIfNeeded();
-      if (restored && mounted) _openActiveRoom();
+      await session.restoreSessionIfNeeded();
+      if (mounted && session.state != SessionState.idle) _openActiveRoom();
     });
   }
 

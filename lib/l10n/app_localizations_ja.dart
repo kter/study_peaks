@@ -36,6 +36,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get signedInSuccess => 'サインインしました！';
 
   @override
+  String get signInFailed => 'サインインできませんでした。もう一度お試しください。';
+
+  @override
   String get close => '閉じる';
 
   @override
@@ -93,6 +96,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get sessionSeatReleased => '別の場所で着席したか、セッションの期限が切れたため、席が解放されました。';
+
+  @override
+  String get sessionSyncFailed => '席の状態を同期できませんでした。自動で再試行します。';
 
   @override
   String get leaveSummaryTitle => '学習時間を記録しました';
@@ -509,6 +515,22 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String seatTitle(int number) {
     return '座席 $number';
+  }
+
+  @override
+  String emptySeatSemantics(int number) {
+    return '座席$number、空席。タップして着席します。';
+  }
+
+  @override
+  String occupiedSeatSemantics(
+      int number, String name, String country, String duration) {
+    return '座席$number、$name、$country、$duration';
+  }
+
+  @override
+  String ownSeatSemantics(int number, String duration) {
+    return '座席$number、あなたの席、$duration';
   }
 
   @override

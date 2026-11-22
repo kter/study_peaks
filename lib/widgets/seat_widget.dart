@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:jdenticon_dart/jdenticon_dart.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:country_flags/country_flags.dart';
+import '../l10n/app_localizations.dart';
 import '../models/models.dart';
 import 'seat_elapsed_duration.dart';
 
@@ -28,7 +29,21 @@ class SeatWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+    final l10n = AppLocalizations.of(context) ??
+        lookupAppLocalizations(const Locale('en'));
+    final user = seat.isOccupied ? seat.user : null;
+    if (user == null) {
+      return _buildSeat(
+        theme,
+        l10n.emptySeatSemantics(seat.seatNumber),
+        _buildEmptySeat(theme),
+      );
+    }
+
+    return _buildOccupiedSeat(theme, l10n, user);
+  }
+
+  Widget _buildSeat(ThemeData theme, String label, Widget child) {
     final isDark = theme.brightness == Brightness.dark;
     
     // Define colors based on whether this is the current user
@@ -41,68 +56,89 @@ class SeatWidget extends StatelessWidget {
     final shadowColor = isCurrentUser
         ? const Color(0xFFFFB300).withValues(alpha: 0.3)
         : theme.colorScheme.primary.withValues(alpha: 0.1);
-    
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: seat.isOccupied 
-              ? (isDark ? const Color(0xFF1E1E1E) : Colors.white)
-              : (isDark ? Colors.grey.shade900 : Colors.grey.shade100),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: borderColor,
-            width: (seat.isOccupied || isCurrentUser) ? 2 : 1,
-          ),
-          boxShadow: seat.isOccupied
-              ? [
-                  BoxShadow(
-                    color: shadowColor,
-                    blurRadius: isCurrentUser ? 12 : 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
+    final card = Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: seat.isOccupied
+            ? (isDark ? const Color(0xFF1E1E1E) : Colors.white)
+            : (isDark ? Colors.grey.shade900 : Colors.grey.shade100),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: borderColor,
+          width: (seat.isOccupied || isCurrentUser) ? 2 : 1,
         ),
-        child: seat.isOccupied && seat.user != null
-            ? _buildOccupiedSeat(theme)
-            : _buildEmptySeat(theme),
+        boxShadow: seat.isOccupied
+            ? [
+                BoxShadow(
+                  color: shadowColor,
+                  blurRadius: isCurrentUser ? 12 : 8,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : null,
       ),
+      child: child,
+    );
+
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      onTap: onTap,
+      child: GestureDetector(onTap: onTap, child: card),
     );
   }
 
-  Widget _buildOccupiedSeat(ThemeData theme) {
-    final user = seat.user!;
-    
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        // Avatar with country flag badge
-        Flexible(
-          flex: 3,
-          child: _buildAvatarWithBadge(user, theme),
-        ),
-        const SizedBox(height: 4),
-        // Username
-        Flexible(
-          child: Text(
-            user.displayName,
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: theme.colorScheme.primary,
-              fontSize: 10,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+  Widget _buildOccupiedSeat(ThemeData theme, AppLocalizations l10n, SeatUser user) {
+    final details = [
+      // Avatar with country flag badge
+      Flexible(
+        flex: 3,
+        child: _buildAvatarWithBadge(user, theme),
+      ),
+      const SizedBox(height: 4),
+      Flexible(
+        child: Text(
+          user.displayName,
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.primary,
+            fontSize: 10,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
-        // Session duration
-        Flexible(
-          child: _DurationBadge(seat: seat, now: now),
-        ),
-      ],
+      ),
+    ];
+
+    return SeatElapsedDuration(
+      seat: seat,
+      now: now,
+      builder: (context, duration) {
+        final hours = duration.inHours;
+        final minutes = duration.inMinutes.remainder(60);
+        final durationText = hours > 0 ? '${hours}h${minutes}m' : '${minutes}m';
+        final label = isCurrentUser
+            ? l10n.ownSeatSemantics(seat.seatNumber, durationText)
+            : l10n.occupiedSeatSemantics(
+                seat.seatNumber,
+                user.displayName,
+                l10n.countryName(user.countryCode),
+                durationText,
+              );
+        return _buildSeat(
+          theme,
+          label,
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ...details,
+              Flexible(child: _DurationBadge(durationText: durationText)),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -214,29 +250,13 @@ class SeatWidget extends StatelessWidget {
 }
 
 class _DurationBadge extends StatelessWidget {
-  const _DurationBadge({required this.seat, required this.now});
+  const _DurationBadge({required this.durationText});
 
-  final Seat seat;
-  final DateTime Function() now;
+  final String durationText;
 
   @override
-  Widget build(BuildContext context) => SeatElapsedDuration(
-        seat: seat,
-        now: now,
-        builder: _buildBadge,
-      );
-
-  Widget _buildBadge(BuildContext context, Duration duration) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final hours = duration.inHours;
-    final minutes = duration.inMinutes.remainder(60);
-
-    String durationText;
-    if (hours > 0) {
-      durationText = '${hours}h${minutes}m';
-    } else {
-      durationText = '${minutes}m';
-    }
 
     return FittedBox(
       fit: BoxFit.scaleDown,
