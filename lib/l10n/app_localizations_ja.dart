@@ -36,6 +36,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get signedInSuccess => 'サインインしました！';
 
   @override
+  String get signInFailed => 'サインインできませんでした。もう一度お試しください。';
+
+  @override
   String get close => '閉じる';
 
   @override
@@ -93,6 +96,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get sessionSeatReleased => '別の場所で着席したか、セッションの期限が切れたため、席が解放されました。';
+
+  @override
+  String get sessionSyncFailed => '席の状態を同期できませんでした。自動で再試行します。';
 
   @override
   String get leaveSummaryTitle => '学習時間を記録しました';

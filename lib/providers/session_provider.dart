@@ -43,6 +43,9 @@ final class LeaveCompleted extends LeaveResult {
 /// Provider for managing study session state.
 class SessionProvider extends ChangeNotifier {
   static const seatReleasedMessageKey = 'sessionSeatReleased';
+  static const seatTakenErrorKey = 'seatTaken';
+  static const sitFailedErrorKey = 'sitFailed';
+  static const syncFailedErrorKey = 'sessionSyncFailed';
   final ApiService _apiService;
   final bool useMockFallback;
   static const _mockSessionPrefix = 'mock-session-';
@@ -58,7 +61,7 @@ class SessionProvider extends ChangeNotifier {
   int _currentDuration = 0;
   Timer? _syncTimer;
   String? _error;
-  final NotificationService _notificationService = NotificationService();
+  final NotificationService _notificationService;
   final StudyHistoryRepository _historyRepository;
   final void Function(String ownerId)? _onStudyRecordSaved;
   TimerProvider? _timerProvider;
@@ -137,9 +140,11 @@ class SessionProvider extends ChangeNotifier {
   SessionProvider({
     ApiService? apiService,
     StudyHistoryRepository? historyRepository,
+    NotificationService? notificationService,
     void Function(String ownerId)? onStudyRecordSaved,
     bool? useMockFallback,
   })  : _historyRepository = historyRepository ?? StudyHistoryRepository(),
+        _notificationService = notificationService ?? NotificationService(),
         _onStudyRecordSaved = onStudyRecordSaved,
         _apiService = apiService ?? ApiService(),
         useMockFallback = useMockFallback ?? kDebugMode;
@@ -223,7 +228,14 @@ class SessionProvider extends ChangeNotifier {
     String? iconSeed,
     String? photoUrl,
   }) async {
-    if (_sessionId != null || _leaving || _sitting) return false;
+    // A duplicate call while a sit is in flight stays silent; the first
+    // call reports its own result.
+    if (_sitting) return false;
+    if (_sessionId != null || _leaving) {
+      _error = sitFailedErrorKey;
+      notifyListeners();
+      return false;
+    }
     _sitting = true;
     final ownerAtStart = historyOwnerId;
     try {
@@ -258,13 +270,13 @@ class SessionProvider extends ChangeNotifier {
       _state = SessionState.seated;
       await _persistSession();
 
-      _startSyncTimer();
-      await refreshStudyNotification(requestPermission: true);
       if (!_disposed && _sessionId == response.sessionId && _pendingRecord == null) {
+        _startSyncTimer();
         _timerProvider?.start(sessionId: response.sessionId);
+        await refreshStudyNotification(requestPermission: true);
       }
 
-      notifyListeners();
+      if (!_disposed) notifyListeners();
       return true;
     } catch (e) {
       if (_sessionId != null && _ownerId != null) {
@@ -272,7 +284,12 @@ class SessionProvider extends ChangeNotifier {
         notifyListeners();
         return false;
       }
-      final errorKey = errorKeyFor(e, 'Failed to sit: $e');
+      final errorKey = errorKeyFor(
+        e,
+        e is ApiException && e.statusCode == 409
+            ? seatTakenErrorKey
+            : sitFailedErrorKey,
+      );
       if (useMockFallback && errorKey == NetworkErrorKey.networkError) {
         // Development mode: log and fall back to mock mode
         debugPrint('API error (mock fallback): $e');
@@ -434,24 +451,21 @@ class SessionProvider extends ChangeNotifier {
     _syncTimer = null;
   }
 
-  /// Force an immediate sync (e.g., when user changes their icon).
-  /// This allows icon changes to be reflected immediately for other users.
-  Future<void> forceSync() async {
-    if (!isSeated || _pendingRecord != null) {
-      return;
-    }
-    await _syncSession();
-  }
+  /// Force an immediate sync for an active session, if none is in progress.
+  Future<void> forceSync() => _syncSession();
 
   /// Sync session with server.
   Future<void> _syncSession() async {
     final sessionId = _sessionId;
     final roomId = _currentRoomId;
-    if (sessionId == null ||
+    if (_disposed ||
+        !isSeated ||
+        sessionId == null ||
         roomId == null ||
         sessionId.startsWith(_mockSessionPrefix) ||
         _leaving ||
         _pendingRecord != null ||
+        _remoteLeaveCompleted ||
         _ownerId != historyOwnerId) {
       return;
     }
@@ -502,7 +516,7 @@ class SessionProvider extends ChangeNotifier {
         await _finalizeSession(seatAlreadyReleased: true);
         return;
       }
-      _error = errorKeyFor(e, e.toString());
+      _error = errorKeyFor(e, syncFailedErrorKey);
     }
 
     if (stillSyncing()) {

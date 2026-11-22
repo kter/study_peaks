@@ -246,7 +246,7 @@ void main() {
     final apiError = ApiException('Connection refused', 503);
     when(() => mockApiService.sync(any(), any(), any())).thenThrow(apiError);
     await provider.forceSync();
-    expect(provider.error, apiError.toString());
+    expect(provider.error, SessionProvider.syncFailedErrorKey);
     expect(provider.isSeated, isTrue);
 
     when(() => mockApiService.sync(any(), any(), any()))

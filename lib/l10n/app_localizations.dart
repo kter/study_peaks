@@ -152,6 +152,12 @@ abstract class AppLocalizations {
   /// **'Signed in successfully!'**
   String get signedInSuccess;
 
+  /// No description provided for @signInFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not sign in. Please try again.'**
+  String get signInFailed;
+
   /// No description provided for @close.
   ///
   /// In en, this message translates to:
@@ -265,6 +271,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your seat was released because you sat down elsewhere or the session expired.'**
   String get sessionSeatReleased;
+
+  /// No description provided for @sessionSyncFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not sync your seat. It will retry automatically.'**
+  String get sessionSyncFailed;
 
   /// No description provided for @leaveSummaryTitle.
   ///

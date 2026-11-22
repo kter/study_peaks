@@ -4,13 +4,38 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:study_peaks/models/timer_mode.dart';
 import 'package:study_peaks/services/api_service.dart';
+import 'package:study_peaks/services/notification_service.dart';
 
 /// Mock HTTP client for testing
 class MockHttpClient extends Mock implements http.Client {}
 
 /// Mock API service for provider testing
 class MockApiService extends Mock implements ApiService {}
+
+class MockNotificationService extends Mock implements NotificationService {}
+
+MockNotificationService mockStudyNotifications() {
+  registerFallbackValue(TimerMode.normal);
+  registerFallbackValue(() => false);
+  final notifications = MockNotificationService();
+  when(() => notifications.isRunning()).thenAnswer((_) async => false);
+  when(() => notifications.stopStudySession()).thenAnswer((_) async {});
+  when(() => notifications.ensureStudySession(
+        sessionId: any(named: 'sessionId'),
+        roomName: any(named: 'roomName'),
+        locale: any(named: 'locale'),
+        requestPermissionIfNeeded: any(named: 'requestPermissionIfNeeded'),
+        isCurrentSession: any(named: 'isCurrentSession'),
+        mode: any(named: 'mode'),
+        pomodoroPhase: any(named: 'pomodoroPhase'),
+        isRunning: any(named: 'isRunning'),
+        waitingToStart: any(named: 'waitingToStart'),
+        seconds: any(named: 'seconds'),
+      )).thenAnswer((_) async {});
+  return notifications;
+}
 
 /// Mock Firebase Auth for AuthProvider testing
 class MockFirebaseAuth extends Mock implements FirebaseAuth {}

@@ -6,6 +6,7 @@ import 'package:study_peaks/l10n/app_localizations.dart';
 import 'package:study_peaks/providers/auth_provider.dart';
 import 'package:study_peaks/providers/user_settings_provider.dart';
 import 'package:study_peaks/screens/user_settings_screen.dart';
+import 'package:study_peaks/services/network_exception.dart';
 
 import '../helpers/test_helpers.dart';
 
@@ -16,6 +17,7 @@ Future<void> _pumpSettings(
   required bool signedIn,
   ThemeData? theme,
   Map<String, Object>? preferences,
+  String? signInError,
 }) async {
   await setupMockSharedPreferences(preferences);
   final settings = UserSettingsProvider();
@@ -26,6 +28,8 @@ Future<void> _pumpSettings(
   when(() => auth.isLoading).thenReturn(false);
   when(() => auth.email).thenReturn('test@example.com');
   when(() => auth.photoUrl).thenReturn('https://example.com/avatar.png');
+  when(() => auth.signInWithGoogle()).thenAnswer((_) async => false);
+  when(() => auth.error).thenReturn(signInError);
 
   await tester.pumpWidget(MultiProvider(
     providers: [
@@ -46,6 +50,28 @@ Finder _containerWithPadding(EdgeInsets padding) => find.byWidgetPredicate(
     );
 
 void main() {
+  for (final networkError in [false, true]) {
+    testWidgets('sign-in failures show localized feedback (network: $networkError)',
+        (tester) async {
+      const rawError = 'ApiException: internal details';
+      await _pumpSettings(
+        tester,
+        signedIn: false,
+        signInError: networkError ? NetworkErrorKey.networkError : rawError,
+      );
+      final l10n = AppLocalizations.of(
+        tester.element(find.byType(UserSettingsScreen)),
+      )!;
+      final signIn = find.text(l10n.signInWithGoogle);
+      await tester.ensureVisible(signIn);
+      await tester.tap(signIn);
+      await tester.pumpAndSettle();
+
+      expect(find.text(networkError ? l10n.networkError : l10n.signInFailed), findsOneWidget);
+      expect(find.text(rawError), findsNothing);
+    });
+  }
+
   testWidgets('guest profile card spans the content width and is centered',
       (tester) async {
     await _pumpSettings(tester, signedIn: false);

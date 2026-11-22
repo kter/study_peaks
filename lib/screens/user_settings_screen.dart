@@ -582,8 +582,11 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
                             );
                           } else if (auth.error != null) {
                             final l10n = AppLocalizations.of(context)!;
-                            final errorMessage =
-                                localizeErrorKey(l10n, auth.error!);
+                            final errorMessage = localizeErrorKey(
+                              l10n,
+                              auth.error!,
+                              fallback: l10n.signInFailed,
+                            );
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(errorMessage),
