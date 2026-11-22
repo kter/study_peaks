@@ -7,20 +7,25 @@ import 'package:provider/provider.dart';
 import 'package:study_peaks/config/app_config.dart';
 import 'package:study_peaks/l10n/app_localizations.dart';
 import 'package:study_peaks/models/models.dart';
+import 'package:study_peaks/models/study_history.dart';
 import 'package:study_peaks/providers/auth_provider.dart';
 import 'package:study_peaks/providers/room_provider.dart';
 import 'package:study_peaks/providers/session_provider.dart';
 import 'package:study_peaks/providers/study_bgm_controller.dart';
 import 'package:study_peaks/providers/timer_provider.dart';
 import 'package:study_peaks/providers/user_settings_provider.dart';
+import 'package:study_peaks/repositories/study_history_repository.dart';
 import 'package:study_peaks/screens/room_detail_screen.dart';
 import 'package:study_peaks/services/api_service.dart';
 import 'package:study_peaks/services/network_exception.dart';
+import 'package:study_peaks/widgets/dialogs/leave_summary_dialog.dart';
 import 'package:study_peaks/widgets/seat_widget.dart';
 
 import '../helpers/test_helpers.dart';
 
 class _MockAuthProvider extends Mock implements AuthProvider {}
+
+class _MockHistory extends Mock implements StudyHistoryRepository {}
 
 const _room =
     Room(roomId: 'fuji', name: 'Mt. Fuji', capacity: 2, currentOccupancy: 0);
@@ -58,22 +63,29 @@ void main() {
   });
 
   Future<AppLocalizations> pumpRoom(WidgetTester tester,
-      {Locale? locale}) async {
-    final auth = _MockAuthProvider();
-    when(() => auth.isSignedIn).thenReturn(false);
+      {Locale? locale,
+      AuthProvider? auth,
+      StudyHistoryRepository? history,
+      DateTime Function()? now}) async {
+    final guestAuth = _MockAuthProvider();
+    when(() => guestAuth.isSignedIn).thenReturn(false);
     final notifications = mockStudyNotifications();
     session = SessionProvider(
       apiService: api,
+      historyRepository: history,
       notificationService: notifications,
       useMockFallback: false,
     );
     timer = TimerProvider(
-        now: () => _startedAt, notificationService: notifications);
+        now: now ?? () => _startedAt, notificationService: notifications);
     session.setTimerProvider(timer);
+    if (auth != null) session.setAuthProvider(auth);
     await tester.pumpWidget(MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => rooms),
-        ChangeNotifierProvider<AuthProvider>.value(value: auth),
+        ChangeNotifierProvider<AuthProvider>.value(value: auth ?? guestAuth),
+        if (history != null)
+          Provider<StudyHistoryRepository>.value(value: history),
         ChangeNotifierProvider(create: (_) => UserSettingsProvider()),
         ChangeNotifierProvider(create: (_) => timer),
         ChangeNotifierProvider(create: (_) => session),
@@ -98,6 +110,80 @@ void main() {
     await tester.pump();
     expect(await sit, isTrue);
   }
+
+  testWidgets('leaving after guest sign-in shows guest history totals',
+      (tester) async {
+    const guestOwner = StudySession.guestOwner;
+    final date = DateTime.now();
+    final start = DateTime(date.year, date.month, date.day, 12);
+    var now = start;
+    final auth = _MockAuthProvider();
+    when(() => auth.isSignedIn).thenReturn(false);
+    when(() => auth.historyOwnerId).thenReturn(guestOwner);
+    when(() => auth.displayName).thenReturn('Anonymous');
+    when(() => auth.userId).thenReturn('');
+    when(() => auth.getIdToken()).thenAnswer((_) async => 'guest-token');
+    final earlierRecord = StudySession(
+      roomId: _room.roomId,
+      startTime: start.subtract(const Duration(hours: 1)),
+      durationSeconds: 30,
+    );
+    final history = _MockHistory();
+    registerFallbackValue(earlierRecord);
+    final records = [earlierRecord];
+    when(() => history.saveSession(any())).thenAnswer((invocation) async {
+      records.add(invocation.positionalArguments.single as StudySession);
+    });
+    when(() => history.getHistory(ownerId: guestOwner))
+        .thenAnswer((_) async => StudyHistory(records));
+    when(() => api.getRoomSeats(_room.roomId))
+        .thenAnswer((_) async => [Seat.empty(1)]);
+    when(() => api.sit(_room.roomId, 1, displayName: 'Anonymous', userId: ''))
+        .thenAnswer((_) async => createMockSitResponse(sessionStartedAt: start));
+    when(() => api.sync(_room.roomId, 'test-session-id', 0))
+        .thenAnswer((_) async {});
+    when(() => api.leave(_room.roomId, 'test-session-id', 20))
+        .thenAnswer((_) async => createMockLeaveResponse());
+
+    final l10n =
+        await pumpRoom(tester, auth: auth, history: history, now: () => now);
+    expect(await session.sit(_room.roomId, 1), isTrue);
+    await session.forceSync();
+    now = start.add(const Duration(seconds: 20));
+    when(() => auth.isSignedIn).thenReturn(true);
+    when(() => auth.historyOwnerId).thenReturn('user:account');
+    when(() => auth.userId).thenReturn('account');
+    when(() => auth.getIdToken()).thenAnswer((_) async => 'account-token');
+    expect(session.sessionOwnerId, guestOwner);
+    await session.forceSync();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(l10n.leaveSeat));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, l10n.leave));
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(LeaveSummaryDialog);
+    Finder textInSummary(String label) =>
+        find.descendant(of: dialog, matching: find.text(label));
+    expect(textInSummary('Study time recorded'), findsOneWidget);
+    expect(textInSummary('20s'), findsOneWidget);
+    expect(textInSummary('50s'), findsNWidgets(2));
+    expect(textInSummary('Saved to the guest history on this device.'), findsOneWidget);
+    expect(textInSummary(l10n.studyHistory), findsNothing);
+    expect(records.last.ownerId, guestOwner);
+    verify(() => history.getHistory(ownerId: guestOwner)).called(1);
+    verifyInOrder([
+      () => api.setAuthToken('guest-token'),
+      () => api.sit(_room.roomId, 1, displayName: 'Anonymous', userId: ''),
+      () => api.setAuthToken('guest-token'),
+      () => api.sync(_room.roomId, 'test-session-id', 0),
+      () => api.setAuthToken('account-token'),
+      () => api.leave(_room.roomId, 'test-session-id', 20),
+    ]);
+    verifyNever(() => api.sync(any(), any(), any()));
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   for (final status in [409, 500, null]) {
     testWidgets('failed sit shows one localized snackbar (status: $status)',

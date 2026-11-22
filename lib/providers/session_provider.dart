@@ -204,6 +204,7 @@ class SessionProvider extends ChangeNotifier {
   String? get currentRoomId => _currentRoomId;
   String? get currentRoomName => _currentRoomName;
   String? get sessionId => _sessionId;
+  String? get sessionOwnerId => _ownerId;
   int? get seatNumber => _seatNumber;
   DateTime? get sessionStartedAt => _sessionStartedAt;
   int get currentDuration => _currentDuration;

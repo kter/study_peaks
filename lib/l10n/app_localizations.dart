@@ -140,6 +140,24 @@ abstract class AppLocalizations {
   /// **'Sign in with Google'**
   String get signInWithGoogle;
 
+  /// Confirmation shown before signing in during an active guest session.
+  ///
+  /// In en, this message translates to:
+  /// **'The current study session will be saved to the guest history on this device, not to your account. Sign in anyway?'**
+  String get signInGuestSessionConfirmation;
+
+  /// Confirmation shown before signing out while a seat session is open.
+  ///
+  /// In en, this message translates to:
+  /// **'Signing out will leave your seat. Continue?'**
+  String get signOutLeaveConfirmation;
+
+  /// Shown when seat release could not be confirmed and sign-out was stopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not leave your seat. Please try again.'**
+  String get signOutLeaveFailed;
+
   /// No description provided for @signInPrompt.
   ///
   /// In en, this message translates to:
@@ -283,6 +301,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Study time recorded'**
   String get leaveSummaryTitle;
+
+  /// Shown in the leave summary when a guest record was saved while an account is signed in.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved to the guest history on this device.'**
+  String get leaveSummarySavedToGuest;
 
   /// No description provided for @leaveSummarySession.
   ///

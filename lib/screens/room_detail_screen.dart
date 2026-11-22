@@ -529,7 +529,9 @@ class _RoomDetailScreenState extends State<RoomDetailScreen>
     };
     final messenger = ScaffoldMessenger.of(context)..clearSnackBars();
     final record = result.record;
-    if (!result.showSummary || !record.isVisibleTo(session.historyOwnerId)) {
+    final canShowRecord = record.ownerId == StudySession.guestOwner ||
+        record.isVisibleTo(session.historyOwnerId);
+    if (!result.showSummary || !canShowRecord) {
       messenger.showSnackBar(SnackBar(content: Text(warning ?? l10n.leftSeat)));
       return;
     }

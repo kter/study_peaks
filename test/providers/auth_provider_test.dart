@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:study_peaks/config/app_config.dart';
+import 'package:study_peaks/models/study_session.dart';
 import 'package:study_peaks/providers/auth_provider.dart';
 import 'package:study_peaks/services/network_exception.dart';
 import 'package:mocktail/mocktail.dart';
@@ -11,6 +12,12 @@ import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../helpers/test_helpers.dart';
+
+MockUser firebaseUser({bool anonymous = false}) {
+  final user = MockUser();
+  when(() => user.isAnonymous).thenReturn(anonymous);
+  return user;
+}
 
 void main() {
   late MockFirebaseAuth mockFirebaseAuth;
@@ -48,7 +55,7 @@ void main() {
       test('current Firebase user is available before the first auth event',
           () {
         provider.dispose();
-        final user = MockUser();
+        final user = firebaseUser();
         when(() => user.uid).thenReturn('restored-account');
         when(() => mockFirebaseAuth.currentUser).thenReturn(user);
         provider = AuthProvider(
@@ -57,8 +64,9 @@ void main() {
         expect(provider.userId, 'restored-account');
       });
 
-      test('isSignedIn is false initially', () {
+      test('does not sign in anonymously at startup', () {
         expect(provider.isSignedIn, false);
+        verifyNever(() => mockFirebaseAuth.signInAnonymously());
       });
 
       test('displayName is Anonymous when not signed in', () {
@@ -261,12 +269,83 @@ void main() {
     });
 
     group('getIdToken', () {
-      test('returns null when signed out', () async {
+      test('keeps anonymous profile and history ownership as guest', () async {
+        final user = firebaseUser(anonymous: true);
+        when(() => user.uid).thenReturn('anonymous-uid');
+        when(() => user.displayName).thenReturn('Firebase guest');
+        when(() => user.email).thenReturn('guest@example.com');
+        when(() => user.photoURL).thenReturn('https://example.com/avatar.png');
+        when(() => user.getIdToken(false)).thenAnswer((_) async => 'guest-token');
+        final owners = <String>[];
+        provider.addListener(() => owners.add(provider.historyOwnerId));
+        authStateController.add(user);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(provider.isSignedIn, false);
+        expect(provider.userId, isEmpty);
+        expect(provider.displayName, 'Anonymous');
+        expect(provider.email, isEmpty);
+        expect(provider.photoUrl, isNull);
+        expect(await provider.getIdToken(), 'guest-token');
+        verifyNever(() => mockFirebaseAuth.signInAnonymously());
+
+        authStateController.add(null);
+        await Future<void>.delayed(Duration.zero);
+        expect(owners, [StudySession.guestOwner, StudySession.guestOwner]);
+      });
+
+      test('concurrent requests share one lazy anonymous sign-in', () async {
+        final user = firebaseUser(anonymous: true);
+        final credential = MockUserCredential();
+        final exchange = Completer<UserCredential>();
+        when(() => credential.user).thenReturn(user);
+        when(() => user.getIdToken(false)).thenAnswer((_) async => 'guest-token');
+        when(() => mockFirebaseAuth.signInAnonymously())
+            .thenAnswer((_) => exchange.future);
+
+        final first = provider.getIdToken();
+        final second = provider.getIdToken();
+        exchange.complete(credential);
+
+        expect(await Future.wait([first, second]), ['guest-token', 'guest-token']);
+        verify(() => mockFirebaseAuth.signInAnonymously()).called(1);
+      });
+
+      test('anonymous sign-in failure returns null and can be retried', () async {
+        when(() => mockFirebaseAuth.signInAnonymously()).thenAnswer(
+          (_) async => throw FirebaseAuthException(code: 'operation-not-allowed'),
+        );
+        expect(await provider.getIdToken(), isNull);
+        expect(await provider.getIdToken(), isNull);
+        expect(provider.error, isNull);
+        verify(() => mockFirebaseAuth.signInAnonymously()).called(2);
+      });
+
+      test('anonymous sign-in times out to a tokenless request', () {
+        fakeAsync((async) {
+          when(() => mockFirebaseAuth.signInAnonymously())
+              .thenAnswer((_) => Completer<UserCredential>().future);
+          Object? token = Object();
+          provider.getIdToken().then((value) => token = value);
+          async.elapse(AppConfig.signInTimeout - const Duration(milliseconds: 1));
+          expect(token, isNotNull);
+          async.elapse(const Duration(milliseconds: 1));
+          expect(token, isNull);
+          verify(() => mockFirebaseAuth.signInAnonymously()).called(1);
+        });
+      });
+
+      test('anonymous token failure returns null', () async {
+        final user = firebaseUser(anonymous: true);
+        when(() => user.getIdToken(false)).thenThrow(StateError('Invalid guest'));
+        authStateController.add(user);
+        await Future<void>.delayed(Duration.zero);
+
         expect(await provider.getIdToken(), isNull);
       });
 
       test('retries network errors and preserves forceRefresh', () async {
-        final user = MockUser();
+        final user = firebaseUser();
         authStateController.add(user);
         await Future<void>.delayed(Duration.zero);
         fakeAsync((async) {
@@ -285,10 +364,11 @@ void main() {
           expect(token, 'refreshed-token');
           verify(() => user.getIdToken(true)).called(2);
         });
+        verifyNever(() => mockFirebaseAuth.signInAnonymously());
       });
 
       test('does not retry non-network errors', () async {
-        final user = MockUser();
+        final user = firebaseUser();
         when(() => user.getIdToken(false))
             .thenThrow(StateError('Invalid user'));
         authStateController.add(user);
@@ -299,6 +379,31 @@ void main() {
     });
 
     group('signOut', () {
+      test('the next seat token request after sign-out creates a guest',
+          () async {
+        final account = firebaseUser();
+        authStateController.add(account);
+        await Future<void>.delayed(Duration.zero);
+        expect(provider.isSignedIn, true);
+
+        when(() => mockGoogleSignIn.signOut()).thenAnswer((_) async {});
+        when(() => mockFirebaseAuth.signOut()).thenAnswer((_) async {});
+        final guest = firebaseUser(anonymous: true);
+        final credential = MockUserCredential();
+        when(() => credential.user).thenReturn(guest);
+        when(() => guest.getIdToken(false)).thenAnswer((_) async => 'guest-token');
+        when(() => mockFirebaseAuth.signInAnonymously())
+            .thenAnswer((_) async => credential);
+
+        await provider.signOut();
+        verifyNever(() => mockFirebaseAuth.signInAnonymously());
+        expect(await provider.getIdToken(), 'guest-token');
+        verifyInOrder([
+          () => mockFirebaseAuth.signOut(),
+          () => mockFirebaseAuth.signInAnonymously(),
+        ]);
+      });
+
       test('calls googleSignIn.signOut and auth.signOut', () async {
         when(() => mockGoogleSignIn.signOut()).thenAnswer((_) async {});
         when(() => mockFirebaseAuth.signOut()).thenAnswer((_) async {});
@@ -346,7 +451,7 @@ void main() {
 
     group('authStateChanges', () {
       test('updates user when auth state changes', () async {
-        final mockUser = MockUser();
+        final mockUser = firebaseUser();
         when(() => mockUser.displayName).thenReturn('Test User');
         when(() => mockUser.email).thenReturn('test@example.com');
         when(() => mockUser.uid).thenReturn('user-123');
@@ -362,7 +467,7 @@ void main() {
       });
 
       test('clears user when auth state emits null', () async {
-        final mockUser = MockUser();
+        final mockUser = firebaseUser();
         when(() => mockUser.displayName).thenReturn('Test User');
 
         // First sign in

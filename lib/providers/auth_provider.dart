@@ -13,6 +13,7 @@ class AuthProvider extends ChangeNotifier {
   final FirebaseAuth _auth;
   final GoogleSignIn _googleSignIn;
   Future<void>? _googleSignInInitialization;
+  Future<User?>? _anonymousSignIn;
   late final StreamSubscription<User?> _authSubscription;
 
   User? _user;
@@ -21,12 +22,13 @@ class AuthProvider extends ChangeNotifier {
 
   User? get user => _user;
   bool get isLoading => _isLoading;
-  bool get isSignedIn => _user != null;
+  User? get _account => _user?.isAnonymous == false ? _user : null;
+  bool get isSignedIn => _account != null;
   String? get error => _error;
-  String get displayName => _user?.displayName ?? 'Anonymous';
-  String get email => _user?.email ?? '';
-  String? get photoUrl => _user?.photoURL;
-  String get userId => _user?.uid ?? '';
+  String get displayName => _account?.displayName ?? 'Anonymous';
+  String get email => _account?.email ?? '';
+  String? get photoUrl => _account?.photoURL;
+  String get userId => _account?.uid ?? '';
   String get historyOwnerId => StudySession.ownerFor(userId);
 
   AuthProvider({FirebaseAuth? auth, GoogleSignIn? googleSignIn})
@@ -100,6 +102,7 @@ class AuthProvider extends ChangeNotifier {
       }
 
       await _auth.signOut();
+      _user = null;
     } catch (e) {
       _handleError(e);
     } finally {
@@ -107,18 +110,38 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Get ID token for API calls with automatic retry on network errors.
+  /// Get an ID token, creating an anonymous seat identity when needed.
   ///
   /// Uses [RetryHelper] to handle transient network issues.
   Future<String?> getIdToken({bool forceRefresh = false}) async {
-    final user = _user;
+    final user = _user ?? _auth.currentUser ?? await _getAnonymousUser();
     if (user == null) return null;
 
-    return await RetryHelper.execute<String?>(
-      () => user.getIdToken(forceRefresh),
-      maxRetries: AppConfig.maxRetries,
-      retryDelays: AppConfig.retryDelays,
-    );
+    try {
+      return await RetryHelper.execute<String?>(
+        () => user.getIdToken(forceRefresh),
+        maxRetries: AppConfig.maxRetries,
+        retryDelays: AppConfig.retryDelays,
+      );
+    } catch (_) {
+      if (!user.isAnonymous) rethrow;
+      return null;
+    }
+  }
+
+  Future<User?> _getAnonymousUser() =>
+      _anonymousSignIn ??= _signInAnonymously().whenComplete(() {
+        _anonymousSignIn = null;
+      });
+
+  Future<User?> _signInAnonymously() async {
+    try {
+      final credential =
+          await _auth.signInAnonymously().timeout(AppConfig.signInTimeout);
+      return credential.user;
+    } catch (_) {
+      return null;
+    }
   }
 
   void _setLoading(bool loading) {

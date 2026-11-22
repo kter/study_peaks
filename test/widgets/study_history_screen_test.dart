@@ -178,7 +178,9 @@ void main() {
 
   testWidgets('a summary hides an earlier owner’s record after auth changes',
       (tester) async {
+    auth.changeUser('original-owner');
     final record = StudySession(
+      ownerId: StudySession.ownerFor('original-owner'),
       roomId: 'fuji',
       startTime: today,
       durationSeconds: 20,
