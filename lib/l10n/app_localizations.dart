@@ -974,6 +974,25 @@ abstract class AppLocalizations {
   /// **'Seat {number}'**
   String seatTitle(int number);
 
+  /// No description provided for @emptySeatSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'Seat {number}, empty. Tap to sit down.'**
+  String emptySeatSemantics(int number);
+
+  /// No description provided for @occupiedSeatSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'Seat {number}, {name}, {country}, {duration}'**
+  String occupiedSeatSemantics(
+      int number, String name, String country, String duration);
+
+  /// No description provided for @ownSeatSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'Seat {number}, your seat, {duration}'**
+  String ownSeatSemantics(int number, String duration);
+
   /// No description provided for @sitQuestion.
   ///
   /// In en, this message translates to:

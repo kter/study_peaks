@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
@@ -18,7 +20,7 @@ typedef OccupiedSeatTapCallback = void Function(Seat seat);
 
 /// Grid view of seats for a room.
 /// 
-/// Displays seats in a 4-column grid with refresh capability.
+/// Displays seats in a grid with at least four columns and refresh capability.
 /// Handles seat tap callbacks for empty and occupied seats.
 class SeatGrid extends StatelessWidget {
   final String roomId;
@@ -66,32 +68,34 @@ class SeatGrid extends StatelessWidget {
           );
         }
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: RefreshIndicator(
-            onRefresh: () => roomProvider.fetchSeats(roomId),
-            child: GridView.builder(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                childAspectRatio: 0.7,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-              ),
-              itemCount: seats.length,
-              itemBuilder: (context, index) {
-                final seat = seats[index];
-                // Check if this seat belongs to the current user
-                final isCurrentUserSeat = session.isSeated &&
-                    session.currentRoomId == roomId &&
-                    session.seatNumber == seat.seatNumber;
+        return LayoutBuilder(
+          builder: (context, constraints) => Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: RefreshIndicator(
+              onRefresh: () => roomProvider.fetchSeats(roomId),
+              child: GridView.builder(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: math.max(4, (constraints.maxWidth / 110).floor()),
+                  childAspectRatio: 0.7,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                ),
+                itemCount: seats.length,
+                itemBuilder: (context, index) {
+                  final seat = seats[index];
+                  // Check if this seat belongs to the current user
+                  final isCurrentUserSeat = session.isSeated &&
+                      session.currentRoomId == roomId &&
+                      session.seatNumber == seat.seatNumber;
 
-                return SeatWidget(
-                  seat: seat,
-                  size: 60,
-                  isCurrentUser: isCurrentUserSeat,
-                  onTap: () => _handleSeatTap(seat, session),
-                );
-              },
+                  return SeatWidget(
+                    seat: seat,
+                    size: 60,
+                    isCurrentUser: isCurrentUserSeat,
+                    onTap: () => _handleSeatTap(seat, session),
+                  );
+                },
+              ),
             ),
           ),
         );

@@ -240,6 +240,42 @@
       }
     }
   },
+  "emptySeatSemantics": "Seat {number}, empty. Tap to sit down.",
+  "@emptySeatSemantics": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "occupiedSeatSemantics": "Seat {number}, {name}, {country}, {duration}",
+  "@occupiedSeatSemantics": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      },
+      "name": {
+        "type": "String"
+      },
+      "country": {
+        "type": "String"
+      },
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "ownSeatSemantics": "Seat {number}, your seat, {duration}",
+  "@ownSeatSemantics": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      },
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
   "sitQuestion": "Do you want to take this seat and start studying?",
   "sitSuccess": "You are now seated at seat {number}!",
   "@sitSuccess": {

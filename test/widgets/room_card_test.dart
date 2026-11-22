@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:study_peaks/models/room.dart';
 import 'package:study_peaks/widgets/room_card.dart';
 
 import '../helpers/mock_data.dart';
@@ -41,6 +42,40 @@ void main() {
       // Core behavior: Shows percentage occupied
       expect(find.text('30% occupied'), findsOneWidget);
     });
+
+    for (final (occupancy, capacity, percent) in [
+      (29, 50, 58),
+      (3, 40, 8),
+      (29, 100, 29),
+      (57, 100, 57),
+      (58, 100, 58),
+      (0, 0, 0),
+      (-1, 50, 0),
+      (51, 50, 100),
+    ]) {
+      testWidgets('$occupancy/$capacity displays and announces $percent%',
+          (tester) async {
+        await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: RoomCard(
+              room: Room(
+                roomId: 'test-room',
+                name: 'Test Room',
+                capacity: capacity,
+                currentOccupancy: occupancy,
+              ),
+            ),
+          ),
+        ));
+
+        expect(find.text('$percent% occupied'), findsOneWidget);
+        final indicator = find.byType(LinearProgressIndicator);
+        final progress = tester.widget<LinearProgressIndicator>(indicator);
+        expect(progress.semanticsValue, '$percent%');
+        expect(tester.getSemantics(indicator).value, '$percent%');
+        expect(progress.value, inInclusiveRange(0.0, 1.0));
+      });
+    }
 
     testWidgets('displays Join button', (tester) async {
       await tester.pumpWidget(

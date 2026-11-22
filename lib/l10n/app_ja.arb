@@ -156,6 +156,42 @@
   "loadSeatsFailed": "座席を読み込めませんでした。",
   "seatCountUnavailable": "着席人数を取得できませんでした。",
   "seatTitle": "座席 {number}",
+  "emptySeatSemantics": "座席{number}、空席。タップして着席します。",
+  "@emptySeatSemantics": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "occupiedSeatSemantics": "座席{number}、{name}、{country}、{duration}",
+  "@occupiedSeatSemantics": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      },
+      "name": {
+        "type": "String"
+      },
+      "country": {
+        "type": "String"
+      },
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "ownSeatSemantics": "座席{number}、あなたの席、{duration}",
+  "@ownSeatSemantics": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      },
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
   "sitQuestion": "この席に着席して学習を始めますか？",
   "sitSuccess": "座席 {number} に着席しました。",
   "sitFailed": "着席できませんでした。",

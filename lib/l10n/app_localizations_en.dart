@@ -531,6 +531,22 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String emptySeatSemantics(int number) {
+    return 'Seat $number, empty. Tap to sit down.';
+  }
+
+  @override
+  String occupiedSeatSemantics(
+      int number, String name, String country, String duration) {
+    return 'Seat $number, $name, $country, $duration';
+  }
+
+  @override
+  String ownSeatSemantics(int number, String duration) {
+    return 'Seat $number, your seat, $duration';
+  }
+
+  @override
   String get sitQuestion => 'Do you want to take this seat and start studying?';
 
   @override

@@ -1,11 +1,59 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:study_peaks/l10n/app_localizations.dart';
 import 'package:study_peaks/models/models.dart';
 import 'package:study_peaks/widgets/seat_widget.dart';
 
 import '../helpers/mock_data.dart';
 
 void main() {
+  for (final (locale, isOccupied, isCurrentUser, label) in [
+    ('en', false, false, 'Seat 5, empty. Tap to sit down.'),
+    ('en', true, false, 'Seat 5, Test User, Japan, 3m'),
+    ('en', true, true, 'Seat 5, your seat, 3m'),
+    ('ja', true, false, '座席5、Test User、日本、3m'),
+  ]) {
+    testWidgets('announces $label as a button', (tester) async {
+      final now = DateTime.utc(2026, 1, 1);
+      final seat = isOccupied
+          ? Seat(
+              seatId: 'seat-005',
+              seatNumber: 5,
+              isOccupied: true,
+              user: mockUser,
+              sessionStartedAt: now.subtract(const Duration(minutes: 3)),
+            )
+          : Seat.empty(5);
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: Locale(locale),
+        home: Scaffold(
+          body: SeatWidget(
+            seat: seat,
+            now: () => now,
+            isCurrentUser: isCurrentUser,
+            onTap: () {},
+          ),
+        ),
+      ));
+
+      final seatSemantics = find.bySemanticsLabel(label);
+      expect(seatSemantics, findsOneWidget);
+      expect(
+        tester.getSemantics(seatSemantics),
+        matchesSemantics(
+          label: label,
+          textDirection: TextDirection.ltr,
+          isButton: true,
+          hasTapAction: true,
+        ),
+      );
+      expect(find.bySemanticsLabel(isOccupied ? mockUser.displayName : '#5'),
+          findsNothing);
+    });
+  }
+
   group('SeatWidget - Empty Seat', () {
     testWidgets('displays seat number', (tester) async {
       await tester.pumpWidget(
@@ -91,7 +139,7 @@ void main() {
       expect(find.text('1h0m'), findsOneWidget);
     });
 
-    testWidgets('refreshes only the duration badge at each elapsed minute',
+    testWidgets('refreshes the badge and announcement at each elapsed minute',
         (tester) async {
       final now = tester.binding.clock.now;
       final seat = Seat(
@@ -118,15 +166,18 @@ void main() {
       final usernameWidget = tester.widget(username);
       final initialParentBuilds = parentBuilds;
       expect(find.text('4m'), findsOneWidget);
+      expect(find.bySemanticsLabel('Seat 1, Test User, Japan, 4m'), findsOneWidget);
 
       await tester.pump(const Duration(seconds: 1));
       expect(find.text('4m'), findsOneWidget);
 
       await tester.pump(const Duration(seconds: 1));
       expect(find.text('5m'), findsOneWidget);
+      expect(find.bySemanticsLabel('Seat 1, Test User, Japan, 5m'), findsOneWidget);
 
       await tester.pump(const Duration(minutes: 1));
       expect(find.text('6m'), findsOneWidget);
+      expect(find.bySemanticsLabel('Seat 1, Test User, Japan, 6m'), findsOneWidget);
       expect(parentBuilds, initialParentBuilds);
       expect(tester.widget(username), same(usernameWidget));
     });

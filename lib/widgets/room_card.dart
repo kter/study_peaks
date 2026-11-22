@@ -16,7 +16,12 @@ class RoomCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context) ?? lookupAppLocalizations(const Locale('en'));
-    final occupancyPercent = room.currentOccupancy / room.capacity;
+    final capacity = room.capacity;
+    final occupancy = capacity > 0 ? room.currentOccupancy.clamp(0, capacity) : 0;
+    final occupancyRatio = capacity > 0 ? occupancy / capacity : 0.0;
+    final occupancyPercent = capacity > 0
+        ? (occupancy * 100 + capacity ~/ 2) ~/ capacity
+        : 0;
 
     return Card(
       elevation: 2,
@@ -94,13 +99,14 @@ class RoomCard extends StatelessWidget {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
-                      value: occupancyPercent,
+                      value: occupancyRatio,
+                      semanticsValue: '$occupancyPercent%',
                       minHeight: 8,
                       backgroundColor: Theme.of(context).brightness == Brightness.dark
                           ? Colors.grey.shade800
                           : Colors.grey.shade200,
                       valueColor: AlwaysStoppedAnimation<Color>(
-                        _getOccupancyColor(occupancyPercent),
+                        _getOccupancyColor(occupancyRatio),
                       ),
                     ),
                   ),
@@ -110,7 +116,7 @@ class RoomCard extends StatelessWidget {
                     children: [
                       Flexible(
                         child: Text(
-                          l10n.occupiedPercent((occupancyPercent * 100).toInt()),
+                          l10n.occupiedPercent(occupancyPercent),
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade500,
