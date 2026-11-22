@@ -327,7 +327,7 @@ void main() {
               .thenAnswer((_) => Completer<UserCredential>().future);
           Object? token = Object();
           provider.getIdToken().then((value) => token = value);
-          async.elapse(AppConfig.signInTimeout - const Duration(milliseconds: 1));
+          async.elapse(AppConfig.anonymousSignInTimeout - const Duration(milliseconds: 1));
           expect(token, isNotNull);
           async.elapse(const Duration(milliseconds: 1));
           expect(token, isNull);

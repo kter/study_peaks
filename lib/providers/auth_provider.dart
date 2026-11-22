@@ -137,7 +137,7 @@ class AuthProvider extends ChangeNotifier {
   Future<User?> _signInAnonymously() async {
     try {
       final credential =
-          await _auth.signInAnonymously().timeout(AppConfig.signInTimeout);
+          await _auth.signInAnonymously().timeout(AppConfig.anonymousSignInTimeout);
       return credential.user;
     } catch (_) {
       return null;

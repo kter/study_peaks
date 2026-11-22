@@ -8,6 +8,9 @@ abstract final class AppConfig {
   // Authentication Configuration
   static const Duration signInTimeout = Duration(seconds: 30);
 
+  /// Anonymous seat identity is optional; fall back to tokenless requests fast.
+  static const Duration anonymousSignInTimeout = Duration(seconds: 8);
+
   // API設定
   static const Duration apiRequestTimeout = Duration(seconds: 8);
   static const Duration apiMutationTimeout = Duration(seconds: 15);
