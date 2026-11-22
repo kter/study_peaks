@@ -248,6 +248,12 @@ abstract class AppLocalizations {
   /// **'Sit Down'**
   String get sitDown;
 
+  /// Button to take a seat and start the study timer with Android screen pinning.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin screen & sit'**
+  String get sitAndPin;
+
   /// No description provided for @leave.
   ///
   /// In en, this message translates to:

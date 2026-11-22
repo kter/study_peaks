@@ -34,6 +34,10 @@
   "focusPhase": "Focus",
   "breakPhase": "Break",
   "sitDown": "Sit Down",
+  "sitAndPin": "Pin screen & sit",
+  "@sitAndPin": {
+    "description": "Button to take a seat and start the study timer with Android screen pinning."
+  },
   "leave": "Leave",
   "leaveSeat": "Leave Seat",
   "leaveSeatConfirmation": "Are you sure you want to leave your seat?",

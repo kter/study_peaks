@@ -87,6 +87,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get sitDown => '着席';
 
   @override
+  String get sitAndPin => '画面を固定して着席';
+
+  @override
   String get leave => '離席';
 
   @override

@@ -17,6 +17,7 @@ import 'package:study_peaks/providers/user_settings_provider.dart';
 import 'package:study_peaks/repositories/study_history_repository.dart';
 import 'package:study_peaks/screens/room_detail_screen.dart';
 import 'package:study_peaks/services/api_service.dart';
+import 'package:study_peaks/services/lock_task_service.dart';
 import 'package:study_peaks/services/network_exception.dart';
 import 'package:study_peaks/widgets/dialogs/leave_summary_dialog.dart';
 import 'package:study_peaks/widgets/seat_widget.dart';
@@ -26,6 +27,8 @@ import '../helpers/test_helpers.dart';
 class _MockAuthProvider extends Mock implements AuthProvider {}
 
 class _MockHistory extends Mock implements StudyHistoryRepository {}
+
+class _MockLockTaskService extends Mock implements LockTaskService {}
 
 const _room =
     Room(roomId: 'fuji', name: 'Mt. Fuji', capacity: 2, currentOccupancy: 0);
@@ -66,10 +69,13 @@ void main() {
       {Locale? locale,
       AuthProvider? auth,
       StudyHistoryRepository? history,
-      DateTime Function()? now}) async {
+      DateTime Function()? now,
+      MockNotificationService? notifications,
+      LockTaskService? lockTaskService,
+      bool asRoute = false}) async {
     final guestAuth = _MockAuthProvider();
     when(() => guestAuth.isSignedIn).thenReturn(false);
-    final notifications = mockStudyNotifications();
+    notifications ??= mockStudyNotifications();
     session = SessionProvider(
       apiService: api,
       historyRepository: history,
@@ -77,7 +83,10 @@ void main() {
       useMockFallback: false,
     );
     timer = TimerProvider(
-        now: now ?? () => _startedAt, notificationService: notifications);
+      now: now ?? () => _startedAt,
+      notificationService: notifications,
+      lockTaskService: lockTaskService,
+    );
     session.setTimerProvider(timer);
     if (auth != null) session.setAuthProvider(auth);
     await tester.pumpWidget(MultiProvider(
@@ -95,9 +104,15 @@ void main() {
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: locale ?? const Locale('en'),
-        home: const RoomDetailScreen(room: _room),
+        home: asRoute ? const Scaffold() : const RoomDetailScreen(room: _room),
       ),
     ));
+    if (asRoute) {
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+      unawaited(navigator.push<void>(MaterialPageRoute(
+        builder: (_) => const RoomDetailScreen(room: _room),
+      )));
+    }
     await tester.pumpAndSettle();
     return AppLocalizations.of(tester.element(find.byType(RoomDetailScreen)))!;
   }
@@ -109,6 +124,130 @@ void main() {
     final sit = session.sit(_room.roomId, 1);
     await tester.pump();
     expect(await sit, isTrue);
+  }
+
+  testWidgets('covering the room keeps the free timer running until it is popped',
+      (tester) async {
+    when(() => api.getRoomSeats(_room.roomId))
+        .thenAnswer((_) async => [Seat.empty(1)]);
+    var now = _startedAt;
+    await pumpRoom(tester, asRoute: true, now: () => now);
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    final bgm = tester.element(find.byType(RoomDetailScreen))
+        .read<StudyBgmController>();
+    timer.start();
+    now = now.add(const Duration(seconds: 12));
+
+    unawaited(navigator.push<void>(MaterialPageRoute(
+      builder: (_) => const Scaffold(body: Text('Another screen')),
+    )));
+    await tester.pumpAndSettle();
+    expect(find.text('Another screen'), findsOneWidget);
+    expect(timer.isRunning, isTrue);
+    expect(bgm.timerAllowsPlayback, isTrue);
+
+    navigator.pop();
+    await tester.pumpAndSettle();
+    expect(timer.elapsedSeconds, 12);
+    navigator.pop();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(RoomDetailScreen), findsNothing);
+    expect(timer.isRunning, isFalse);
+    expect(timer.elapsedSeconds, 0);
+    expect(timer.focusIntervals, isEmpty);
+    expect(bgm.timerAllowsPlayback, isFalse);
+  });
+
+  testWidgets('popping the room keeps a seated timer running', (tester) async {
+    when(() => api.getRoomSeats(_room.roomId))
+        .thenAnswer((_) async => [Seat.empty(1)]);
+    await pumpRoom(tester, asRoute: true);
+    await sitInRoom(tester);
+
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(RoomDetailScreen), findsNothing);
+    expect(session.isSeated, isTrue);
+    expect(timer.isRunning, isTrue);
+    expect(timer.sessionId, session.sessionId);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  for (final pinned in [true, false]) {
+    testWidgets('pin and sit waits for Android before starting (pinned: $pinned)',
+        (tester) async {
+      when(() => api.getRoomSeats(_room.roomId))
+          .thenAnswer((_) async => [Seat.empty(1)]);
+      when(() => api.sit(
+            _room.roomId,
+            1,
+            displayName: any(named: 'displayName'),
+            countryCode: any(named: 'countryCode'),
+            iconSeed: any(named: 'iconSeed'),
+          )).thenAnswer(
+        (_) async => createMockSitResponse(sessionStartedAt: _startedAt),
+      );
+      final pinConfirmation = Completer<bool>();
+      final lockTaskService = _MockLockTaskService();
+      when(() => lockTaskService.onLockTaskModeExited)
+          .thenAnswer((_) => const Stream.empty());
+      when(() => lockTaskService.startLockTask())
+          .thenAnswer((_) => pinConfirmation.future);
+      when(() => lockTaskService.stopLockTask()).thenAnswer((_) async => true);
+      when(() => lockTaskService.setKeepScreenOn(any()))
+          .thenAnswer((_) async {});
+
+      final permissionAnswered = Completer<void>();
+      final notifications = mockStudyNotifications();
+      var permissionRequests = 0;
+      when(() => notifications.ensureStudySession(
+            sessionId: 'test-session-id',
+            roomName: _room.name,
+            locale: 'en',
+            requestPermissionIfNeeded: true,
+            isCurrentSession: any(named: 'isCurrentSession'),
+            mode: TimerMode.normal,
+            pomodoroPhase: any(named: 'pomodoroPhase'),
+            isRunning: any(named: 'isRunning'),
+            waitingToStart: any(named: 'waitingToStart'),
+            seconds: 0,
+          )).thenAnswer((invocation) {
+        permissionRequests++;
+        expect(invocation.namedArguments[#isRunning], isTrue);
+        expect(timer.sessionId, session.sessionId);
+        return permissionAnswered.future;
+      });
+
+      final l10n = await pumpRoom(tester,
+          notifications: notifications, lockTaskService: lockTaskService);
+      timer.setScreenLockEnabled(true);
+      if (pinned) timer.start();
+      await tester.tap(_seat(1));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.sitAndPin));
+      await tester.pumpAndSettle();
+
+      verify(() => lockTaskService.startLockTask()).called(1);
+      expect(session.isSeated, isTrue);
+      expect(timer.isRunning, isFalse);
+      expect(timer.focusIntervals, isEmpty);
+      expect(permissionRequests, 0);
+
+      pinConfirmation.complete(pinned);
+      await tester.pumpAndSettle();
+
+      expect(timer.isRunning, isTrue);
+      expect(timer.sessionId, 'test-session-id');
+      expect(timer.isScreenLocked, pinned);
+      expect(permissionRequests, 1);
+      verifyNever(() => lockTaskService.stopLockTask());
+
+      permissionAnswered.complete();
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
   }
 
   testWidgets('leaving after guest sign-in shows guest history totals',

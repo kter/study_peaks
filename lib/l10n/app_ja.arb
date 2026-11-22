@@ -28,6 +28,10 @@
   "focusPhase": "集中",
   "breakPhase": "休憩",
   "sitDown": "着席",
+  "sitAndPin": "画面を固定して着席",
+  "@sitAndPin": {
+    "description": "Android の画面固定を使って着席し、学習タイマーを開始するボタン。"
+  },
   "leave": "離席",
   "leaveSeat": "離席する",
   "leaveSeatConfirmation": "席を離れますか？",

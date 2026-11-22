@@ -268,13 +268,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   void start({String? sessionId}) {
     if (_finalizing || _recoveryBlocked) return;
     if (sessionId != null && sessionId != _sessionId) {
-      // A newly seated session starts with its own journal. Unseated focus and
-      // a previous seat's focus must never be adopted by this seat's owner.
-      _resetFields();
-      _focusIntervals.clear();
-      _unallocatedSeconds = 0;
-      _pomodoroCompletedCycles = 0;
-      _sessionId = sessionId;
+      _bindSession(sessionId);
     }
     if (_isRunning) return;
     final now = _now();
@@ -308,6 +302,16 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  void _bindSession(String sessionId) {
+    // A newly seated session starts with its own journal. Unseated focus and
+    // a previous seat's focus must never be adopted by this seat's owner.
+    _resetFields();
+    _focusIntervals.clear();
+    _unallocatedSeconds = 0;
+    _pomodoroCompletedCycles = 0;
+    _sessionId = sessionId;
+  }
+
   // The actual time is calculated from timestamps; this timer only updates UI.
   void _startUiTimer() {
     _timer?.cancel();
@@ -322,18 +326,31 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// Start timer with screen lock (called from UI after dialog confirmation).
-  Future<void> startWithLock() async {
-    if (_disposed || _finalizing || _recoveryBlocked || _isRunning || _pinning) return;
+  Future<void> startWithLock({String? sessionId}) async {
+    final bindNewSession = sessionId != null && sessionId != _sessionId;
+    if (_disposed ||
+        _finalizing ||
+        _recoveryBlocked ||
+        (_isRunning && !bindNewSession) ||
+        _pinning) {
+      return;
+    }
     _pinning = true;
-    _pinRequested = true;
-    final sessionId = _sessionId;
     try {
+      // Binding a new seat resets the timer and releases any existing pin.
+      if (bindNewSession) _bindSession(sessionId);
+      final boundSessionId = _sessionId;
+      _pinRequested = true;
+      if (bindNewSession) {
+        _persistState();
+        notifyListeners();
+      }
       final pinned = await _lockTaskService.startLockTask();
       if (!_pinRequested ||
           _disposed ||
           _finalizing ||
           _recoveryBlocked ||
-          sessionId != _sessionId) {
+          boundSessionId != _sessionId) {
         if (_pinRequested) {
           _releaseLockTask();
         } else if (pinned) {
@@ -343,7 +360,7 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
       _isScreenLocked = pinned;
       if (pinned) await _lockTaskService.setKeepScreenOn(true);
-      if (_pinRequested) start();
+      if (_pinRequested) start(sessionId: sessionId);
     } finally {
       _pinning = false;
     }

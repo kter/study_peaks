@@ -90,6 +90,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sitDown => 'Sit Down';
 
   @override
+  String get sitAndPin => 'Pin screen & sit';
+
+  @override
   String get leave => 'Leave';
 
   @override
