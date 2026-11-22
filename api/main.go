@@ -303,7 +303,10 @@ func getRoomsHandler(w http.ResponseWriter, r *http.Request) {
 
 func getSeatsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	roomId := chi.URLParam(r, "roomId")
+	roomId, ok := requestRoomId(w, r)
+	if !ok {
+		return
+	}
 
 	// Get room capacity
 	roomDoc, err := getRoom(ctx, roomId)
@@ -387,7 +390,10 @@ func getSeatsHandler(w http.ResponseWriter, r *http.Request) {
 
 func sitHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	roomId := chi.URLParam(r, "roomId")
+	roomId, ok := requestRoomId(w, r)
+	if !ok {
+		return
+	}
 
 	var req struct {
 		SeatNumber  int    `json:"seatNumber"`
@@ -397,8 +403,7 @@ func sitHandler(w http.ResponseWriter, r *http.Request) {
 		IconSeed    string `json:"iconSeed"`
 		PhotoUrl    string `json:"photoUrl"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	if !readSeatRequest(w, r, &req) {
 		return
 	}
 
@@ -412,15 +417,10 @@ func sitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate displayName is required for anonymous users
-	if req.DisplayName == "" {
-		req.DisplayName = "User"
-	}
-
-	// Set default country code
-	if req.CountryCode == "" {
-		req.CountryCode = "JP"
-	}
+	req.DisplayName = normalizeDisplayName(req.DisplayName, "User")
+	req.CountryCode = normalizeCountryCode(req.CountryCode, "JP")
+	req.IconSeed = normalizeIconSeed(req.IconSeed)
+	req.PhotoUrl = normalizePhotoUrl(req.PhotoUrl)
 
 	userId := authenticatedUserId(ctx)
 	if userId == "" {
@@ -544,7 +544,10 @@ func mutateSession(ctx context.Context, roomId, sessionId string, mutate func(*f
 
 func syncHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	roomId := chi.URLParam(r, "roomId")
+	roomId, ok := requestRoomId(w, r)
+	if !ok {
+		return
+	}
 
 	var req struct {
 		SessionId       string `json:"sessionId"`
@@ -554,29 +557,27 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 		IconSeed        string `json:"iconSeed"`
 		PhotoUrl        string `json:"photoUrl"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	if !readSeatRequest(w, r, &req) || !validateSessionId(w, req.SessionId) {
 		return
 	}
 
 	var syncedAt time.Time
 	updates := []firestore.Update{
-		{Path: "currentSessionDuration", Value: req.CurrentDuration},
+		{Path: "currentSessionDuration", Value: normalizeDuration(req.CurrentDuration)},
 	}
 
 	// Update profile fields if provided
-	if req.DisplayName != "" {
-		updates = append(updates, firestore.Update{Path: "displayName", Value: req.DisplayName})
+	if displayName := normalizeDisplayName(req.DisplayName, ""); displayName != "" {
+		updates = append(updates, firestore.Update{Path: "displayName", Value: displayName})
 	}
-	if req.CountryCode != "" {
-		updates = append(updates, firestore.Update{Path: "countryCode", Value: req.CountryCode})
+	if countryCode := normalizeCountryCode(req.CountryCode, ""); countryCode != "" {
+		updates = append(updates, firestore.Update{Path: "countryCode", Value: countryCode})
 	}
-	if req.IconSeed != "" {
-		updates = append(updates, firestore.Update{Path: "iconSeed", Value: req.IconSeed})
+	if iconSeed := normalizeIconSeed(req.IconSeed); iconSeed != "" {
+		updates = append(updates, firestore.Update{Path: "iconSeed", Value: iconSeed})
 	}
-	// PhotoUrl can be empty string (user switched from Google to Jdenticon)
-	// So we always update it if it's present in the request
-	updates = append(updates, firestore.Update{Path: "photoUrl", Value: req.PhotoUrl})
+	// An empty photoUrl clears the stored photo when the user switches to Jdenticon.
+	updates = append(updates, firestore.Update{Path: "photoUrl", Value: normalizePhotoUrl(req.PhotoUrl)})
 
 	err := mutateSession(ctx, roomId, req.SessionId, func(ref *firestore.DocumentRef, precondition firestore.Precondition) error {
 		syncedAt = time.Now().UTC()
@@ -593,8 +594,14 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 
 func getSessionHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	roomId := chi.URLParam(r, "roomId")
+	roomId, ok := requestRoomId(w, r)
+	if !ok {
+		return
+	}
 	sessionId := chi.URLParam(r, "sessionId")
+	if !validateSessionId(w, sessionId) {
+		return
+	}
 
 	// Get room info for room name
 	roomDoc, err := getRoom(ctx, roomId)
@@ -632,14 +639,16 @@ func getSessionHandler(w http.ResponseWriter, r *http.Request) {
 
 func leaveHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	roomId := chi.URLParam(r, "roomId")
+	roomId, ok := requestRoomId(w, r)
+	if !ok {
+		return
+	}
 
 	var req struct {
 		SessionId     string `json:"sessionId"`
 		FinalDuration int    `json:"finalDuration"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	if !readSeatRequest(w, r, &req) || !validateSessionId(w, req.SessionId) {
 		return
 	}
 
@@ -653,7 +662,7 @@ func leaveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"totalSessionDuration": req.FinalDuration,
+		"totalSessionDuration": normalizeDuration(req.FinalDuration),
 		"endedAt":              time.Now().UTC(),
 	})
 }
